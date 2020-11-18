@@ -1,0 +1,228 @@
+---
+title: "scran-normalised scRNA-seq data"
+output: html_notebook
+---
+
+```{r message=FALSE, warning=FALSE}
+library(data.table)
+library(Matrix)
+library(limma)
+library(plyr)
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+library(seriation)
+library(ggrepel)
+library(cowplot)
+library(scran)
+library(scater)
+
+source('general_functions.R')
+# source('tcga_functions.R')
+source('sc_functions.R')
+source('sparse_matrix_functions.R')
+```
+
+scran is an R package implementing the normalisation strategy described in [Lun, Bach & Marioni, 2016](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-016-0947-7).  This method calculates cell-specific size factors, instead of using a single size factor for all cells (as in TPM).  The motivation for this is that TPM can introduce spurious differences between cells due to differences in library composition.  Bulk methods would do this by comparing each cell's expression profile against an "average" profile, but this is inappropriate for single cell data due to the high frequency of zeros.  In scran, the "problematic" zeros are dealt with by summing across pools of cells.  The size factors for the cell pools are then deconvolved to yield size factors for the individual cells.  The deconvolution is possible because they repeat their process with many different pools, creating a solvable system of linear equations.  The assumption underlying this is that most genes are not differentially expressed across the cells, and the counts should be scaled so that there is, on average, no difference in expression between cells for the majority of genes.
+
+Here we analyse the breast cancer scRNA-seq data from [Qian et al., 2020](https://www.nature.com/articles/s41422-020-0355-0), which we normalise using scran.  We start with a (sparse) count matrix.
+
+```{r warning=FALSE}
+sc_data <- readMM('../data_and_figures/sc_alt_norm/matrix.mtx')
+sc_data[1:6, 1:10]
+```
+
+```{r message=FALSE}
+tpm_data <- fread('../data_and_figures/qian_breast_2020_reclassified.csv', showProgress = FALSE)[
+    cell_type != 'ambiguous' & id != 'sc5rJUQ064_CCATGTCCATCCCATC',
+    -c('cell_type_author', 'cell_type_lenient')
+]
+tpm_data[1:6, 1:10]
+```
+
+```{r}
+barcodes <- fread('../data_and_figures/sc_alt_norm/barcodes.tsv', header = FALSE)$V1
+genes <- fread('../data_and_figures/sc_alt_norm/genes.tsv', header = FALSE)$V1
+gn <- alias2SymbolTable(genes)
+sc_data <- sc_data[!is.na(gn) & gn %in% names(table(gn))[table(gn) == 1], ]
+rownames(sc_data) <- gn[!is.na(gn) & gn %in% names(table(gn))[table(gn) == 1]]
+colnames(sc_data) <- barcodes
+
+sc_data <- sc_data[, tpm_data$id]
+sc_meta <- tpm_data[, .(id, patient, cell_type)]
+
+rm(tpm_data)
+rm(barcodes)
+rm(genes)
+rm(gn)
+
+fwrite(sc_meta, '../data_and_figures/sc_alt_norm/qian_breast_2020_meta.csv')
+
+# Normalise data by scran/scater:
+sc_data_scran <- SingleCellExperiment(list(counts = sc_data))
+scran_clusters <- quickCluster(sc_data_scran)
+sc_data_scran <- computeSumFactors(sc_data_scran, clusters = scran_clusters)
+sc_data_scran <- logNormCounts(sc_data_scran)
+
+saveRDS(
+    SingleCellExperiment::logcounts(sc_data_scran),
+    '../data_and_figures/sc_alt_norm/qian_breast_2020_scran.rds'
+)
+```
+
+Exploration of the normalised dataset (note the summary is only of the non-zero elements):
+
+```{r}
+sc_data <- readRDS('../data_and_figures/sc_alt_norm/qian_breast_2020_scran.rds')
+summary(sc_data@x)
+sc_data[1:20, 1:12]
+```
+
+```{r}
+sc_meta <- fread('../data_and_figures/sc_alt_norm/qian_breast_2020_meta.csv')
+head(sc_meta)
+```
+
+```{r}
+dim(sc_data)
+```
+
+We can see the number of genes detected per cell using the col_nnz() function.  We can see that the cells have already been filtered to exclude those with fewer than 1000 genes detected.
+
+```{r}
+summary(col_nnz(sc_data))
+```
+
+Now we want to choose a suitable gene filtering threshold.  It looks like average (log-normalised) expression of 0.07 will be sufficient to shave off the peak at zero.
+
+```{r}
+plot(density(rowMeans(sc_data)), xlim = c(0, 1))
+abline(v = 0.07, col = 'blue', lty = 'dashed')
+```
+
+We see that this leaves a comparable number of genes to the threshold we usually use with TPM data, that is, log average TPM value at least 4.
+
+```{r}
+gene_averages_scran <- rowMeans(sc_data)
+sapply(c(0.07, 0.2, 0.4, 0.6), function(i) sum(gene_averages_scran > i))
+
+# gene_averages_tpm <- log2(
+#     apply(tpm_data[, -c('id', 'patient', 'cell_type')], 2, function(x) mean(10*(2^x - 1))) + 1
+# )
+gene_averages_tpm <- log2(colMeans(10*(2^tpm_data[, -c('id', 'patient', 'cell_type')] - 1)) + 1)
+sapply(4:7, function(i) sum(gene_averages_tpm > i))
+```
+
+```{r}
+rm(tpm_data)
+
+sc_data_table <- cbind(sc_meta, t(as.matrix(sc_data)))
+
+# Get TCGA data:
+expression_data <- fread('../../TCGA_data/tcga_expression_data.csv', key = 'id')
+meta_data <- fread('../../TCGA_data/tcga_meta_data.csv', key = 'id')
+expression_data <- expression_data[meta_data[sample_type != 'normal', id]]
+meta_data <- meta_data[sample_type != 'normal']
+
+# Get EMT markers:
+emt_markers <- fread('../../emt_markers.csv')[, gene := alias2SymbolTable(gene)][source != 'GO', sort(unique(gene))]
+
+genes_unfiltered <- unique(
+    c(
+        emt_markers[emt_markers %in% names(sc_data_table)],
+        top_cols_by_fun_cor(
+            expression_data[meta_data[cancer_type == 'BRCA', id], -'id'],
+            threshold_fun = function(x) quantile(x, 0.99)
+        )[id %in% names(sc_data), id]
+    )
+)
+
+genes_filtered <- filter_for_groups(sc_data_table[, c('cell_type', ..genes_unfiltered)], groups = c('caf', 'cancer'))
+```
+
+```{r}
+set.seed(1634)
+
+sc_cancer_caf <- sc_groups(
+    genes = genes_filtered,
+    sc_data = sc_data_table[cell_type %in% c('cancer', 'caf')],
+    groups = c('cancer', 'caf'),
+    score_cells_nbin = 30,
+    score_cells_n = 40,
+    min_sig_size = 0,
+    scores_filter_groups = 'cancer',
+    genes_filter_fun = function(x) {mean(x) >= 0.2 | sum(x >= 0.6) >= length(x)/100},
+    scores_filter_fun = function(x) {mean(x) >= 0.4 | sum(x >= 0.6) >= length(x)/100}
+)
+
+sc_cancer_caf_heatmap <- sc_groups_heatmap(
+    sc_groups_list = sc_cancer_caf,
+    groups = c('cancer', 'caf'),
+    default_figure_widths = list(annotations = 2.5, cancer = 6, caf = 1.2),
+    figure_spacing = 2.5,
+    annotations_nudge = 0.25,
+    es_fun = NULL,
+    es_title = 'EMT score',
+    h_limits = c(0, 9),
+    h_legend_breaks = c(0, 3, 6, 9),
+    h_legend_labels = c('0' = '0', '3' = '3', '6' = '6', '9' = '\u2265 9'),
+    h_legend_title = 'Expression level\n',
+    h_legend_width = 20,
+    h_legend_height = 10,
+    h_legend_direction = 'horizontal',
+    h_legend_title_position = 'right',
+    h_legend_just = 'left',
+    gd_legend_title = 'Genes detected\n',
+    gd_legend_width = 20,
+    gd_legend_height = 10,
+    gd_legend_direction = 'horizontal',
+    gd_legend_title_position = 'right',
+    gd_legend_just = 'left',
+    annotations = c('VIM', 'COL1A1', 'FN1', 'VCAN', 'THY1', 'JUN', 'ECM1', 'NOTCH2', 'VEGFA', 'SNAI1', 'SNAI2', 'TWIST1', 'ZEB1', 'ZEB2'),
+	annotations_title = 'Breast'
+)
+```
+
+```{r fig.width=10, fig.height=5}
+cowplot_sc(
+    sc_cancer_caf_heatmap,
+    legend_space = 0.4,
+    heights = c(1.5, 20, 4),
+    es_x_axis_title_vjust = 1.3,
+    es_y_axis_title_angle = 0,
+    es_y_axis_title_xpos = 0.8
+)
+```
+
+```{r}
+sc_data_table[, cell_type := mapvalues(cell_type, 'dendritic', 'rare')]
+
+lineplot <- simulated_tumours_lineplot(
+    sc_data_table,
+    genes_filtered,
+    initial_types = c('b_cell', 'caf', 'cancer', 'endothelial', 'macrophage', 'mast', 't_cell'),
+    plot_title = 'Breast',
+    max_mean_count = 800,
+    legend_labels = c(
+        'b_cell' = 'B cell',
+        'cancer' = 'Cancer',
+        'endothelial' = 'Endothelial',
+        'caf' = 'CAF',
+        'macrophage' = 'Macrophage',
+        'mast' = 'Mast',
+        't_cell' = 'T cell'
+    ),
+    legend_colours = c(
+        'b_cell' = '#8DD3C7',
+        'cancer' = '#FB8072',
+        'endothelial' = '#BC80BD',
+        'caf' = '#FDB462',
+        'macrophage' = '#80B1D3',
+        'mast' = '#FCCDE5',
+        't_cell' = '#B3DE69'
+    ),
+)
+```
+
+```{r}
+lineplot$lineplot
+```

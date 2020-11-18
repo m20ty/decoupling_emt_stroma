@@ -1,0 +1,147 @@
+# This script is for inferring CNAs using the cells annotated as non-malignant in the original publication as reference.
+# This is intended to be a sort of sanity check.
+
+# bsub -q tirosh -n 8 -R "rusage[mem=2000]" -o sc_infercna_hnscc_log.o -e sc_infercna_hnscc_log.e Rscript sc_infercna_hnscc.R
+
+cat(R.Version()$version.string, '\n')
+
+library(data.table) # 1.12.8
+library(ggplot2) # 3.3.1
+library(magrittr) # 1.5
+library(infercna) # 1.0.0
+library(biomaRt) # 2.42.1
+
+source('../../chr.order.R')
+source('general_functions.R')
+
+sc_data <- fread('../data_and_figures/puram_hnscc_2017.csv')[, -c('lymph_node', 'processed_by_maxima_enzyme')]
+
+# First just plot the t-SNE, coloured by Itay's cell type classifications:
+
+sc_tsne <- readRDS('../data_and_figures/tsne_hnscc_puram.rds')
+sc_dbscan <- readRDS('../data_and_figures/dbscan_hnscc_puram.rds')
+
+tsne_plot <- ggplot(
+    setNames(
+        cbind(as.data.table(sc_tsne$Y), as.character(sc_dbscan$cluster), as.character(sc_data$cell_type)),
+        c('x', 'y', 'dbscan_cluster', 'cell_type')
+    )[dbscan_cluster != 0],
+    aes(x = x, y = y, colour = cell_type)
+) +
+    geom_point() +
+	scale_colour_manual(values = randomcoloR::distinctColorPalette(length(unique(sc_data$cell_type)))) +
+    theme_minimal()
+
+pdf('../data_and_figures/tsne_plot_hnscc_puram_comparison.pdf')
+tsne_plot
+dev.off()
+
+# I'm not including fibroblasts here, but I tried it with the fibroblasts and it didn't make it any better (worse, if anything).
+
+ref_cells <- list(
+	b_cell = sc_data[cell_type == 'b_cell', id],
+	dendritic = sc_data[cell_type == 'dendritic', id],
+	endothelial = sc_data[cell_type == 'endothelial', id],
+	macrophage = sc_data[cell_type == 'macrophage', id],
+	mast = sc_data[cell_type == 'mast', id],
+	myocyte = sc_data[cell_type == 'myocyte', id],
+	t_cell = sc_data[cell_type == 't_cell', id]
+)
+
+gene_averages <- sapply(
+	sc_data[, -c('id', 'patient', 'cell_type')],
+	function(x) {log2(mean(10*(2^x - 1)) + 1)},
+	USE.NAMES = TRUE
+)
+
+sc_data <- sc_data[, c('id', 'patient', names(gene_averages)[gene_averages >= 4]), with = FALSE]
+
+inferred_cna <- sapply(
+	as.character(unique(sc_data$patient)),
+	function(p) {
+		infercna(
+			t(
+				set_rownames(
+					as.matrix(sc_data[patient == p | id %in% unlist(ref_cells), -c('id', 'patient')]),
+					sc_data[patient == p | id %in% unlist(ref_cells), id]
+				)
+			),
+			refCells = ref_cells,
+			isLog = TRUE
+		)
+	},
+	simplify = FALSE,
+	USE.NAMES = TRUE
+)
+
+.chromosomeBreaks = function(genes = NULL, halfway = F, hide = NULL) {
+    n = length(genes)
+    chrsum = cumsum(lengths(splitGenes(genes, by = 'chr')))
+    Breaks = chrsum/max(chrsum) * n
+    # halfway useful for placing x axis chromosome text labels
+    # halfway = F for placing x axis chromosome lines
+    if (halfway) {
+        b = Breaks
+        Breaks = c(b[1]/2, b[2:length(b)] - diff(b)/2)
+    }
+    if (!is.null(hide)) {
+        names(Breaks)[which(names(Breaks) %in% hide)] = rep('', length(hide))
+    }
+    Breaks
+}
+
+# The genes should be the same in all of the inferred_cna matrices:
+# gene_order <- chr.order(rownames(inferred_cna[[1]]))
+x_line_breaks <- .chromosomeBreaks(rownames(inferred_cna[[1]]))
+x_text_breaks <- round(.chromosomeBreaks(rownames(inferred_cna[[1]]), halfway = TRUE, hide = c('13', '18', '21', 'Y')))
+
+pdf('../data_and_figures/cna_plots_hnscc_comparison.pdf')
+
+for(p in names(inferred_cna)) {
+	
+	cna_scatterplot <- cnaScatterPlot(inferred_cna[[p]], gene.quantile = 0.9, main = p)
+	
+	# I'm still undecided on whether removing the reference cell is a good idea, though it obviously makes plotting less computationally expensive.
+	inferred_cna_subset <- inferred_cna[[p]][, colnames(inferred_cna[[p]])[!(colnames(inferred_cna[[p]]) %in% unlist(ref_cells))]]
+	
+	# cell_order <- hclust(dist(t(inferred_cna_subset[names(gene_averages)[names(gene_averages) %in% rownames(inferred_cna_subset)][1:2000], ])))$order
+	cell_order <- hclust(dist(t(inferred_cna_subset)))$order
+	
+	# gene_order <- chr.order(rownames(inferred_cna[[p]]))
+	
+	cna_heatmap <- ggplot(
+		reshape2::melt(
+			inferred_cna_subset,
+			varnames = c('gene', 'cell'),
+			value.name = 'cna_score'
+		)
+	) +
+		geom_raster(
+			aes(
+				x = factor(gene, levels = rownames(inferred_cna_subset)),
+				y = factor(cell, levels = colnames(inferred_cna_subset)[cell_order]),
+				fill = cna_score
+			)
+		) +
+		scale_fill_gradientn(
+			colours = rev(colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(50)),
+			limits = c(-1, 1),
+			oob = scales::squish
+		) +
+		scale_y_discrete(expand = c(0, 0)) +
+		scale_x_discrete(expand = c(0, 0), breaks = rownames(inferred_cna_subset)[x_text_breaks], labels = names(x_text_breaks)) +
+		geom_vline(xintercept = x_line_breaks, size = 0.25) +
+		# geom_vline(xintercept = gene_order$chr_breaks[-c(1, length(gene_order$chr_breaks))], size = 0.25) +
+		theme(
+			axis.text.y = element_blank(),
+			axis.ticks = element_blank(),
+			axis.ticks.length = unit(0, 'pt'),
+			panel.border = element_rect(colour = 'black', size = 0.5, fill = NA)
+		) +
+		labs(x = 'Chromosome', y = 'Cells', fill = 'Inferred CNA', title = p)
+	
+	print(cna_heatmap)
+	
+}
+
+dev.off()
