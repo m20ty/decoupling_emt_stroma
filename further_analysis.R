@@ -30,14 +30,16 @@ deconv_plots <- readRDS('../data_and_figures/deconv_plots.rds')
 
 # Cancer types I've left out: cesc, esca_escc, hnsc_atypical, kich, lusc_basal, stad_ebv (this last one has only 30 samples).
 # I'm leaving out kich because the "CAF" end doesn't look a bit like CAFs - I'm not sure what it is.  I don't think this one is trustworthy.
+# I'm also using paad on its own, instead of splitting it up into classical and basal.  This was mainly motivated by the loss of clinical significance after separating
+# the subtypes, but anyway paad basal is identified as an intermediate in the clustering, so gets filtered out.
 ct_to_keep <- c('blca_luminal_infiltrated', 'blca_luminal_papillary', 'blca_basal_squamous', 'brca_luminal_a', 'brca_luminal_b', 'brca_basal_like',
     'brca_her2_enriched', 'coad', 'esca_ac', 'hnsc_mesenchymal_basal', 'hnsc_classical', 'kirp', 'lihc', 'luad_proximal_inflammatory', 'luad_proximal_proliferative',
     'luad_terminal_respiratory_unit', 'lusc_classical', 'lusc_secretory', 'ov_differentiated', 'ov_immunoreactive', 'ov_mesenchymal', 'ov_proliferative',
-    'paad_basal_moffitt', 'paad_classical_moffitt', 'prad', 'read', 'stad_cin', 'stad_gs', 'stad_msi', 'ucec')
+    'paad', 'prad', 'read', 'stad_cin', 'stad_gs', 'stad_msi', 'ucec')
 nice_names_for_figure <- c('BLCA - Luminal-Infiltrated', 'BLCA - Luminal-Papillary', 'BLCA - Basal-Squamous', 'BRCA - Luminal A', 'BRCA - Luminal B', 'BRCA - Basal-like',
     'BRCA - HER2-enriched', 'COAD', 'ESCA - Adenocarcinoma', 'HNSC - Malignant-Basal', 'HNSC - Classical', 'KIRP', 'LIHC', 'LUAD - Squamoid', 'LUAD - Magnoid',
     'LUAD - Bronchioid', 'LUSC - Classical', 'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive', 'OV - Mesenchymal', 'OV - Proliferative',
-    'PAAD - Basal', 'PAAD - Classical', 'PRAD', 'READ', 'STAD - CIN', 'STAD - GS', 'STAD - MSI', 'UCEC')
+    'PAAD', 'PRAD', 'READ', 'STAD - CIN', 'STAD - GS', 'STAD - MSI', 'UCEC')
 
 
 
@@ -99,12 +101,10 @@ dev.off()
 # Remove cancer types that didn't pass the threshold, namely BLCA - Luminal-Infiltrated, KIRP, KIHC, PRAD, STAD - GS and OV - Mesenchymal:
 ct_to_keep <- c('blca_luminal_papillary', 'blca_basal_squamous', 'brca_luminal_a', 'brca_luminal_b', 'brca_basal_like', 'brca_her2_enriched',
     'coad', 'esca_ac', 'hnsc_mesenchymal_basal', 'hnsc_classical', 'luad_proximal_inflammatory', 'luad_proximal_proliferative', 'luad_terminal_respiratory_unit',
-    'lusc_classical', 'lusc_secretory', 'ov_differentiated', 'ov_immunoreactive', 'ov_proliferative', 'paad_basal_moffitt', 'paad_classical_moffitt', 'read',
-    'stad_cin', 'stad_msi', 'ucec')
+    'lusc_classical', 'lusc_secretory', 'ov_differentiated', 'ov_immunoreactive', 'ov_proliferative', 'paad', 'read', 'stad_cin', 'stad_msi', 'ucec')
 nice_names_for_figure <- c('BLCA - Luminal-Papillary', 'BLCA - Basal-Squamous', 'BRCA - Luminal A', 'BRCA - Luminal B', 'BRCA - Basal-like', 'BRCA - HER2-enriched',
     'COAD', 'ESCA - Adenocarcinoma', 'HNSC - Malignant-Basal', 'HNSC - Classical', 'LUAD - Squamoid', 'LUAD - Magnoid', 'LUAD - Bronchioid',
-    'LUSC - Classical', 'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive', 'OV - Proliferative', 'PAAD - Basal', 'PAAD - Classical', 'READ',
-    'STAD - CIN', 'STAD - MSI', 'UCEC')
+    'LUSC - Classical', 'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive', 'OV - Proliferative', 'PAAD', 'READ', 'STAD - CIN', 'STAD - MSI', 'UCEC')
 
 
 
@@ -115,7 +115,29 @@ nice_names_for_figure <- c('BLCA - Luminal-Papillary', 'BLCA - Basal-Squamous', 
 rank_mat <- deconv_rank(deconv_data[ct_to_keep])
 scores_data_transformed <- deconv_scores(expression_data, deconv_data[ct_to_keep], scale_fun = function(x) x/(3*sd(x)), scale_fun_margin = 2, transform_data = TRUE)
 
-# deconv_names <- names(deconv_data)
+# Initial heatmap of top 50 pEMT and CAF genes, ordered by SPIN_NH:
+set.seed(44398)
+htmp_emt_caf <- deconv_heatmap(
+    setNames(
+        scores_data_transformed[
+            unique(c(names(head(sort(apply(rank_mat, 1, quantile, 0.25)), 50)), names(tail(sort(apply(rank_mat, 1, quantile, 0.75)), 50)))),
+            c('gene', ..ct_to_keep)
+        ],
+        c('gene', nice_names_for_figure)
+    ),
+    order_genes_fun = 'seriate',
+    order_genes_method = 'SPIN_NH',
+    # order_analyses_fun = function(x) rev(get_order(seriate(dist(t(x)), method = 'SPIN_NH'))),
+    order_analyses_fun = 'seriate',
+    order_analyses_method = 'SPIN_NH',
+    plot_title = 'Common EMT and stroma genes'
+)
+
+
+
+
+
+# Clustering cancer types by pEMT genes:
 
 scores_mat <- set_rownames(as.matrix(scores_data_transformed[, ..ct_to_keep]), scores_data_transformed$gene)
 scores_mat[scores_mat > 1] <- 1
@@ -152,7 +174,7 @@ ct_hclust_heatmap <- ggplot(ct_hclust_heatmap_data, aes(x = ct1, y = ct2, fill =
         colours = c('#798234', '#a3ad62', '#d0d3a2', '#fdfbe4', '#f0c6c3', '#df91a3', '#d46780'),
         limits = c(-0.6, 0.6),
         breaks = c(-0.6, -0.3, 0, 0.3, 0.6),
-        oob = scales::squish
+        oob = squish
     ) +
     scale_y_discrete(expand = c(0, 0)) +
     scale_x_discrete(expand = c(0, 0)) +
@@ -171,7 +193,7 @@ ct_gw_heatmap <- ggplot(ct_gw_heatmap_data, aes(x = ct1, y = ct2, fill = corr)) 
         colours = c('#798234', '#a3ad62', '#d0d3a2', '#fdfbe4', '#f0c6c3', '#df91a3', '#d46780'),
         limits = c(-0.6, 0.6),
         breaks = c(-0.6, -0.3, 0, 0.3, 0.6),
-        oob = scales::squish
+        oob = squish
     ) +
     scale_y_discrete(expand = c(0, 0)) +
     scale_x_discrete(expand = c(0, 0)) +
@@ -237,191 +259,170 @@ dev.off()
 
 
 ct_hclust_cut <- cutree(ct_hclust, 3)
+ct_clust <- data.table(cancer_type = names(ct_hclust_cut), cluster = ct_hclust_cut)[, memb_strength := silhouette_vals(1 - ct_cor, ct_hclust)]
 
-ct_clust <- data.table(cancer_type = names(ct_hclust_cut), cluster = ct_hclust_cut)[
-    ,
-    memb_strength := unlist(
-        lapply(
-            1:3,
-            function(i) {
-                in_i <- names(ct_hclust_cut[ct_hclust_cut == i])
-                not_in_i <- names(ct_hclust_cut[ct_hclust_cut != i])
-                rowMeans(ct_cor[in_i, in_i]) - rowMeans(ct_cor[in_i, not_in_i])
-            }
-        )
-    )[cancer_type]
-]
-
-# ct_clust <- data.table(
-#     cancer_type = c(
-#         'BRCA - Luminal A',
-#         'BRCA - Luminal B',
-#         'BRCA - Basal-like',
-#         'LUAD - Bronchioid',
-#         'OV - Proliferative',
-#         'OV - Immunoreactive',
-#         'UCEC',
-#         'BRCA - HER2-enriched',
-#         'COAD',
-#         'PAAD - Classical',
-#         'STAD - CIN',
-#         'READ',
-#         'BLCA - Basal-Squamous',
-#         'LUAD - Magnoid',
-#         'LUAD - Squamoid',
-#         'LUSC - Secretory',
-#         'HNSC - Malignant-Basal'
-#     ),
-#     cluster = c(rep(1, 7), rep(2, 5), rep(3, 5))
-# )
-
-score_diff_list <- lapply(
-    1:3,
-    function(i) {
-        cts <- list(in_i = ct_clust[cluster == i & memb_strength > 0.35, cancer_type], not_i = ct_clust[cluster != i & memb_strength > 0.35, cancer_type])
-        scores_data_transformed[
-            names(head(sort(apply(rank_mat, 1, quantile, 0.25)), 100)),
-            .(gene, apply(.SD[, cts$in_i, with = FALSE], 1, median) - apply(.SD[, cts$not_i, with = FALSE], 1, median))
-            # .(gene, rowMeans(.SD[, cts$in_i, with = FALSE]) - rowMeans(.SD[, cts$not_i, with = FALSE]))
-        ] %>% setNames(c('gene', paste0('score_diff_', i)))
-    }
-)
-
-score_diff_table <- merge(merge(score_diff_list[[1]], score_diff_list[[2]]), score_diff_list[[3]])
-score_diff_table[, c('which_max', 'which_max_score') := .(which.max(as.numeric(.SD)), max(as.numeric(.SD))), by = gene]
-ct_clust_distinct_genes <- score_diff_table[order(-which_max_score), .(gene = gene[which_max_score > 0.2]), by = which_max]
-# ct_clust_distinct_genes <- score_diff_table[order(which_max, -which_max_score), .(gene = gene[1:20]), by = which_max]
-
-# Simple clustered heatmap:
-scores_heatmap <- deconv_heatmap(
-    scores_data_transformed[unique(unlist(ct_clust_distinct_genes$gene)), c('gene', ct_clust[memb_strength > 0.35, cancer_type]), with = FALSE],
-    order_genes_fun = 'seriate',
-    order_genes_method = 'OLO_ward',
-    order_analyses_fun = 'seriate',
-    order_analyses_method = 'OLO_ward',
-    # order_genes_fun = 'hclust',
-    # order_genes_method = 'ward.D2',
-    # order_analyses_fun = 'hclust',
-    # order_analyses_method = 'ward.D2',
-    plot_title = NULL
-)
-deconv_heatmap_dendro_plot(scores_heatmap, direction = 'horizontal', title.position = 'top')
-# Actually works pretty well!  Could try using threshold instead of 1:20 or 1:15, and manually rearrange branches so that clusters go diagonally.
-# Could also try using the ordering from the ct-ct clust heatmap, and apply clustering only to the genes.  SPIN_NH also works quite well, but blurs the clusters together.
-
-# ct_clust_distinct_scores <- scores_data_transformed[ct_clust_distinct_genes$gene, c('gene', deconv_names), with = FALSE]
-ct_clust_distinct_scores <- scores_data_transformed[ct_clust_distinct_genes$gene, c('gene', ct_clust[memb_strength > 0.35, cancer_type]), with = FALSE]
-# analyses_clust <- hclust(dist(t(ct_clust_distinct_scores[, -'gene'])), method = 'average')
-ct_clust_distinct_scores <- melt(ct_clust_distinct_scores, variable.name = 'cancer_type', value.name = 'score')
-setkey(ct_clust_distinct_scores, gene)
-setkey(score_diff_table, gene)
-
-ct_clust_cancer_types_scores <- rbindlist(
-    lapply(
-        1:3,
-        function(i) {
-            genes <- ct_clust_distinct_genes[which_max == i, gene]
-            ct_clust_distinct_scores[
-                cancer_type %in% ct_clust[cluster == i, cancer_type] & gene %in% genes,
-                .(weighted_mean = weighted.mean(.SD[genes, score], score_diff_table[genes, which_max_score]), cluster = i),
-                by = cancer_type
-            ]
-        }
-    )
-)
-
-ct_clust_distinct_scores[
-    ,
-    c('gene', 'cancer_type') := .(
-        factor(gene, levels = ct_clust_distinct_genes$gene),
-        # factor(cancer_type, levels = with(tempcor_clust, labels[order]))
-        factor(cancer_type, levels = ct_clust_cancer_types_scores[order(cluster, -weighted_mean), cancer_type])
-    )
-]
-
-pdf('../data_and_figures/scores_heatmap_reordered.pdf', width = 6, height = 8)
-ggplot(ct_clust_distinct_scores, aes(x = cancer_type, y = gene, fill = score)) +
-    geom_raster() +
-    scale_x_discrete(expand = c(0, 0)) +
-    scale_y_discrete(expand = c(0, 0)) +
-    scale_fill_gradientn(colours = rev(colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(50)), limits = c(-1, 1), oob = scales::squish) +
-    theme(axis.text.x = element_text(angle = 55, hjust = 1))
-dev.off()
-
-# Alternative ordering within each cluster:
-
-orderings <- lapply(
-    1:3,
-    function(i) list(
-        ordering_genes = get_order(
-            seriate(
-                # dist(scores_data_transformed[ct_clust_distinct_genes[which_max == i, gene], ct_clust[cluster == i, cancer_type], with = FALSE]),
-                dist(scores_data_transformed[ct_clust_distinct_genes[which_max == i, gene]]),
-                method = 'GW_ward'
-            )
-        ),
-        ordering_cancer_type = get_order(
-            seriate(
-                # dist(t(scores_data_transformed[ct_clust_distinct_genes[which_max == i, gene], ct_clust[cluster == i, cancer_type], with = FALSE])),
-                dist(t(scores_data_transformed[, ct_clust[cluster == i, cancer_type], with = FALSE])),
-                method = 'GW_ward'
-            )
-        )
-    )
-)
-
-ct_clust_distinct_scores[
-    ,
-    c('gene', 'cancer_type') := .(
-        factor(gene, levels = unlist(lapply(1:3, function(i) ct_clust_distinct_genes[which_max == i, gene][orderings[[i]]$ordering_genes]), recursive = FALSE)),
-        factor(cancer_type, levels = unlist(lapply(1:3, function(i) ct_clust[cluster == i, cancer_type][orderings[[i]]$ordering_cancer_type]), recursive = FALSE))
-    )
-]
-
-ggplot(ct_clust_distinct_scores, aes(x = cancer_type, y = gene, fill = score)) +
-    geom_raster() +
-    scale_x_discrete(expand = c(0, 0)) +
-    scale_y_discrete(expand = c(0, 0)) +
-    scale_fill_gradientn(colours = rev(colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(50)), limits = c(-1, 1), oob = scales::squish) +
-    theme(axis.text.x = element_text(angle = 55, hjust = 1))
-
-
-
-
-
-# deconv_data <- deconv_data[ct_to_keep]
-# deconv_plots <- deconv_plots[ct_to_keep]
-
-# Change to nice names:
-# names(deconv_data) <- mapvalues(names(deconv_data), names(deconv_data), nice_names_for_figure)
-# names(deconv_plots) <- mapvalues(names(deconv_plots), names(deconv_plots), nice_names_for_figure)
-
-
-
-
-
-set.seed(44398)
-
-htmp_emt_caf <- deconv_heatmap(
-    setNames(
-        scores_data_transformed[
-            unique(c(names(head(sort(apply(rank_mat, 1, quantile, 0.25)), 50)), names(tail(sort(apply(rank_mat, 1, quantile, 0.75)), 50)))),
-            c('gene', ..ct_to_keep)
-        ],
-        c('gene', nice_names_for_figure)
-    ),
-    order_genes_fun = 'seriate',
-    order_genes_method = 'SPIN_NH',
-    # order_analyses_fun = function(x) rev(get_order(seriate(dist(t(x)), method = 'SPIN_NH'))),
-    order_analyses_fun = 'seriate',
-    order_analyses_method = 'SPIN_NH',
-    plot_title = 'Common EMT and stroma genes'
-)
+# ct_clust <- data.table(cancer_type = names(ct_hclust_cut), cluster = ct_hclust_cut)[
+#     ,
+#     memb_strength := unlist(
+#         lapply(
+#             1:3,
+#             function(i) {
+#                 in_i <- names(ct_hclust_cut[ct_hclust_cut == i])
+#                 not_in_i <- names(ct_hclust_cut[ct_hclust_cut != i])
+#                 rowMeans(ct_cor[in_i, in_i]) - rowMeans(ct_cor[in_i, not_in_i])
+#             }
+#         )
+#     )[cancer_type]
+# ]
 
 # Make the names of the cluster match "1", "2", "3" in a consistent order:
 setkey(ct_clust, cancer_type)
 ct_clust_map <- mapvalues(1:3, 1:3, ct_clust[c('brca_luminal_a', 'hnsc_mesenchymal_basal', 'stad_cin'), cluster])
 ct_clust[, cluster_manual := mapvalues(cluster, 1:3, ct_clust_map)]
+
+score_diff_table <- data.table(symbol = names(head(sort(apply(rank_mat, 1, quantile, 0.25)), 100)))[
+    ,
+    (paste0('score_diff_', 1:3)) := lapply(
+        1:3,
+        function(i) {
+            cts <- list(in_i = ct_clust[cluster_manual == i & memb_strength > 0.05, cancer_type], not_i = ct_clust[cluster_manual != i & memb_strength > 0.05, cancer_type])
+            scores_data_transformed[symbol, rowMeans(.SD[, cts$in_i, with = FALSE]) - rowMeans(.SD[, cts$not_i, with = FALSE])]
+        }
+    )
+] %>% setnames('symbol', 'gene')
+score_diff_table[, c('which_max', 'which_max_score') := .(which.max(as.numeric(.SD)), max(as.numeric(.SD))), by = gene]
+# ct_clust_distinct_genes <- score_diff_table[order(which_max, -which_max_score), .(gene = gene[which_max_score > 0.22]), by = which_max]
+ct_clust_distinct_genes <- score_diff_table[order(which_max, -which_max_score), .(gene = gene[1:20]), by = which_max]
+
+scores_heatmap_data <- scores_data_transformed[unique(unlist(ct_clust_distinct_genes$gene)), c('gene', ct_clust[memb_strength > 0.05, cancer_type]), with = FALSE]
+names(scores_heatmap_data) <- mapvalues(names(scores_heatmap_data), ct_to_keep, nice_names_for_figure, warn_missing = FALSE)
+
+scores_heatmap <- deconv_heatmap(
+    scores_heatmap_data,
+    order_genes_fun = 'seriate',
+    order_genes_method = 'GW_ward',
+    order_analyses_fun = 'seriate',
+    order_analyses_method = 'GW_ward',
+    # order_genes_fun = 'hclust',
+    # order_genes_method = 'ward.D2',
+    # order_analyses_fun = 'hclust',
+    # order_analyses_method = 'ward.D2',
+    colour_limits = c(-1, 1),
+    legend_breaks = c(-1, 0, 1),
+    legend_labels = c('-1' = '-1', '0' = '0', '1' = '1'),
+    plot_title = NULL,
+    legend.text = element_text(size = 9),
+    legend.title = element_text(size = 9)
+)
+
+scores_heatmap <- c(
+    list(
+        heatmap = scores_heatmap$heatmap +
+            theme(
+                axis.text.x = element_text(
+                    angle = 55,
+                    hjust = 1,
+                    colour = ct_clust[
+                        with(scores_heatmap, mapvalues(analyses[ordering_analyses], nice_names_for_figure, ct_to_keep, warn_missing = FALSE)),
+                        mapvalues(cluster_manual, 1:3, brewer.pal(3, 'Dark2'))
+                    ]
+                )
+            )
+    ),
+    scores_heatmap[-1]
+)
+
+deconv_heatmap_dendro_plot(
+    scores_heatmap,
+    direction = 'horizontal',
+    title.position = 'top',
+    title.hjust = 0.5,
+    barwidth = unit(50, 'pt'),
+    barheight = unit(7.5, 'pt'),
+    rel_widths = c(9, 1.25),
+    rel_heights = c(0.75, 10)
+)
+
+# I think it's also possible to colour the dendrogram, but might be more work than it's worth.  Here's some info in case we decide to do this:
+# https://stackoverflow.com/questions/21474388/colorize-clusters-in-dendogram-with-ggplot2
+
+# Alternative ordering for scores heatmap, by weighted mean within each cluster:
+
+# ct_clust_distinct_scores <- scores_data_transformed[ct_clust_distinct_genes$gene, c('gene', ct_clust[memb_strength > 0.05, cancer_type]), with = FALSE]
+# ct_clust_distinct_scores <- melt(ct_clust_distinct_scores, variable.name = 'cancer_type', value.name = 'score')
+# setkey(ct_clust_distinct_scores, gene)
+# setkey(score_diff_table, gene)
+#
+# ct_clust_cancer_types_scores <- rbindlist(
+#     lapply(
+#         1:3,
+#         function(i) {
+#             genes <- ct_clust_distinct_genes[which_max == i, gene]
+#             ct_clust_distinct_scores[
+#                 cancer_type %in% ct_clust[cluster_manual == i, cancer_type] & gene %in% genes,
+#                 .(weighted_mean = weighted.mean(.SD[genes, score], score_diff_table[genes, which_max_score]), cluster_manual = i),
+#                 by = cancer_type
+#             ]
+#         }
+#     )
+# )
+#
+# ct_clust_distinct_scores[
+#     ,
+#     c('gene', 'cancer_type') := .(
+#         factor(gene, levels = ct_clust_distinct_genes$gene),
+#         # factor(cancer_type, levels = with(tempcor_clust, labels[order]))
+#         factor(cancer_type, levels = ct_clust_cancer_types_scores[order(cluster_manual, -weighted_mean), cancer_type])
+#     )
+# ]
+#
+# ggplot(ct_clust_distinct_scores, aes(x = cancer_type, y = gene, fill = score)) +
+#     geom_raster() +
+#     scale_x_discrete(expand = c(0, 0)) +
+#     scale_y_discrete(expand = c(0, 0)) +
+#     scale_fill_gradientn(colours = rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)), limits = c(-1, 1), oob = squish) +
+#     theme(axis.text.x = element_text(angle = 55, hjust = 1))
+
+# Alternative ordering by seriate() within each cluster:
+
+# orderings <- lapply(
+#     1:3,
+#     function(i) list(
+#         ordering_genes = get_order(
+#             seriate(
+#                 # dist(scores_data_transformed[ct_clust_distinct_genes[which_max == i, gene], ct_clust[cluster == i, cancer_type], with = FALSE]),
+#                 dist(scores_data_transformed[ct_clust_distinct_genes[which_max == i, gene], -'gene']),
+#                 method = 'SPIN_STS'
+#             )
+#         ),
+#         ordering_cancer_type = get_order(
+#             seriate(
+#                 # dist(t(scores_data_transformed[ct_clust_distinct_genes[which_max == i, gene], ct_clust[cluster == i, cancer_type], with = FALSE])),
+#                 dist(t(scores_data_transformed[, ct_clust[cluster_manual == i, cancer_type], with = FALSE])),
+#                 method = 'SPIN_STS'
+#             )
+#         )
+#     )
+# )
+#
+# ct_clust_distinct_scores[
+#     ,
+#     c('gene', 'cancer_type') := .(
+#         factor(gene, levels = unlist(lapply(1:3, function(i) ct_clust_distinct_genes[which_max == i, gene][orderings[[i]]$ordering_genes]), recursive = FALSE)),
+#         factor(cancer_type, levels = unlist(lapply(1:3, function(i) ct_clust[cluster_manual == i, cancer_type][orderings[[i]]$ordering_cancer_type]), recursive = FALSE))
+#     )
+# ]
+#
+# ggplot(ct_clust_distinct_scores, aes(x = cancer_type, y = gene, fill = score)) +
+#     geom_raster() +
+#     scale_x_discrete(expand = c(0, 0)) +
+#     scale_y_discrete(expand = c(0, 0)) +
+#     scale_fill_gradientn(colours = rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)), limits = c(-1, 1), oob = squish) +
+#     theme(axis.text.x = element_text(angle = 55, hjust = 1))
+
+
+
+
 
 # Tables of cancer types in each cluster and genes scoring highly in each cluster relative to the others:
 
@@ -433,10 +434,10 @@ table_cancer_types_data <- setNames(
             1:3,
             function(i) {
                 ct_clust[
-                    memb_strength > 0.35 & cluster_manual == i,
+                    memb_strength > 0.05 & cluster_manual == i,
                     c(
                         mapvalues(cancer_type, ct_to_keep, nice_names_for_figure, warn_missing = FALSE),
-                        rep('', max(table(ct_clust[memb_strength > 0.35, cluster_manual])) - .N)
+                        rep('', max(table(ct_clust[memb_strength > 0.05, cluster_manual])) - .N)
                     )
                 ]
             }
@@ -472,20 +473,20 @@ table_cancer_types_data_all <- setNames(
                 1:3,
                 function(i) {
                     ct_clust[
-                        memb_strength > 0.35 & cluster_manual == i,
+                        memb_strength > 0.05 & cluster_manual == i,
                         c(
                             mapvalues(cancer_type, ct_to_keep, nice_names_for_figure, warn_missing = FALSE),
-                            rep('', max(table(ct_clust[memb_strength > 0.35, cluster_manual])) - .N)
+                            rep('', max(table(ct_clust[memb_strength > 0.05, cluster_manual])) - .N)
                         )
                     ]
                 }
             )
         ),
         ct_clust[
-            memb_strength <= 0.35,
+            memb_strength <= 0.05,
             c(
                 mapvalues(cancer_type, ct_to_keep, nice_names_for_figure, warn_missing = FALSE),
-                rep('', max(table(ct_clust[memb_strength > 0.35, cluster_manual])) - .N)
+                rep('', max(table(ct_clust[memb_strength > 0.05, cluster_manual])) - .N)
             )
         ]
     ),
@@ -511,7 +512,8 @@ table_cancer_types_all <- do.call(
 )
 
 table_genes_data <- setNames(
-    as.data.table(ct_clust_distinct_genes[ct_clust_map]),
+    # lapply(1:3, function(i) ct_clust_distinct_genes[, c(.SD[which_max == i, gene], rep('', max(.SD[, .N, by = which_max]$N) - .SD[which_max == i, .N]))])
+    as.data.table(lapply(1:3, function(i) score_diff_table[which_max == i][order(-which_max_score), gene[1:20]])),
     c('Cluster 1\nGynaecological', 'Cluster 2\nSquamous-like', 'Cluster 3\nGastro-intestinal')
 )
 
@@ -528,7 +530,7 @@ table_genes <- do.call(
                 ),
                 rows = NULL
             )
-            gtable_add_grob(g, grobs = grid::rectGrob(gp = grid::gpar(fill = NA)), t = 2, b = nrow(g), l = 1) # l = switch((i == 1) + 1, 1, 2)
+            gtable_add_grob(g, grobs = rectGrob(gp = gpar(fill = NA)), t = 2, b = nrow(g), l = 1) # l = switch((i == 1) + 1, 1, 2)
         }
     )
 )
@@ -547,7 +549,7 @@ htmp_emt_caf$heatmap + theme(
         colour = mapvalues(
             ct_clust[
                 with(htmp_emt_caf, mapvalues(analyses[ordering_analyses], nice_names_for_figure, ct_to_keep)),
-                .(new_clust = switch((memb_strength > 0.35) + 1, 0L, cluster_manual)),
+                .(new_clust = switch((memb_strength > 0.05) + 1, 0L, cluster_manual)),
                 by = cancer_type
             ]$new_clust,
             0:3,
@@ -558,7 +560,7 @@ htmp_emt_caf$heatmap + theme(
 dev.off()
 
 # Tables of cancer types and signature genes for each cluster:
-pdf('../data_and_figures/scores_pca_tables_alt_v2.pdf', width = 10, height = 8)
+pdf('../data_and_figures/scores_tables.pdf', width = 10, height = 8)
 ggdraw(table_cancer_types)
 ggdraw(table_cancer_types_all)
 ggdraw(table_genes)
@@ -569,68 +571,12 @@ dev.off()
 # I think it's also possible to colour the dendrogram, but might be more work than it's worth.  Here's some info in case we decide to do this:
 # https://stackoverflow.com/questions/21474388/colorize-clusters-in-dendogram-with-ggplot2
 
-pdf('../data_and_figures/scores_heatmap.pdf', width = 6.5, height = 9)
-
-deconv_heatmap_dendro_plot(
-    # htmp_all_kmeans_distinct,
-    c(
-        list(
-            heatmap = htmp_all_kmeans_distinct$heatmap + theme(
-                axis.text.x = element_text(
-                    angle = 55,
-                    hjust = 1,
-                    colour = pca_data[
-                        with(htmp_all_kmeans_distinct, analyses[ordering_analyses]),
-                        mapvalues(kmeans_cluster_manual, c(1, 2, 3), brewer.pal(3, 'Dark2'))
-                    ]
-                )
-            )
-        ),
-        htmp_all_kmeans_distinct[-1]
-    ),
-    direction = 'horizontal',
-    title.position = 'top',
-    title.hjust = 0.5,
-    barwidth = unit(70, 'pt'),
-    barheight = unit(10, 'pt'),
-    rel_widths = c(9, 2),
-    rel_heights = c(1, 10)
-)
-
-deconv_heatmap_dendro_plot(
-    # htmp_all_kmeans_distinct,
-    c(
-        list(
-            heatmap = htmp_all_kmeans_distinct_emttfs$heatmap + theme(
-                axis.text.x = element_text(
-                    angle = 55,
-                    hjust = 1,
-                    colour = pca_data[
-                        with(htmp_all_kmeans_distinct_emttfs, analyses[ordering_analyses]),
-                        mapvalues(kmeans_cluster_manual, c(1, 2, 3), brewer.pal(3, 'Dark2'))
-                    ]
-                )
-            )
-        ),
-        htmp_all_kmeans_distinct_emttfs[-1]
-    ),
-    direction = 'horizontal',
-    title.position = 'top',
-    title.hjust = 0.5,
-    barwidth = unit(70, 'pt'),
-    barheight = unit(10, 'pt'),
-    rel_widths = c(9, 2),
-    rel_heights = c(1, 10)
-)
-
-dev.off()
 
 
 
 
-
-# Volcano plot to fill in white space in figure 4: the idea is that genes which occur in more lists will have a larger sample size and therefore greater chance
-# of becoming significant.  The fold change is replaced by average EMT-CAF score.
+# Volcano plot for figure 4: the idea is that genes which occur in more lists will have a larger sample size and therefore greater chance of becoming significant.
+# The fold change is replaced by average EMT-CAF score.
 
 scores_volcano_plot_data <- scores_data_transformed[, .(ave_score = rowMeans(.SD), signif_val = t.test(as.numeric(.SD))$p.value), by = gene]
 
@@ -1471,9 +1417,7 @@ clin_cor$deconv_caf[, nice_test_name := mapvalues(test_name, ct_to_keep, nice_na
 # Get expressions from these commands:
 # latex2exp::TeX('\\textbf{Significance of association}')
 # latex2exp::TeX('-log_{10}(p) $\\times$ sign(fold change)')
-
-# Except I deleted a space from the following.  Not sure why I didn't need to do this
-# for the scatterplots.
+# Except I deleted a space from the following.  Not sure why I didn't need to do this for the scatterplots.
 
 sig_lab <- expression(
     atop(
@@ -1494,7 +1438,7 @@ clin_cor_heatmaps <- sapply(
             y_var = 'nice_variable_name',
             fill_var = 'sigval',
             hclust_method = NULL,
-            x_factor_levels = with(ct_hclust, mapvalues(labels[order], ct_to_keep, nice_names_for_figure)),
+            x_factor_levels = with(ct_hclust, mapvalues(labels[order][labels[order] %in% clin_cor[[emt_type]]$test_name], ct_to_keep, nice_names_for_figure)),
             y_factor_levels = c('Lymph node metastasis', 'N stage', 'Lymphovascular invasion', 'Grade', 'T stage', 'Reduced survival', 'Therapy resistance'),
             colours = c('#276419', '#4D9221', '#7FBC41', '#B8E186', '#E6F5D0', '#F7F7F7', '#F7F7F7', '#F7F7F7', '#F7F7F7', '#F7F7F7',
 						'#FDE0EF', '#F1B6DA', '#DE77AE', '#C51B7D', '#8E0152'), # PiYG palette with fatter waist...
@@ -1518,10 +1462,7 @@ clin_cor_heatmaps <- sapply(
     USE.NAMES = TRUE
 )
 
-# Save to PDF:
-
-cairo_pdf('../data_and_figures/clinical_heatmaps.pdf', width = 9.5, height = 5)
-
+cairo_pdf('../data_and_figures/clinical_heatmaps.pdf', width = 8.5, height = 5)
 plot_grid(
     plot_grid(
         clin_cor_heatmaps$deconv_emt + theme(axis.text.x = element_blank(), legend.position = 'none'),
@@ -1531,7 +1472,11 @@ plot_grid(
                 clin_cor_heatmaps$deconv_caf + theme(
                     axis.text.x = element_text(
                         colour = mapvalues(
-                            ct_clust[with(ct_hclust, labels[order]), .(new_clust = switch((memb_strength > 0.35) + 1, 0L, cluster_manual)), by = cancer_type]$new_clust,
+                            ct_clust[
+                                with(ct_hclust, labels[order][labels[order] %in% clin_cor$deconv_caf$test_name]),
+                                .(new_clust = switch((memb_strength > 0.05) + 1, 0L, cluster_manual)),
+                                by = cancer_type
+                            ]$new_clust,
                             c(0, 1, 2, 3),
                             c('darkgrey', brewer.pal(3, 'Dark2'))
                         )
@@ -1539,7 +1484,6 @@ plot_grid(
                 )
             )
         ),
-        # ggdraw(get_x_axis(clin_cor_heatmaps$deconv_caf)),
         nrow = 3,
         ncol = 1,
         align = 'v',
@@ -1553,9 +1497,8 @@ plot_grid(
     ),
     nrow = 1,
     ncol = 2,
-    rel_widths = c(9.5, 3)
+    rel_widths = c(6, 2.5)
 )
-
 dev.off()
 
 
@@ -1565,73 +1508,30 @@ dev.off()
 # Scatterplots of significance of association for EMT vs. that for CAFs:
 
 # latex2exp::TeX('-log_{10}(p_{CAF}) $\\times$ sign(fold change)')
-
 sig_lab_caf <- expression(
     atop(
-        `\textbf{Significance of association for CAFs}` = paste(
-            "",
-            bold(paste("Significance of association for CAFs"))
-        ),
-        `-log_{10}(p_{CAF}) $\times$ sign(fold change)` = paste(
-            "-log",
-            phantom()[{paste("10")}],
-            "(",
-            "",
-            "p",
-            phantom()[{paste("CAF")}],
-            ")",
-            "",
-            " ",
-            "",
-            phantom() %*% phantom(),
-            " sign",
-            "(",
-            "fold change",
-            ")",
-            ""
-        )
+        `\textbf{Significance of association for CAFs}` = paste("", bold(paste("Significance of association for CAFs"))),
+        `-log_{10}(p_{CAF}) $\times$ sign(fold change)` = paste("-log", phantom()[{paste("10")}], "(", "", "p", phantom()[{paste("CAF")}], ")", "", " ", "",
+            phantom() %*% phantom(), " sign", "(", "fold change", ")", "")
     )
 )
 
 # latex2exp::TeX('-log_{10}(p_{pEMT}) $\\times$ sign(fold change)')
-
 sig_lab_emt <- expression(
     atop(
-        `\textbf{Significance of association for pEMT}` = paste(
-            "",
-            bold(paste("Significance of association for pEMT"))
-        ),
-        `-log_{10}(p_{pEMT}) $\times$ sign(fold change)` = paste(
-            "-log",
-            phantom()[{paste("10")}],
-            "(",
-            "",
-            "p",
-            phantom()[{paste("pEMT")}],
-            ")",
-            "",
-            " ",
-            "",
-            phantom() %*% phantom(),
-            " sign",
-            "(",
-            "fold change",
-            ")",
-            ""
-        )
+        `\textbf{Significance of association for pEMT}` = paste("", bold(paste("Significance of association for pEMT"))),
+        `-log_{10}(p_{pEMT}) $\times$ sign(fold change)` = paste("-log", phantom()[{paste("10")}], "(", "", "p", phantom()[{paste("pEMT")}], ")", "", " ", "",
+            phantom() %*% phantom(), " sign", "(", "fold change", ")", "")
     )
 )
 
 # Scatterplot including all clinical features and cancer types:
+# THIS WILL GO IN A SUPPLEMENTARY FIGURE: DECIDE WHICH ONE!
 
-emt_caf_sig_data <- merge(
-    clin_cor$deconv_emt,
-    clin_cor$deconv_caf,
-    by = c('test_name', 'nice_variable_name')
-)[
+emt_caf_sig_data <- merge(clin_cor$deconv_emt, clin_cor$deconv_caf, by = c('nice_test_name', 'nice_variable_name'))[
     ,
     .(
-        test_name = test_name,
+        test_name = nice_test_name,
         variable_name = nice_variable_name,
         sig_emt = sigval.x,
         sig_caf = sigval.y,
@@ -1640,36 +1540,18 @@ emt_caf_sig_data <- merge(
     )
 ]
 
-pval_adj_threshold <- adjust_threshold_bh(
-    c(
-        clin_cor$deconv_emt[variable_name != 'pathologic_m', pval],
-        clin_cor$deconv_caf[variable_name != 'pathologic_m', pval]
-    )
-)
+pval_adj_threshold <- adjust_threshold_bh(c(clin_cor$deconv_emt[variable_name != 'pathologic_m', pval], clin_cor$deconv_caf[variable_name != 'pathologic_m', pval]))
 
-pdf(
-    '../data_and_figures/clinical_scatterplot_all_features.pdf',
-    width = 7,
-    height = 4.5
-)
-
-ggplot(
-    emt_caf_sig_data[variable_name != 'M stage'],
-    aes(x = sig_caf, y = sig_emt)
-) +
-    geom_point(
-        aes(colour = variable_name),
-        shape = 17,
-        size = 2.5
-    ) +
+pdf('../data_and_figures/clinical_scatterplot_all_features.pdf', width = 7, height = 4.5)
+ggplot(emt_caf_sig_data[variable_name != 'M stage'], aes(x = sig_caf, y = sig_emt)) +
+    geom_hline(yintercept = 0, linetype = 'dashed', colour = 'lightgrey') +
+    geom_vline(xintercept = 0, linetype = 'dashed', colour = 'lightgrey') +
+    geom_point(aes(colour = variable_name), shape = 17, size = 2.5) +
     geom_text_repel(
         aes(label = str_extract(test_name, '^[A-Z]+')),
         data = emt_caf_sig_data[
             variable_name != 'M stage' & (
-                sig_emt > -log10(pval_adj_threshold) |
-                    sig_emt < log10(pval_adj_threshold) |
-                    sig_caf > -log10(pval_adj_threshold) |
-                    sig_caf < log10(pval_adj_threshold)
+                sig_emt > -log10(pval_adj_threshold) | sig_emt < log10(pval_adj_threshold) | sig_caf > -log10(pval_adj_threshold) | sig_caf < log10(pval_adj_threshold)
             )
         ],
         point.padding = 0.1,
@@ -1678,24 +1560,11 @@ ggplot(
     scale_colour_manual(
         values = setNames(
             brewer.pal(8, "Set1")[-6],
-            c(
-                'Lymph node metastasis',
-                'Therapy resistance',
-                'Reduced survival',
-                'Lymphovascular invasion',
-                'T stage',
-                'N stage',
-                'Grade'
-            )
+            c('Lymph node metastasis', 'Therapy resistance', 'Reduced survival', 'Lymphovascular invasion', 'T stage', 'N stage', 'Grade')
         )
     ) +
-    labs(
-        x = sig_lab_caf,
-        y = sig_lab_emt,
-        colour = 'Clinical feature'
-    ) +
+    labs(x = sig_lab_caf, y = sig_lab_emt, colour = 'Clinical feature') +
     theme_test()
-
 dev.off()
 
 # Below is a figure combining four plots showing my "top 4" clinical features, which
@@ -1703,29 +1572,26 @@ dev.off()
 # significant cases.  Survival and T stage show no significant cases after adjusting
 # p values, while LVI shows one but has relatively few points anyway.
 
+scatterplots_data <- rbindlist(
+    lapply(
+        c('Grade', 'Lymph node metastasis', 'Lymphovascular invasion', 'M stage', 'N stage', 'Reduced survival', 'T stage', 'Therapy resistance'),
+        function(clin_feat) {
+            pthresh <- adjust_threshold_bh(c(clin_cor$deconv_emt[nice_variable_name == clin_feat, pval], clin_cor$deconv_caf[nice_variable_name == clin_feat, pval]))
+            dt <- emt_caf_sig_data[variable_name == clin_feat]
+            if(is.na(pthresh)) {
+                dt[, sig := 'not_significant']
+            } else {
+                dt[, sig := switch((abs(sig_emt) > -log10(pthresh) | abs(sig_caf) > -log10(pthresh)) + 1, 'not_significant', 'significant'), by = test_name]
+            }
+            return(dt)
+        }
+    )
+)
+
 scatterplots <- sapply(
-    c('Grade', 'N stage', 'Reduced survival', 'Therapy resistance'),
+    c('Grade', 'Lymph node metastasis', 'N stage', 'Therapy resistance'),
     function(clin_feat) {
-
-        pval_adj_threshold <- adjust_threshold_bh(
-            c(
-                clin_cor$deconv_emt[nice_variable_name == clin_feat, pval],
-                clin_cor$deconv_caf[nice_variable_name == clin_feat, pval]
-            )
-        )
-
-        ggplot(
-            emt_caf_sig_data[variable_name == clin_feat][
-                ,
-                sig := switch(
-                    (abs(sig_emt) > -log10(pval_adj_threshold) | abs(sig_caf) > -log10(pval_adj_threshold)) + 1,
-                    'not_significant',
-                    'significant'
-                ),
-                by = test_name
-            ],
-            aes(x = sig_caf, y = sig_emt)
-        ) +
+        ggplot(scatterplots_data[variable_name == clin_feat], aes(x = sig_caf, y = sig_emt)) +
             geom_hline(yintercept = 0, colour = 'grey', size = 0.5, linetype = 'dashed') +
             geom_vline(xintercept = 0, colour = 'grey', size = 0.5, linetype = 'dashed') +
             geom_point(aes(colour = sig), shape = 17, size = 2.5) +
@@ -1736,7 +1602,6 @@ scatterplots <- sapply(
             labs(title = clin_feat, colour = NULL) +
             theme_test() +
             theme(axis.title = element_blank())
-
     },
     simplify = FALSE,
     USE.NAMES = TRUE
@@ -1744,93 +1609,61 @@ scatterplots <- sapply(
 
 scatterplots$Grade <- scatterplots$Grade + geom_text_repel(
     aes(label = str_replace(test_name, ' - ', '\n')),
-    data = emt_caf_sig_data[variable_name == 'Grade' & test_name == 'STAD - CIN'],
+    data = scatterplots_data[variable_name == 'Grade' & test_name == 'ESCA - Adenocarcinoma'],
     point.padding = 0.1, size = 3.5, lineheight = 0.75, segment.size = 0.3,
-    nudge_x = 0.1, nudge_y = 0.5
+    nudge_y = -0.4
 ) + geom_text_repel(
     aes(label = str_replace(test_name, ' - ', '\n')),
-    data = emt_caf_sig_data[variable_name == 'Grade' & test_name == 'ESCA - Adenocarcinoma'],
+    data = scatterplots_data[variable_name == 'Grade' & test_name == 'STAD - CIN'],
     point.padding = 0.1, size = 3.5, lineheight = 0.75, segment.size = 0.3,
-    nudge_x = 0.1, nudge_y = 1.2
+    nudge_y = -0.1
+)
+
+scatterplots$`Lymph node metastasis` <- scatterplots$`Lymph node metastasis` + geom_text_repel(
+    aes(label = str_replace(test_name, ' - ', '\n')),
+    data = emt_caf_sig_data[variable_name == 'Lymph node metastasis' & test_name == 'COAD'],
+    point.padding = 0.1, size = 3.5, lineheight = 0.75, segment.size = 0.3,
+    nudge_x = 0.1, nudge_y = -0.1
 ) + geom_text_repel(
     aes(label = str_replace(test_name, ' - ', '\n')),
-    data = emt_caf_sig_data[variable_name == 'Grade' & test_name %in% c('HNSC - Atypical', 'HNSC - Malignant-Basal')],
+    data = emt_caf_sig_data[variable_name == 'Lymph node metastasis' & test_name == 'HNSC - Classical'],
     point.padding = 0.1, size = 3.5, lineheight = 0.75, segment.size = 0.3,
-    nudge_x = -0.5, nudge_y = -1
+    nudge_x = 0.9
 ) + geom_text_repel(
     aes(label = str_replace(test_name, ' - ', '\n')),
-    data = emt_caf_sig_data[variable_name == 'Grade' & test_name == 'PAAD'],
+    data = emt_caf_sig_data[variable_name == 'Lymph node metastasis' & test_name == 'HNSC - Malignant-Basal'],
     point.padding = 0.1, size = 3.5, lineheight = 0.75, segment.size = 0.3,
-    nudge_x = -0.3, nudge_y = 0.1
-) + geom_text_repel(
-    aes(label = str_replace(test_name, ' - ', '\n')),
-    data = emt_caf_sig_data[variable_name == 'Grade' & test_name == 'CESC'],
-    point.padding = 0.1, size = 3.5, lineheight = 0.75, segment.size = 0.3,
-    nudge_x = 0.1
+    nudge_y = -1.2
 )
 
 scatterplots$`N stage` <- scatterplots$`N stage` + geom_text_repel(
     aes(label = str_replace(test_name, ' - ', '\n')),
-    data = emt_caf_sig_data[variable_name == 'N stage' & test_name == 'LUAD - Magnoid'],
+    data = emt_caf_sig_data[variable_name == 'N stage' & test_name == 'HNSC - Classical'],
     point.padding = 0.1, size = 3.5, lineheight = 0.75, segment.size = 0.3,
-    nudge_x = -0.75, nudge_y = -0.1
+    nudge_x = 0.5
 ) + geom_text_repel(
     aes(label = str_replace(test_name, ' - ', '\n')),
     data = emt_caf_sig_data[variable_name == 'N stage' & test_name == 'HNSC - Malignant-Basal'],
     point.padding = 0.1, size = 3.5, lineheight = 0.75, segment.size = 0.3,
-    nudge_x = -0.5, nudge_y = -0.5
+    nudge_x = 0.1, nudge_y = -0.3
 ) + geom_text_repel(
     aes(label = str_replace(test_name, ' - ', '\n')),
     data = emt_caf_sig_data[variable_name == 'N stage' & test_name == 'READ'],
     point.padding = 0.1, size = 3.5, lineheight = 0.75, segment.size = 0.3,
-    nudge_y = 0.5
-) + geom_text_repel(
-    aes(label = str_replace(test_name, ' - ', '\n')),
-    data = emt_caf_sig_data[variable_name == 'N stage' & test_name == 'BRCA - Luminal A'],
-    point.padding = 0.1, size = 3.5, lineheight = 0.75, segment.size = 0.3,
-    nudge_x = 0.1, nudge_y = -0.5
-)
-
-scatterplots$`Reduced survival` <- scatterplots$`Reduced survival` + geom_text_repel(
-    aes(label = str_replace(test_name, ' - ', '\n')),
-    data = emt_caf_sig_data[variable_name == 'Reduced survival' & test_name == 'LIHC'],
-    point.padding = 0.1, size = 3.5, lineheight = 0.75, segment.size = 0.3,
-    nudge_x = -0.2, nudge_y = -0.1
-) + geom_text_repel(
-    aes(label = str_replace(test_name, ' - ', '\n')),
-    data = emt_caf_sig_data[variable_name == 'Reduced survival' & test_name %in% c('LUSC - Primitive', 'BRCA - Luminal B')],
-    point.padding = 0.1, size = 3.5, lineheight = 0.75, segment.size = 0.3,
-    nudge_y = 0.75
+    nudge_y = 0.1
 )
 
 scatterplots$`Therapy resistance` <- scatterplots$`Therapy resistance` + geom_text_repel(
     aes(label = str_replace(test_name, ' - ', '\n')),
-    data = emt_caf_sig_data[variable_name == 'Therapy resistance' & test_name == 'PAAD'],
+    data = emt_caf_sig_data[variable_name == 'Therapy resistance' & test_name %in% c('HNSC - Malignant-Basal', 'PAAD')],
     point.padding = 0.1, size = 3.5, lineheight = 0.75, segment.size = 0.3,
-    nudge_x = 0.3, nudge_y = -0.1
-) + geom_text_repel(
-    aes(label = str_replace(test_name, ' - ', '\n')),
-    data = emt_caf_sig_data[variable_name == 'Therapy resistance' & test_name == 'HNSC - Malignant-Basal'],
-    point.padding = 0.1, size = 3.5, lineheight = 0.75, segment.size = 0.3,
-    nudge_x = 0.6, nudge_y = -0.1
+    nudge_x = 0.1, nudge_y = -0.1
 )
 
-pdf(
-    '../data_and_figures/clinical_4_scatterplots.pdf',
-    width = 8,
-    height = 6.5
-)
-
+pdf('../data_and_figures/clinical_4_scatterplots.pdf', width = 8, height = 6.5)
 plot_grid(
     textGrob(sig_lab_emt, rot = 90, gp = gpar(fontsize = 9)),
-    plot_grid(
-        plotlist = lapply(
-            scatterplots,
-            function(g) {g + theme(legend.position = 'none')}
-        ),
-        nrow = 2,
-        ncol = 2
-    ),
+    plot_grid(plotlist = lapply(scatterplots, function(g) {g + theme(legend.position = 'none')}), nrow = 2, ncol = 2),
     get_legend(scatterplots[[1]]),
     blank_plot(),
     textGrob(sig_lab_caf, gp = gpar(fontsize = 9)),
@@ -1840,645 +1673,89 @@ plot_grid(
     rel_widths = c(1, 12, 3),
     rel_heights = c(11, 1)
 )
-
 dev.off()
 
-# plot_grid(
-#     blank_plot(),
-#     plot_grid(
-#         plotlist = lapply(
-#             c(
-#                 'Grade',
-#                 # 'Lymph node metastasis',
-#                 # 'Lymphovascular invasion',
-#                 'N stage',
-#                 'Survival',
-#                 # 'T stage',
-#                 'Therapy resistance'
-#             ),
-#             function(clin_feat) {
-#
-#                 pval_adj_threshold <- adjust_threshold_bh(
-#                     c(
-#                         clin_cor$deconv_emt[nice_variable_name == clin_feat, pval],
-#                         clin_cor$deconv_caf[nice_variable_name == clin_feat, pval]
-#                     )
-#                 )
-#
-#                 ggplot(
-#                     emt_caf_sig_data[variable_name == clin_feat][
-#                         ,
-#                         sig := switch(
-#                             (
-#                                 abs(sig_emt) > -log10(pval_adj_threshold) |
-#                                     abs(sig_caf) > -log10(pval_adj_threshold)
-#                             ) + 1,
-#                             'not_significant',
-#                             'significant'
-#                         ),
-#                         by = test_name
-#                     ],
-#                     aes(x = sig_caf, y = sig_emt)
-#                 ) +
-#                     geom_hline(yintercept = 0, colour = 'grey', size = 0.5, linetype = 'dashed') +
-#                     geom_vline(xintercept = 0, colour = 'grey', size = 0.5, linetype = 'dashed') +
-#                     geom_point(aes(colour = sig), shape = 17, size = 2.5) +
-#                     scale_colour_manual(
-#                         values = c(
-#                             'not_significant' = 'dodgerblue4',
-#                             'significant' = 'darkgoldenrod1'
-#                         )
-#                     ) +
-#                     geom_text_repel(
-#                         aes(label = str_extract(test_name, '^[A-Z]+')),
-#                         data = emt_caf_sig_data[
-#                             variable_name == clin_feat & (
-#                                 abs(sig_emt) > 2 | abs(sig_caf) > 2
-#                                 # sig_emt > -log10(pval_adj_threshold) |
-#                                 #     sig_emt < log10(pval_adj_threshold) |
-#                                 #     sig_caf > -log10(pval_adj_threshold) |
-#                                 #     sig_caf < log10(pval_adj_threshold)
-#                             )
-#                         ],
-#                         point.padding = 0.1,
-#                         nudge_x = 0.1,
-#                         nudge_y = 0.1
-#                     ) +
-#                     labs(title = clin_feat) +
-#                     theme_test() +
-#                     theme(
-#                         axis.title = element_blank(),
-#                         legend.position = 'none'
-#                     )
-#
-#             }
-#         ),
-#         nrow = 2,
-#         ncol = 2
-#     ),
-#     nrow = 2,
-#     ncol = 2,
-#     rel_widths = c(1, 10),
-#     rel_heights = c(8, 1)
-# ) +
-#     cowplot::draw_label(
-#         sig_lab_caf,
-#         x = 0.5,
-#         y = 0,
-#         vjust = -0.5,
-#         size = 12
-#     ) +
-#     cowplot::draw_label(
-#         sig_lab_emt,
-#         x = 0,
-#         y = 0.5,
-#         vjust = 1.3,
-#         angle = 90,
-#         size = 12
-#     )
 
 
 
 
+# Combined figure of clinical correlation heatmaps and 4 scatterplots:
 
-# For rare vs shared EMT clinical analysis:
+clinical_heatmap_1 <- clin_cor_heatmaps$deconv_emt + theme(axis.text.x = element_blank(), legend.position = 'none')
 
-# rare_shared_emt <- readRDS('../data_and_figures/rare_shared_emt.rds')
-#
-# rare_shared_emt_analysis_names <- names(deconv_data)[
-#     grepl('^HNSC|^LUSC|^LUAD|^PAAD', names(deconv_data))
-# ]
-
-# emt_types <- list(
-#     rare_emt = rare_shared_emt_analysis_names,
-#     shared_emt = rare_shared_emt_analysis_names
-# )
-#
-# clin_cor_genes <- sapply(
-#     names(emt_types),
-#     function(emt_type) {
-#         sapply(
-#             emt_types[[emt_type]],
-#             function(ct) {
-#                 rare_shared_emt[[
-#                     mapvalues(
-#                         strtrim(ct, 4),
-#                         c('Head', 'Lung', 'Panc'),
-#                         c('hnsc', 'lung', 'paad'),
-#                         warn_missing = FALSE
-#                     )
-#                 ]]$rare_shared_emt_data[[paste0(emt_type, '_genes')]]
-#             },
-#             simplify = FALSE,
-#             USE.NAMES = TRUE
-#         )
-#     },
-#     simplify = FALSE,
-#     USE.NAMES = TRUE
-# )
-
-# Or:
-
-# emt_types <- list(
-#     rare_emt = rare_shared_emt_analysis_names,
-#     shared_emt = rare_shared_emt_analysis_names,
-#     deconv_emt = deconv_names,
-#     deconv_caf = deconv_names
-# )
-#
-# clin_cor_genes <- c(
-#     sapply(
-#         c('rare_emt', 'shared_emt'),
-#         function(emt_type) {
-#             sapply(
-#                 emt_types[[emt_type]],
-#                 function(ct) {
-#                     rare_shared_emt[[
-#                         mapvalues(
-#                             strtrim(ct, 4),
-#                             c('Head', 'Lung', 'Panc'),
-#                             c('hnsc', 'lung', 'paad'),
-#                             warn_missing = FALSE
-#                         )
-#                     ]]$rare_shared_emt_data[[paste0(emt_type, '_genes')]]
-#                 },
-#                 simplify = FALSE,
-#                 USE.NAMES = TRUE
-#             )
-#         },
-#         simplify = FALSE,
-#         USE.NAMES = TRUE
-#     ),
-#     setNames(
-#         lapply(
-#             list(head, tail),
-#             function(FUN) {
-#                 sapply(
-#                     deconv_data[deconv_names],
-#                     function(deconv_ct) {
-#                         FUN(deconv_ct$genes_filtered[deconv_ct$ordering], 20)
-#                     },
-#                     simplify = FALSE,
-#                     USE.NAMES = TRUE
-#                 )
-#             }
-#         ),
-#         c('deconv_emt', 'deconv_caf')
-#     )
-# )
-
-# After this, I think you can safely run the same as for deconv_emt and deconv_caf.
-
-
-
-
-
-# Stuff for volcano plots:
-
-# clin_cor_labels_logicals <- list(
-#     rare_emt = clin_cor$rare_emt[
-#         ,
-#         test_name == 'Head & Neck Malignant-Basal' & variable_name == 'number_of_lymphnodes_positive_by_he' |
-#             test_name == 'Head & Neck Malignant-Basal' & variable_name == 'pathologic_n' |
-#             test_name == 'Head & Neck Malignant-Basal' & variable_name == 'followup_treatment_success'
-#             # test_name == 'Lung Adenocarcinoma Squamoid' & variable_name == 'days_to_death' |
-#             # test_name == 'Pancreatic' & variable_name == 'followup_treatment_success' |
-#             # test_name == 'Head & Neck Malignant-Basal' & variable_name == 'neoplasm_histologic_grade' |
-#             # test_name == 'Lung Squamous Basal' & variable_name == 'pathologic_n' |
-#             # test_name == 'Head & Neck Atypical' & variable_name == 'days_to_death' |
-#             # test_name == 'Lung Squamous Primitive' & variable_name == 'pathologic_m' |
-#             # test_name == 'Head & Neck Malignant-Basal' & variable_name == 'pathologic_m'
-#     ],
-#     shared_emt = clin_cor$shared_emt[
-#         ,
-#         test_name == 'Head & Neck Malignant-Basal' & variable_name == 'number_of_lymphnodes_positive_by_he' |
-#             # test_name == 'Head & Neck Malignant-Basal' & variable_name == 'pathologic_n' |
-#             test_name == 'Pancreatic' & variable_name == 'followup_treatment_success' |
-#             test_name == 'Lung Adenocarcinoma Magnoid' & variable_name == 'days_to_death' |
-#             test_name == 'Pancreatic' & variable_name == 'pathologic_t'
-#             # test_name == 'Lung Squamous Primitive' & variable_name == 'pathologic_m' |
-#             # test_name == 'Head & Neck Classical' & variable_name == 'number_of_lymphnodes_positive_by_he' |
-#             # test_name == 'Head & Neck Classical' & variable_name == 'pathologic_n' |
-#             # test_name == 'Head & Neck Atypical' & variable_name == 'days_to_death' |
-#             # test_name == 'Head & Neck Malignant-Basal' & variable_name == 'pathologic_m'
-#     ],
-#     deconv_emt = clin_cor$deconv_emt[
-#         ,
-#         test_name == 'Head & Neck Malignant-Basal' & variable_name == 'number_of_lymphnodes_positive_by_he' |
-#             test_name == 'Head & Neck Malignant-Basal' & variable_name == 'pathologic_n' |
-#             # test_name == 'Head & Neck Malignant-Basal' & variable_name == 'followup_treatment_success' |
-#             test_name == 'Pancreatic' & variable_name == 'followup_treatment_success' |
-#             test_name == 'Liver' & variable_name == 'days_to_death' |
-#             test_name == 'Lung Adenocarcinoma Magnoid' & variable_name == 'pathologic_n'
-#             # test_name == 'Rectum' & variable_name == 'days_to_death' |
-#             # test_name == 'Cervical' & variable_name == 'neoplasm_histologic_grade' |
-#             # test_name == 'Bladder Basal-Squamous' & variable_name == 'pathologic_m' |
-#             # test_name == 'Head & Neck Malignant-Basal' & variable_name == 'pathologic_m' |
-#             # test_name == 'Lung Squamous Primitive' & variable_name == 'pathologic_m'
-#     ],
-#     deconv_caf = clin_cor$deconv_caf[
-#         ,
-#         test_name == 'Head & Neck Malignant-Basal' & variable_name == 'number_of_lymphnodes_positive_by_he' |
-#             # test_name == 'Head & Neck Malignant-Basal' & variable_name == 'pathologic_n' |
-#             test_name == 'Colon' & variable_name == 'lymphovascular_invasion' |
-#             test_name == 'Rectum' & variable_name == 'pathologic_n' |
-#             test_name == 'Stomach EBV' & variable_name == 'followup_treatment_success' |
-#             # test_name == 'Ovarian Immunoreactive' & variable_name == 'followup_treatment_success' |
-#             # test_name == 'Colon' & variable_name == 'number_of_lymphnodes_positive_by_he' |
-#             test_name == 'Breast Luminal B' & variable_name == 'days_to_death'
-#             # test_name == 'Pancreatic' & variable_name == 'number_of_lymphnodes_positive_by_he' |
-#             # test_name == 'Head & Neck Malignant-Basal' & variable_name == 'neoplasm_histologic_grade' |
-#             # test_name == 'Stomach CIN' & variable_name == 'neoplasm_histologic_grade' |
-#             # test_name == 'Oesophageal Adenocarcinoma' & variable_name == 'neoplasm_histologic_grade' |
-#             # test_name == 'Lung Squamous Primitive' & variable_name == 'days_to_death' |
-#             # test_name == 'Head & Neck Malignant-Basal' & variable_name == 'pathologic_m'
-#     ]
-# )
-#
-# clin_cor_plots <- sapply(
-#     names(clin_cor),
-#     function(emt_type) {
-#         clinical_test_volcano(
-#             test_data = clin_cor[[emt_type]],
-#             rows_for_labels = clin_cor_labels_logicals[[emt_type]],
-#             legend_title = 'Prognostic feature',
-#             legend_labels = c(
-#                 'number_of_lymphnodes_positive_by_he' = 'Lymph node metastasis',
-#                 'followup_treatment_success' = 'Therapy resistance',
-#                 'days_to_death' = 'Survival',
-#                 'lymphovascular_invasion' = 'Lymphovascular invasion',
-#                 'pathologic_t' = 'T stage',
-#                 'pathologic_n' = 'N stage',
-#                 'pathologic_m' = 'M stage',
-#                 'neoplasm_histologic_grade' = 'Grade'
-#             ),
-#             legend_colours = setNames(
-#                 brewer.pal(9, "Set1")[-6],
-#                 c(
-#                     'number_of_lymphnodes_positive_by_he',
-#                     'followup_treatment_success',
-#                     'days_to_death',
-#                     'lymphovascular_invasion',
-#                     'pathologic_t',
-#                     'pathologic_n',
-#                     'pathologic_m',
-#                     'neoplasm_histologic_grade'
-#                 )
-#             ),
-#             plot_title = mapvalues(
-#                 emt_type,
-#                 names(clin_cor),
-#                 c(
-#                     'Rare EMT',
-#                     'Shared EMT',
-#                     'EMT signature from deconvolution',
-#                     'CAF signature from deconvolution'
-#                 ),
-#                 warn_missing = FALSE
-#             ),
-#             labels_fun = geom_text_repel,
-#             box.padding = 1,
-#             max.iter = 10000,
-#             seed = 1826,
-#             # force = 1.5,
-#             nudge_x = -0.05,
-#             nudge_y = 0.1
-#         )
-#     },
-#     simplify = FALSE,
-#     USE.NAMES = TRUE
-# )
-#
-# # Save to PDF:
-#
-# pdf(
-#     '../data_and_figures/clinical_analyses_volcano.pdf',
-#     width = 10.5,
-#     height = 8
-# )
-#
-# plot_grid(
-#     plot_grid(
-#         clin_cor_plots$rare_emt + theme(
-#             axis.title.x = element_blank(),
-#             legend.position = 'none'
-#         ),
-#         clin_cor_plots$shared_emt + theme(
-#             axis.title = element_blank(),
-#             legend.position = 'none'
-#         ),
-#         clin_cor_plots$deconv_emt + theme(legend.position = 'none'),
-#         clin_cor_plots$deconv_caf + theme(
-#             axis.title.y = element_blank(),
-#             legend.position = 'none'
-#         ),
-#         nrow = 2,
-#         ncol = 2,
-#         rel_widths = c(21, 20),
-#         rel_heights = c(20, 21),
-#         align = 'hv'
-#     ),
-#     get_legend(clin_cor_plots[[1]]),
-#     nrow = 1,
-#     ncol = 2,
-#     rel_widths = c(4.75, 1)
-# )
-#
-# dev.off()
-#
-# # Just the signatures from the deconvolution:
-#
-# pdf(
-#     '../data_and_figures/clinical_analyses_volcano_deconv.pdf',
-#     width = 10.5,
-#     height = 4.5
-# )
-#
-# plot_grid(
-#     plot_grid(
-#         clin_cor_plots$deconv_emt +
-#             theme(legend.position = 'none') +
-#             labs(title = 'EMT signature'),
-#         clin_cor_plots$deconv_caf +
-#             theme(
-#                 axis.title.y = element_blank(),
-#                 legend.position = 'none'
-#             ) +
-#             labs(title = 'CAF signature'),
-#         nrow = 1,
-#         ncol = 2,
-#         rel_widths = c(21, 20),
-#         align = 'h'
-#     ),
-#     get_legend(clin_cor_plots$deconv_emt),
-#     nrow = 1,
-#     ncol = 2,
-#     rel_widths = c(4.75, 1)
-# )
-#
-# dev.off()
-
-
-
-
-
-# Correlation with copy number variation:
-
-gistic_data <- fread('../data_and_figures/gistic_data.csv')
-gene_meta <- fread('../data_and_figures/gene_meta.csv')
-sample_meta <- fread('../data_and_figures/sample_meta.csv')
-
-# The following is still going to take way too long...  Perhaps we should limit the
-# tests to the high-level amplifications/deletions, i.e. just values 2 and -2.  Or,
-# we could try to build in use of parLapply etc, to use multiple threads.
-
-cnv_test <- rbindlist(
-    lapply(
-        deconv_names,
-        function(ct) {
-
-            # We subset the IDs and genes before running clinical_test_2(), because
-            # this makes it run much faster.  To do this, we first have to match
-            # the IDs from the expression data and the CNV data: the code for this
-            # is the same as that used in the definition of clinical_test_2().
-
-            all_ids <- data.table(
-                expression_data_id = deconv_data[[ct]]$sample_ids,
-                patient_id = apply(
-                    str_split_fixed(
-                        deconv_data[[ct]]$sample_ids,
-                        '\\.',
-                        4
-                    )[, 1:3],
-                    1,
-                    paste,
-                    collapse = '.'
-                )
-            )[
-                ,
-                gistic_data_id := sapply(
-                    patient_id,
-                    function(x) {
-
-                        matches <- names(gistic_data)[
-                            grep(paste0('^', x), names(gistic_data))
-                        ]
-
-                        if(length(matches) == 1) {
-                            return(matches)
-                        } else {
-                            return(NA)
-                        }
-
-                    }
-                )
-            ][
-                !(
-                    gistic_data_id %in% names(table(gistic_data_id))[
-                        table(gistic_data_id) > 1
-                    ]
-                ) & !is.na(gistic_data_id)
-            ]
-
-            test_data <- gistic_data[
-                ,
-                c('symbol', all_ids$gistic_data_id),
-                with = FALSE
-            ]
-
-            setkey(test_data, symbol)
-
-            rbindlist(
-                lapply(
-                    c(-2, -1, 1, 2),
-                    function(cnv_score) {
-
-                        genes_to_test <- test_data[
-                            ,
-                            .(enough_samples = sum(as.numeric(.SD) == cnv_score) >= 10),
-                            by = symbol
-                        ][
-                            enough_samples == TRUE,
-                            symbol
-                        ]
-
-                        # Run statistical tests:
-
-                        # clinical_test_2(
-                        #     expression_data,
-                        #     setNames(list(all_ids$expression_data_id), ct),
-                        #     clin_cor_genes$deconv_emt[[ct]],
-                        #     clinical_data = tdt(test_data[genes_to_test]),
-                        #     clin_var = genes_to_test,
-                        #     wilcox_test_x_fun = function(z) {z == cnv_score},
-                        #     wilcox_test_y_fun = function(z) {z != cnv_score},
-                        #     min_samples = 10,
-                        #     amatch_max_dist = NULL
-                        # )
-
-                        # I am calculating the fold changes in the below, even though I
-                        # don't need it for the immediate analysis, because I might need
-                        # it later!  It takes more than 50% longer when we calculate the
-                        # fold change, however.
-
-                        if(length(genes_to_test) > 0) {
-                            return(
-                                cbind(
-                                    clinical_test_2_concise(
-                                        expression_data,
-                                        setNames(list(all_ids$expression_data_id), ct),
-                                        clin_cor_genes$deconv_emt[[ct]],
-                                        clinical_data = tdt(test_data[genes_to_test]),
-                                        clin_var = genes_to_test,
-                                        wilcox_test_x_fun = function(z) {z == cnv_score},
-                                        wilcox_test_y_fun = function(z) {z != cnv_score}
-                                        # calculate_fold_change = FALSE
-                                    ),
-                                    cnv_score = cnv_score
-                                )
-                            )
-                        } else {
-                            return(NULL)
-                        }
-
-                    }
-                )
+clinical_heatmap_2 <- clin_cor_heatmaps$deconv_caf +
+    theme(
+        axis.text.x = element_text(
+            colour = mapvalues(
+                ct_clust[
+                    with(ct_hclust, labels[order][labels[order] %in% clin_cor$deconv_caf$test_name]),
+                    .(new_clust = switch((memb_strength > 0.05) + 1, 0L, cluster_manual)),
+                    by = cancer_type
+                ]$new_clust,
+                c(0, 1, 2, 3),
+                c('darkgrey', brewer.pal(3, 'Dark2'))
             )
-
-        }
+        ),
+        legend.position = 'none',
+        plot.margin = unit(c(5.5, 5.5, 1, 5.5), 'pt')
     )
+
+clinical_scatterplots <- lapply(scatterplots, function(g) {g + theme(legend.position = 'none')})
+
+aligned_clinical_heatmaps <- align_plots(clinical_heatmap_1, clinical_heatmap_2, align = 'v')
+
+aligned_clinical_scatterplots_1_3 <- align_plots(
+    aligned_clinical_heatmaps[[1]],
+    aligned_clinical_heatmaps[[2]],
+    clinical_scatterplots[[1]],
+    clinical_scatterplots[[3]],
+    axis = 'l',
+    align = 'v'
 )
 
-fwrite(cnv_test, '../data_and_figures/cnv_test.csv')
+aligned_clinical_scatterplots_2_4 <- align_plots(
+    aligned_clinical_heatmaps[[1]],
+    aligned_clinical_heatmaps[[2]],
+    clinical_scatterplots[[2]],
+    clinical_scatterplots[[4]],
+    axis = 'r',
+    align = 'v'
+)
 
-
-
-
-
-cnv_test <- fread('../data_and_figures/cnv_test.csv', key = 'variable_name')
-
-setnames(cnv_test, c('test_name', 'variable_name'), c('cancer_type', 'symbol'))
-
-# setkey(cnv_test, symbol)
-
-source('../../chr.order.R')
-
-library(biomaRt)
-
-ordered_genes <- chr.order(gene_meta$symbol)$cna_genes
-
-plot_data <- cnv_test[
-    ,
-    .SD[
-        ordered_genes,
-        .(
-            cnv_score, # For this we need to manually include cnv_score in .SDcols
-            symbol,
-            pval,
-            pval_adj
-        )
-    ],
-    by = .(cancer_type, abs_cnv_score = abs(cnv_score)),
-    .SDcols = c('symbol', 'cnv_score', 'pval', 'pval_adj')
-][
-    ,
-    c('sig_val', 'sig_val_adj') := .(
-        switch(is.na(pval) + 1, -log10(pval)*sign(cnv_score), 0),
-        switch(is.na(pval_adj) + 1, -log10(pval_adj)*sign(cnv_score), 0)
-    ),
-    by = .(symbol, cancer_type, abs_cnv_score, cnv_score)
-]
-
-# The following takes ages to plot if you don't remove the x axis text.  Removing the
-# x axis ticks also speeds it up quite a bit.
-
+cairo_pdf('../data_and_figures/final_figures_resubmission/5.pdf', width = 8.5, height = 11.5)
 plot_grid(
-    plotlist = lapply(
-        0:3,
-        function(i) {
-            ggplot(
-                plot_data[cancer_type %in% unique(cancer_type)[(i*8 + 1):(i*8 + 8)]],
-                aes(
-                    factor(symbol, levels = unique(symbol)),
-                    sig_val_adj,
-                    group = abs_cnv_score,
-                    colour = as.character(abs_cnv_score)
-                )
-            ) +
-                facet_grid(cancer_type ~ .) +
-                geom_line() +
-                theme_test() +
-                theme(
-                    axis.text.x = element_blank(),
-                    axis.ticks.x = element_blank(),
-                    legend.position = 'none'
-                )
-        }
+    plot_grid(
+        blank_plot(),
+        aligned_clinical_scatterplots_1_3[[1]],
+        aligned_clinical_scatterplots_1_3[[2]],
+        blank_plot(),
+        plot_grid(
+            aligned_clinical_scatterplots_1_3[[3]],
+            aligned_clinical_scatterplots_2_4[[3]],
+            aligned_clinical_scatterplots_1_3[[4]],
+            aligned_clinical_scatterplots_2_4[[4]],
+            nrow = 2,
+            ncol = 2,
+            rel_widths = c(6.02, 3.98)
+        ),
+        blank_plot(),
+        nrow = 6,
+        ncol = 1,
+        rel_heights = c(0.4, 2.03, 3.27, 0.4, 5.5, 0.7)
+    ),
+    plot_grid(
+        get_legend(clin_cor_heatmaps$deconv_emt + theme(legend.justification = c(0, 0.595)) + guides(fill = guide_colourbar(title.position = 'right'))),
+        get_legend(scatterplots[[1]] + theme(legend.justification = c(0.1, 0.55))),
+        nrow = 2,
+        ncol = 1,
+        rel_heights = c(5.9, 6.6)
     ),
     nrow = 1,
-    ncol = 4
-)
-
-# Also try it after including all 1.1 million p values in the adjustment:
-
-cnv_test[, pval_adj_all := p.adjust(pval, method = 'BH')]
-
-plot_data <- cnv_test[
-    ,
-    .SD[
-        ordered_genes,
-        .(
-            cnv_score, # For this we need to manually include cnv_score in .SDcols
-            symbol,
-            pval,
-            pval_adj_all
-        )
-        ],
-    by = .(cancer_type, abs_cnv_score = abs(cnv_score)),
-    .SDcols = c('symbol', 'cnv_score', 'pval', 'pval_adj_all')
-][
-    ,
-    c('sig_val', 'sig_val_adj_all') := .(
-        switch(is.na(pval) + 1, -log10(pval)*sign(cnv_score), 0),
-        switch(is.na(pval_adj_all) + 1, -log10(pval_adj_all)*sign(cnv_score), 0)
-    ),
-    by = .(symbol, cancer_type, abs_cnv_score, cnv_score)
-]
-
-pdf('../data_and_figures/cnv_test.pdf', width = 20, height = 14)
-
-plot_grid(
-    plotlist = lapply(
-        0:3,
-        function(i) {
-            ggplot(
-                plot_data[cancer_type %in% unique(cancer_type)[(i*8 + 1):(i*8 + 8)]],
-                aes(
-                    factor(symbol, levels = unique(symbol)),
-                    sig_val_adj_all,
-                    # sig_val,
-                    group = abs_cnv_score,
-                    colour = as.character(abs_cnv_score)
-                )
-            ) +
-                facet_grid(cancer_type ~ ., scales = 'free_y') +
-                geom_line() +
-                geom_hline(
-                    yintercept = -log10(0.05)*c(1, -1),
-                    # yintercept = -log10(adjust_threshold_bh(cnv_test$pval))*c(1, -1),
-                    linetype = 'dashed'
-                ) +
-                theme_test() +
-                theme(
-                    axis.text.x = element_blank(),
-                    axis.ticks.x = element_blank(),
-                    legend.position = 'none'
-                ) +
-                labs(x = 'genes', y = NULL)
-        }
-    ),
-    nrow = 1,
-    ncol = 4
-)
-
+    ncol = 2,
+    rel_widths = c(6, 2.5)
+) +
+    draw_label('A', x = 0, y = 0.98, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2) +
+    draw_label('B', x = 0, y = 0.52, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2) +
+    draw_label(sig_lab_emt, x = 0.1, y = 0.29, angle = 90, size = 11) +
+    draw_label(sig_lab_caf, x = 0.45, y = 0.033, size = 11)
 dev.off()

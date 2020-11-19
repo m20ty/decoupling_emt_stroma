@@ -355,6 +355,16 @@ deconv_args_per_ct <- list(
 		cell_type_weights = FALSE
     ),
 
+	paad = list(
+        tcga_cancer_types = 'PAAD',
+        ccle_cancer_type = 'pancreas',
+        extra_data_source = 'pdac_peng',
+        seed = 88,
+        plot_title = 'PAAD',
+        genes_filter_fun = function(x) 1:170,
+        cell_type_weights = list(B_plasma = 0, myocyte = 0, macrophage = 0, endothelial = 1, DC = 0, mast = 0, T = 0, B = 0)
+    ),
+
     paad_basal_moffitt = list(
         tcga_cancer_types = 'PAAD',
         subtypes = 'Basal',

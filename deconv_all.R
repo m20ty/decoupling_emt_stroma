@@ -335,13 +335,13 @@ deconv_args_per_ct <- list(
         plot_title = 'OV - Proliferative'
     ),
 
-    # paad = list(
-    #     tcga_cancer_types = 'PAAD',
-    #     ccle_cancer_type = 'pancreas',
-    #     extra_data_source = 'pdac_peng',
-    #     seed = 88,
-    #     plot_title = 'PAAD'
-    # ),
+    paad = list(
+        tcga_cancer_types = 'PAAD',
+        ccle_cancer_type = 'pancreas',
+        extra_data_source = 'pdac_peng',
+        seed = 88,
+        plot_title = 'PAAD'
+    ),
 
     paad_basal_moffitt = list(
         tcga_cancer_types = 'PAAD',
@@ -550,7 +550,7 @@ deconv_plots <- sapply(
 
 
 saveRDS(deconv_data, '../data_and_figures/deconv_data_all.rds')
-saveRDS(deconv_plots, '../data_and_figures/deconv_plots_all.rds')
+# saveRDS(deconv_plots, '../data_and_figures/deconv_plots_all.rds')
 
 
 

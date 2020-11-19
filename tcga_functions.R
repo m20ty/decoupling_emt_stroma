@@ -4985,9 +4985,7 @@ clinical_test <- function(
     if(missing(sample_ids_list) & !is.data.frame(expression_data)) {
         sample_ids_list <- lapply(expression_data, `[[`, 'id')
     }
-
     p_adjust_method <- match.arg(p_adjust_method)
-
     score_method <- match.arg(score_method)
 
     clinical_analyses <- sapply(
@@ -5021,54 +5019,25 @@ clinical_test <- function(
 
             sample_ids <- sample_ids_list[[ct]]
 
-            # The following is for the (optional) data transform by calculating
-            # residuals.  I do this before refining sample_ids because I want
+            # The following is for the (optional) data transform by calculating residuals.  I do this before refining sample_ids because I want
             # the transformation to be the same as in deconv_data.
-
             if(!is.null(genes_for_data_transform)) {
-
                 if(typeof(genes_for_data_transform) == 'list') {
                     genes_transform <- genes_for_data_transform[[ct]]
                 } else {
                     genes_transform <- genes_for_data_transform
                 }
-
-                expression_data_table <- expression_data_table[
-                    sample_ids
-                ][
-                    ,
-                    row_sums := rowSums(.SD),
-                    .SDcols = genes_transform
-                ]
-
+                expression_data_table <- expression_data_table[sample_ids][, row_sums := rowSums(.SD), .SDcols = genes_transform]
                 expression_data_table <- as.data.table(
                     sapply(
                         genes_vec,
-                        function(g) {
-
-                            lm(
-                                formula(
-                                    paste0(
-                                        '`',
-                                        g,
-                                        '` ~ row_sums'
-                                    )
-                                ),
-                                data = expression_data_table
-                            )$residuals
-
-                        },
+                        function(g) lm(formula(paste0('`', g, '` ~ row_sums')), data = expression_data_table)$residuals,
                         simplify = FALSE,
                         USE.NAMES = TRUE
                     )
-                )[
-                    ,
-                    id := sample_ids
-                ]
-
+                )[, id := sample_ids]
                 setcolorder(expression_data_table, 'id')
                 setkey(expression_data_table, id)
-
             }
 
             # Match IDs from clinical data and expression data on the level of patients,
@@ -5076,78 +5045,33 @@ clinical_test <- function(
             # and then look for matches for these patient IDs in clinical_data_table$id.
             # We exclude non-unique matches.
 
-            # patient_ids <- apply(
-            #     stringr::str_split_fixed(
-            #         sample_ids,
-            #         '\\.',
-            #         4
-            #     )[, 1:3],
-            #     1,
-            #     paste,
-            #     collapse = '.'
-            # )
+            # patient_ids <- apply(stringr::str_split_fixed(sample_ids, '\\.', 4)[, 1:3], 1, paste, collapse = '.')
 
             all_ids <- data.table(
                 expression_data_id = sample_ids,
-                patient_id = apply(
-                    stringr::str_split_fixed(
-                        sample_ids,
-                        '\\.',
-                        4
-                    )[, 1:3],
-                    1,
-                    paste,
-                    collapse = '.'
-                )
+                patient_id = apply(stringr::str_split_fixed(sample_ids, '\\.', 4)[, 1:3], 1, paste, collapse = '.')
             )[
                 ,
                 clinical_data_id := sapply(
                     patient_id,
                     function(x) {
-
-                        matches <- clinical_data_table[
-                            ,
-                            id[grep(paste0('^', x), id)]
-                        ]
-
+                        matches <- clinical_data_table[, id[grep(paste0('^', x), id)]]
                         if(length(matches) == 1) {
                             return(matches)
                         } else {
                             return(NA)
                         }
-
                     }
                 )
-            ][
-                !(
-                    clinical_data_id %in%
-                        names(table(clinical_data_id))[
-                            table(clinical_data_id) > 1
-                        ]
-                )
-            ]
+            ][!(clinical_data_id %in% names(table(clinical_data_id))[table(clinical_data_id) > 1])]
 
-            # The following two lines just allow consistency with the rest of the code for this
-            # function, which I wrote before the addition of all_ids.
-
+            # The following two lines just allow consistency with the rest of the code for this function, which I wrote before the addition of all_ids.
             patient_ids <- all_ids$clinical_data_id
             sample_ids <- all_ids$expression_data_id
 
-            # Look for a match for clin_var, with specified max. distance, among the variables
-            # that are not all NA or the empty string for this cancer type/subtype, and return
-            # NA if we don't find one:
-
-            non_na_names <- colnames(
-                clinical_data_table[
-                    patient_ids,
-                    sapply(
-                        .SD,
-                        function(x) {
-                            switch((sum(!is.na(x) & x != '') == 0) + 1, x, NULL)
-                        }
-                    )
-                ]
-            )
+            # Look for a match for clin_var, with specified max. distance, among the variables that are not all NA or the empty string for this cancer
+            # type/subtype, and return NA if we don't find one:
+            non_na_names <- colnames(clinical_data_table[patient_ids, sapply(.SD, function(x) switch((sum(!is.na(x) & x != '') == 0) + 1, x, NULL))])
 
             # The following returns a list with names being the non-NA variable name matches and
             # each element being a list consisting of the corresponding x and y Wilcoxon test
@@ -5157,30 +5081,22 @@ clinical_test <- function(
                 lapply(
                     clin_var,
                     function(v) {
-
                         if(typeof(wilcox_test_x_expr) == 'list') {
                             x_expr <- wilcox_test_x_expr[[which(clin_var == v)]]
                         } else {
                             x_expr <- wilcox_test_x_expr
                         }
-
                         if(typeof(wilcox_test_y_expr) == 'list') {
                             y_expr <- wilcox_test_y_expr[[which(clin_var == v)]]
                         } else {
                             y_expr <- wilcox_test_y_expr
                         }
-
                         if(is.null(amatch_max_dist)) {
-
                             if(v %in% non_na_names) {
                                 return(
                                     setNames(
                                         list( # List whose one element is a list with 3 elements
-                                            list(
-                                                variable_name = v,
-                                                x_expr = x_expr,
-                                                y_expr = y_expr
-                                            )
+                                            list(variable_name = v, x_expr = x_expr, y_expr = y_expr)
                                         ),
                                         v # Name for the single element of the 'outer' list
                                     )
@@ -5188,17 +5104,8 @@ clinical_test <- function(
                             } else {
                                 cat("Cannot find", v, "in data.\n")
                             }
-
                         } else {
-
-                            var_match <- non_na_names[
-                                stringdist::amatch(
-                                    v,
-                                    non_na_names,
-                                    maxDist = amatch_max_dist
-                                )
-                            ]
-
+                            var_match <- non_na_names[stringdist::amatch(v, non_na_names, maxDist = amatch_max_dist)]
                             if(is.na(var_match)) {
                                 cat("No variable match for ", v, ".\n", sep = '')
                             } else {
@@ -5206,19 +5113,13 @@ clinical_test <- function(
                                 return(
                                     setNames(
                                         list( # List whose one element is a list with 3 elements
-                                            list(
-                                                variable_name = v,
-                                                x_expr = x_expr,
-                                                y_expr = y_expr
-                                            )
+                                            list(variable_name = v, x_expr = x_expr, y_expr = y_expr)
                                         ),
                                         var_match # Name for the single element of the 'outer' list
                                     )
                                 )
                             }
-
                         }
-
                     }
                 ),
                 recursive = FALSE
@@ -5227,73 +5128,28 @@ clinical_test <- function(
             # Calculate scores by chosen method:
 
             if(is.null(scores_filter_fun)) {
-
                 if(score_method == 'average') {
-
-                    ct_scores <- setNames(
-                        rowMeans(
-                            expression_data_table[
-                                sample_ids,
-                                ..genes_vec
-                            ]
-                        ),
-                        sample_ids
-                    )
-
+                    ct_scores <- setNames(rowMeans(expression_data_table[sample_ids, ..genes_vec]), sample_ids)
                 } else {
-
                     ct_scores <- scrabble::score(
-                        set_colnames(
-                            t(expression_data_table[sample_ids, -'id']),
-                            sample_ids
-                        ),
+                        set_colnames(t(expression_data_table[sample_ids, -'id']), sample_ids),
                         list(genes_vec),
                         bin.control = TRUE,
                         nbin = (length(expression_data_table) - 1) %/% 110
                     )[, 1]
-
                 }
-
             } else {
-
-                filtered_genes <- expression_data_table[
-                    sample_ids,
-                    names(.SD)[apply(.SD, 2, scores_filter_fun)],
-                    .SDcols = -'id'
-                ]
-
+                filtered_genes <- expression_data_table[sample_ids, names(.SD)[apply(.SD, 2, scores_filter_fun)], .SDcols = -'id']
                 if(score_method == 'average') {
-
-                    ct_scores <- setNames(
-                        rowMeans(
-                            expression_data_table[
-                                sample_ids,
-                                genes_vec[genes_vec %in% filtered_genes],
-                                with = FALSE
-                            ]
-                        ),
-                        sample_ids
-                    )
-
+                    ct_scores <- setNames(rowMeans(expression_data_table[sample_ids, genes_vec[genes_vec %in% filtered_genes], with = FALSE]), sample_ids)
                 } else {
-
                     ct_scores <- scrabble::score(
-                        set_colnames(
-                            t(
-                                expression_data_table[
-                                    sample_ids,
-                                    ..filtered_genes
-                                ]
-                            ),
-                            sample_ids
-                        ),
+                        set_colnames(t(expression_data_table[sample_ids, ..filtered_genes]), sample_ids),
                         list(genes_vec[genes_vec %in% filtered_genes]),
                         bin.control = TRUE,
                         nbin = length(filtered_genes) %/% 110
                     )[, 1]
-
                 }
-
             }
 
             test_results <- rbindlist(
@@ -5301,152 +5157,74 @@ clinical_test <- function(
                     names(ct_clin_vars),
                     function(v) {
 
-                        # Check that we have enough observations for the Wilcoxon test
-                        # (by default, we only ignore cases with no observations):
+                        # Check that we have enough observations for the Wilcoxon test (by default, we only ignore cases with no observations):
 
-                        # criterion <- data_for_test[
-                        #     ,
-                        #     c(
-                        #         sum(eval(ct_clin_vars[[v]]$x_expr)) < min_samples,
-                        #         sum(eval(ct_clin_vars[[v]]$y_expr)) < min_samples
-                        #     )
-                        # ]
+                        # criterion <- data_for_test[, c(sum(eval(ct_clin_vars[[v]]$x_expr)) < min_samples, sum(eval(ct_clin_vars[[v]]$y_expr)) < min_samples)]
 
                         # The following actually takes a surprisingly long time...
-
-                        criterion <- clinical_data_table[
-                            patient_ids,
-                            .(variable = get(v))
-                        ][
+                        criterion <- clinical_data_table[patient_ids, .(variable = get(v))][
                             !is.na(variable) & variable != '',
-                            c(
-                                sum(eval(ct_clin_vars[[v]]$x_expr)) < min_samples,
-                                sum(eval(ct_clin_vars[[v]]$y_expr)) < min_samples
-                            )
+                            c(sum(eval(ct_clin_vars[[v]]$x_expr)) < min_samples, sum(eval(ct_clin_vars[[v]]$y_expr)) < min_samples)
                         ]
 
                         if(sum(criterion) > 0) {
 
-                            cat(
-                                "Not enough ",
-                                paste(c('x', 'y')[criterion], collapse = ' or '),
-                                " observations for ",
-                                v,
-                                ".\n",
-                                sep = ''
-                            )
+                            cat("Not enough ", paste(c('x', 'y')[criterion], collapse = ' or '), " observations for ", v, ".\n", sep = '')
 
                         } else {
 
-                            # Restrict sample and patient IDs to those where the clinical variable
-                            # is not NA:
-
-                            sample_ids <- sample_ids[
-                                clinical_data_table[
-                                    patient_ids,
-                                    !is.na(get(v)) & get(v) != ''
-                                ]
-                            ]
-
-                            patient_ids <- patient_ids[
-                                clinical_data_table[
-                                    patient_ids,
-                                    !is.na(get(v)) & get(v) != ''
-                                ]
-                            ]
+                            # Restrict sample and patient IDs to those where the clinical variable is not NA:
+                            sample_ids <- sample_ids[clinical_data_table[patient_ids, !is.na(get(v)) & get(v) != '']]
+                            patient_ids <- patient_ids[clinical_data_table[patient_ids, !is.na(get(v)) & get(v) != '']]
 
                             # Calculate scores by chosen method:
-
                             # if(is.null(scores_filter_fun)) {
-                            #
                             #     if(score_method == 'average') {
-                            #
                             #         data_for_test <- clinical_data_table[
                             #             patient_ids,
-                            #             .(
-                            #                 id = id,
-                            #                 variable = get(v),
-                            #                 score = rowMeans(
-                            #                     expression_data_table[
-                            #                         sample_ids,
-                            #                         ..genes_vec
-                            #                     ]
-                            #                 )
-                            #             )
+                            #             .(id = id, variable = get(v), score = rowMeans(expression_data_table[sample_ids, ..genes_vec]))
                             #         ]
-                            #
                             #     } else {
-                            #
                             #         data_for_test <- clinical_data_table[
                             #             patient_ids,
                             #             .(
                             #                 id = id,
                             #                 variable = get(v),
                             #                 score = scrabble::score(
-                            #                     set_colnames(
-                            #                         t(expression_data_table[sample_ids, -'id']),
-                            #                         sample_ids
-                            #                     ),
+                            #                     set_colnames(t(expression_data_table[sample_ids, -'id']), sample_ids),
                             #                     list(genes_vec),
                             #                     bin.control = TRUE,
                             #                     nbin = (length(expression_data_table) - 1) %/% 110
                             #                 )[, 1]
                             #             )
                             #         ]
-                            #
                             #     }
-                            #
                             # } else {
-                            #
-                            #     filtered_genes <- expression_data_table[
-                            #         sample_ids,
-                            #         names(.SD)[apply(.SD, 2, scores_filter_fun)],
-                            #         .SDcols = -'id'
-                            #     ]
-                            #
+                            #     filtered_genes <- expression_data_table[sample_ids, names(.SD)[apply(.SD, 2, scores_filter_fun)], .SDcols = -'id']
                             #     if(score_method == 'average') {
-                            #
                             #         data_for_test <- clinical_data_table[
                             #             patient_ids,
                             #             .(
                             #                 id = id,
                             #                 variable = get(v),
-                            #                 score = rowMeans(
-                            #                     expression_data_table[
-                            #                         sample_ids,
-                            #                         genes_vec[genes_vec %in% filtered_genes],
-                            #                         with = FALSE
-                            #                     ]
-                            #                 )
+                            #                 score = rowMeans(expression_data_table[sample_ids, genes_vec[genes_vec %in% filtered_genes], with = FALSE])
                             #             )
                             #         ]
-                            #
                             #     } else {
-                            #
                             #         data_for_test <- clinical_data_table[
                             #             patient_ids,
                             #             .(
                             #                 id = id,
                             #                 variable = get(v),
                             #                 score = scrabble::score(
-                            #                     set_colnames(
-                            #                         t(
-                            #                             expression_data_table[
-                            #                                 sample_ids,
-                            #                                 ..filtered_genes
-                            #                             ]
-                            #                         ),
-                            #                         sample_ids
-                            #                     ),
+                            #                     set_colnames(t(expression_data_table[sample_ids, ..filtered_genes]), sample_ids),
                             #                     list(genes_vec[genes_vec %in% filtered_genes]),
                             #                     bin.control = TRUE,
                             #                     nbin = length(filtered_genes) %/% 110
                             #                 )[, 1]
                             #             )
                             #         ]
-                            #
                             #     }
-                            #
                             # }
 
                             # Running Wilcoxon rank-sum test and calculating fold change:
@@ -5459,19 +5237,10 @@ clinical_test <- function(
                             #             variable_name = ct_clin_vars[[v]]$variable_name,
                             #             variable_match = v,
                             #             setNames(
-                            #                 wilcox.test(
-                            #                     .SD[eval(ct_clin_vars[[v]]$x_expr), score],
-                            #                     .SD[eval(ct_clin_vars[[v]]$y_expr), score]
-                            #                 )[c('statistic', 'p.value')],
+                            #                 wilcox.test(.SD[eval(ct_clin_vars[[v]]$x_expr), score], .SD[eval(ct_clin_vars[[v]]$y_expr), score])[c('statistic', 'p.value')],
                             #                 c('stat', 'pval')
                             #             ),
-                            #             fold_change = .SD[
-                            #                 eval(ct_clin_vars[[v]]$x_expr),
-                            #                 mean(score)
-                            #             ]/.SD[
-                            #                 eval(ct_clin_vars[[v]]$y_expr),
-                            #                 mean(score)
-                            #             ] - 1
+                            #             fold_change = .SD[eval(ct_clin_vars[[v]]$x_expr), mean(score)]/.SD[eval(ct_clin_vars[[v]]$y_expr), mean(score)] - 1
                             #         )
                             #     ]
                             # )
@@ -5479,11 +5248,7 @@ clinical_test <- function(
                             return(
                                 clinical_data_table[
                                     patient_ids,
-                                    .(
-                                        id = id,
-                                        variable = get(v),
-                                        score = ct_scores[sample_ids]
-                                    )
+                                    .(id = id, variable = get(v), score = ct_scores[sample_ids])
                                 ][
                                     ,
                                     c(
@@ -5491,19 +5256,10 @@ clinical_test <- function(
                                         variable_name = ct_clin_vars[[v]]$variable_name,
                                         variable_match = v,
                                         setNames(
-                                            wilcox.test(
-                                                .SD[eval(ct_clin_vars[[v]]$x_expr), score],
-                                                .SD[eval(ct_clin_vars[[v]]$y_expr), score]
-                                            )[c('statistic', 'p.value')],
+                                            wilcox.test(.SD[eval(ct_clin_vars[[v]]$x_expr), score], .SD[eval(ct_clin_vars[[v]]$y_expr), score])[c('statistic', 'p.value')],
                                             c('stat', 'pval')
                                         ),
-                                        fold_change = .SD[
-                                            eval(ct_clin_vars[[v]]$x_expr),
-                                            mean(score)
-                                        ]/.SD[
-                                            eval(ct_clin_vars[[v]]$y_expr),
-                                            mean(score)
-                                        ] - 1
+                                        fold_change = .SD[eval(ct_clin_vars[[v]]$x_expr), mean(score)]/.SD[eval(ct_clin_vars[[v]]$y_expr), mean(score)] - 1
                                     )
                                 ]
                             )
@@ -5529,32 +5285,19 @@ clinical_test <- function(
 
     clinical_analyses <- rbindlist(clinical_analyses)
 
-    clinical_analyses[
-        ,
-        c('test_id', 'pval_adj') := .(
-            .I,
-            p.adjust(pval, p_adjust_method)
-        )
-    ]
+    if(nrow(clinical_analyses) > 0) {
+        clinical_analyses[, c('test_id', 'pval_adj') := .(.I, p.adjust(pval, p_adjust_method))]
+        setcolorder(clinical_analyses, c('test_id', 'test_name', 'variable_name', 'variable_match', 'stat', 'pval', 'pval_adj', 'fold_change'))
+        return(clinical_analyses)
+    } else {
+        return(NULL)
+    }
 
-    setcolorder(
-        clinical_analyses,
-        c(
-            'test_id',
-            'test_name',
-            'variable_name',
-            'variable_match',
-            'stat',
-            'pval',
-            'pval_adj',
-            'fold_change'
-        )
-    )
+    # clinical_analyses[, c('test_id', 'pval_adj') := .(.I, p.adjust(pval, p_adjust_method))]
+    # setcolorder(clinical_analyses, c('test_id', 'test_name', 'variable_name', 'variable_match', 'stat', 'pval', 'pval_adj', 'fold_change'))
 
     # Output:
-
     cat('\n')
-
     clinical_analyses
 
 }
