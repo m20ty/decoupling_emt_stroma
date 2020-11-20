@@ -115,28 +115,6 @@ nice_names_for_figure <- c('BLCA - Luminal-Papillary', 'BLCA - Basal-Squamous', 
 rank_mat <- deconv_rank(deconv_data[ct_to_keep])
 scores_data_transformed <- deconv_scores(expression_data, deconv_data[ct_to_keep], scale_fun = function(x) x/(3*sd(x)), scale_fun_margin = 2, transform_data = TRUE)
 
-# Initial heatmap of top 50 pEMT and CAF genes, ordered by SPIN_NH:
-set.seed(44398)
-htmp_emt_caf <- deconv_heatmap(
-    setNames(
-        scores_data_transformed[
-            unique(c(names(head(sort(apply(rank_mat, 1, quantile, 0.25)), 50)), names(tail(sort(apply(rank_mat, 1, quantile, 0.75)), 50)))),
-            c('gene', ..ct_to_keep)
-        ],
-        c('gene', nice_names_for_figure)
-    ),
-    order_genes_fun = 'seriate',
-    order_genes_method = 'SPIN_NH',
-    # order_analyses_fun = function(x) rev(get_order(seriate(dist(t(x)), method = 'SPIN_NH'))),
-    order_analyses_fun = 'seriate',
-    order_analyses_method = 'SPIN_NH',
-    plot_title = 'Common EMT and stroma genes'
-)
-
-
-
-
-
 # Clustering cancer types by pEMT genes:
 
 scores_mat <- set_rownames(as.matrix(scores_data_transformed[, ..ct_to_keep]), scores_data_transformed$gene)
@@ -254,10 +232,6 @@ plot_grid(
 
 dev.off()
 
-
-
-
-
 ct_hclust_cut <- cutree(ct_hclust, 3)
 ct_clust <- data.table(cancer_type = names(ct_hclust_cut), cluster = ct_hclust_cut)[, memb_strength := silhouette_vals(1 - ct_cor, ct_hclust)]
 
@@ -332,16 +306,16 @@ scores_heatmap <- c(
     scores_heatmap[-1]
 )
 
-deconv_heatmap_dendro_plot(
-    scores_heatmap,
-    direction = 'horizontal',
-    title.position = 'top',
-    title.hjust = 0.5,
-    barwidth = unit(50, 'pt'),
-    barheight = unit(7.5, 'pt'),
-    rel_widths = c(9, 1.25),
-    rel_heights = c(0.75, 10)
-)
+# deconv_heatmap_dendro_plot(
+#     scores_heatmap,
+#     direction = 'horizontal',
+#     title.position = 'top',
+#     title.hjust = 0.5,
+#     barwidth = unit(50, 'pt'),
+#     barheight = unit(7.5, 'pt'),
+#     rel_widths = c(9, 1.25),
+#     rel_heights = c(0.75, 10)
+# )
 
 # I think it's also possible to colour the dendrogram, but might be more work than it's worth.  Here's some info in case we decide to do this:
 # https://stackoverflow.com/questions/21474388/colorize-clusters-in-dendogram-with-ggplot2
@@ -419,6 +393,48 @@ deconv_heatmap_dendro_plot(
 #     scale_y_discrete(expand = c(0, 0)) +
 #     scale_fill_gradientn(colours = rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)), limits = c(-1, 1), oob = squish) +
 #     theme(axis.text.x = element_text(angle = 55, hjust = 1))
+
+
+
+
+
+# Heatmap of top 50 pEMT and CAF genes, ordering genes by SPIN_NH and cancer types by ct_hclust:
+set.seed(44398)
+htmp_emt_caf <- deconv_heatmap(
+    setNames(
+        scores_data_transformed[
+            unique(c(names(head(sort(apply(rank_mat, 1, quantile, 0.25)), 50)), names(tail(sort(apply(rank_mat, 1, quantile, 0.75)), 50)))),
+            c('gene', ..ct_to_keep)
+        ],
+        c('gene', nice_names_for_figure)
+    ),
+    order_genes_fun = 'seriate',
+    order_genes_method = 'SPIN_NH',
+    order_analyses_fun = function(x) ct_hclust$order,
+    # order_analyses_fun = function(x) rev(get_order(seriate(dist(t(x)), method = 'SPIN_NH'))),
+    # order_analyses_fun = 'seriate',
+    # order_analyses_method = 'SPIN_NH',
+    plot_title = 'Common EMT and stroma genes'
+)
+
+pdf('../data_and_figures/scores_heatmap_supp.pdf', width = 7.5, height = 14)
+htmp_emt_caf$heatmap + theme(
+    axis.text.x = element_text(
+        colour = mapvalues(
+            ct_clust[
+                with(htmp_emt_caf, mapvalues(analyses[ordering_analyses], nice_names_for_figure, ct_to_keep)),
+                .(new_clust = switch((memb_strength > 0.05) + 1, 0L, cluster_manual)),
+                by = cancer_type
+            ]$new_clust,
+            0:3,
+            c('darkgrey', brewer.pal(3, 'Dark2'))
+        )
+    )
+)
+dev.off()
+
+# I think it's also possible to colour the dendrogram, but might be more work than it's worth.  Here's some info in case we decide to do this:
+# https://stackoverflow.com/questions/21474388/colorize-clusters-in-dendogram-with-ggplot2
 
 
 
@@ -535,41 +551,11 @@ table_genes <- do.call(
     )
 )
 
-
-
-
-
-# Write to PDFs:
-
-# Initial heatmap of 100 most common EMT/CAF genes:
-
-pdf('../data_and_figures/scores_heatmap_supp.pdf', width = 7.5, height = 14)
-htmp_emt_caf$heatmap + theme(
-    axis.text.x = element_text(
-        colour = mapvalues(
-            ct_clust[
-                with(htmp_emt_caf, mapvalues(analyses[ordering_analyses], nice_names_for_figure, ct_to_keep)),
-                .(new_clust = switch((memb_strength > 0.05) + 1, 0L, cluster_manual)),
-                by = cancer_type
-            ]$new_clust,
-            0:3,
-            c('darkgrey', brewer.pal(3, 'Dark2'))
-        )
-    )
-)
-dev.off()
-
-# Tables of cancer types and signature genes for each cluster:
 pdf('../data_and_figures/scores_tables.pdf', width = 10, height = 8)
 ggdraw(table_cancer_types)
 ggdraw(table_cancer_types_all)
 ggdraw(table_genes)
 dev.off()
-
-# Final clustered heatmap of filtered list of cancer types:
-
-# I think it's also possible to colour the dendrogram, but might be more work than it's worth.  Here's some info in case we decide to do this:
-# https://stackoverflow.com/questions/21474388/colorize-clusters-in-dendogram-with-ggplot2
 
 
 
@@ -582,43 +568,43 @@ scores_volcano_plot_data <- scores_data_transformed[, .(ave_score = rowMeans(.SD
 
 pdf('../data_and_figures/scores_volcano.pdf', width = 5, height = 5)
 
-ggplot(scores_volcano_plot_data[signif_val < 1], aes(x = ave_score, y = -log10(signif_val))) +
-    geom_vline(xintercept = 0, linetype = 'dashed', colour = 'grey', size = 0.25) +
-    geom_point(colour = 'grey40', alpha = 0.75) +
-    geom_text_repel(
-        aes(label = gene),
-        data = scores_volcano_plot_data[abs(ave_score) > 0.2 & -log10(signif_val) > 5 | gene %in% c('SNAI1', 'SNAI2', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2')]
-    )
+# ggplot(scores_volcano_plot_data[signif_val < 1], aes(x = ave_score, y = -log10(signif_val))) +
+#     geom_vline(xintercept = 0, linetype = 'dashed', colour = 'grey', size = 0.25) +
+#     geom_point(colour = 'grey40', alpha = 0.75) +
+#     geom_text_repel(
+#         aes(label = gene),
+#         data = scores_volcano_plot_data[abs(ave_score) > 0.2 & -log10(signif_val) > 5 | gene %in% c('SNAI1', 'SNAI2', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2')]
+#     )
 
 # In the following, I'm manually choosing which labels to nudge left and which to nudge right.  This is because ggrepel doesn't do it adequately by itself, but it
 # has the disadvantage that ggrepel doesn't know to avoid overlaps between the labels arising from the two separate calls to geom_label_repel().  So, if we're not
 # careful, the ones that are nudged left can overlap those that are nudged right.
 
 scores_volcano_plot <- ggplot(scores_volcano_plot_data[signif_val < 1], aes(x = ave_score, y = -log10(signif_val))) +
-    scale_x_continuous(limits = c(-0.75, 0.55)) +
+    scale_x_continuous(limits = c(-0.9, 0.6)) +
     scale_y_continuous(expand = c(0, 0), limits = c(-1, 14)) +
     geom_vline(xintercept = 0, linetype = 'dashed', colour = 'grey', size = 0.25) +
     geom_point(colour = 'grey40', alpha = 0.75) +
     geom_point(data = scores_volcano_plot_data[gene %in% c('SNAI1', 'SNAI2', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2')], size = 2.5, colour = brewer.pal(4, 'Dark2')[4]) +
     geom_text_repel(
         aes(label = gene),
-        data = scores_volcano_plot_data[gene %in% c('OLFML2B', 'ITGA11', 'ACTA2', 'TAGLN', 'POSTN', 'DCN', 'DPT', 'MMP2')],
-        nudge_x = 0.17,
+        data = scores_volcano_plot_data[gene %in% c('ITGA11', 'OLFML2B', 'ASPN', 'LUM', 'ACTA2', 'TAGLN', 'POSTN')],
+        nudge_x = 0.18,
         size = 3,
         point.padding = 0.2,
         segment.size = 0.3
     ) +
     geom_text_repel(
         aes(label = gene),
-        data = scores_volcano_plot_data[gene %in% c('ASPN', 'SPARC', 'COL1A2', 'LUM', 'COL3A1', 'FAP', 'COL1A1', 'THY1', 'VCAN', 'COL5A2', 'COL5A1')],
-        nudge_x = -0.14,
+        data = scores_volcano_plot_data[gene %in% c('SPARC', 'COL1A2', 'COL3A1', 'FAP', 'COL1A1', 'THY1', 'VCAN', 'MMP2', 'ECM2', 'PDGFRB')],
+        nudge_x = -0.18,
         size = 3,
         point.padding = 0.2,
         segment.size = 0.3
     ) +
     geom_text_repel(
         aes(label = gene),
-        data = scores_volcano_plot_data[gene %in% c('LUZP1', 'LAMC1', 'LAMC2', 'LAMA3', 'ITGA2', 'PVR', 'ITGB1', 'CD44')],
+        data = scores_volcano_plot_data[gene %in% c('LUZP1', 'LAMC1', 'LAMC2', 'LAMA3', 'ITGA2', 'VCL')],
         nudge_x = 0.12,
         size = 3,
         point.padding = 0.2,
@@ -626,7 +612,15 @@ scores_volcano_plot <- ggplot(scores_volcano_plot_data[signif_val < 1], aes(x = 
     ) +
     geom_text_repel(
         aes(label = gene),
-        data = scores_volcano_plot_data[gene %in% c('MCM7', 'VCL', 'MSN', 'SGCB')],
+        data = scores_volcano_plot_data[gene %in% c('MCM7', 'CD59')],
+        nudge_x = -0.1,
+        size = 3,
+        point.padding = 0.2,
+        segment.size = 0.3
+    ) +
+    geom_text_repel(
+        aes(label = gene),
+        data = scores_volcano_plot_data[gene %in% c('MSN', 'PVR', 'ITGB1', 'CD44')],
         nudge_x = -0.15,
         size = 3,
         point.padding = 0.2,
@@ -634,25 +628,35 @@ scores_volcano_plot <- ggplot(scores_volcano_plot_data[signif_val < 1], aes(x = 
     ) +
     geom_label_repel(
         aes(label = gene),
-        data = scores_volcano_plot_data[gene %in% c('SNAI2', 'VIM', 'ZEB2')],
-        nudge_x = 0.13,
-        nudge_y = 0.7,
+        data = scores_volcano_plot_data[gene %in% c('SNAI1', 'VIM')],
+        nudge_x = 0.15,
+        nudge_y = 0.5,
         size = 3,
         point.padding = 0.3,
         segment.size = 0.3
     ) +
     geom_label_repel(
         aes(label = gene),
-        data = scores_volcano_plot_data[gene %in% c('SNAI1', 'ZEB1', 'TWIST1')],
-        nudge_x = -0.17,
+        data = scores_volcano_plot_data[gene %in% c('ZEB2', 'TWIST1')],
+        nudge_x = -0.21,
+        nudge_y = 0.5,
+        size = 3,
+        point.padding = 0.3,
+        segment.size = 0.3
+    ) +
+    geom_label_repel(
+        aes(label = gene),
+        data = scores_volcano_plot_data[gene %in% c('SNAI2', 'ZEB1')],
+        nudge_x = -0.2,
+        nudge_y = -0.1,
         size = 3,
         point.padding = 0.3,
         segment.size = 0.3
     ) +
     geom_segment(aes(x = 0.1, xend = 0.5, y = -0.5, yend = -0.5), arrow = arrow(ends = 'last', length = unit(5, 'pt')), colour = brewer.pal(11, 'RdBu')[2]) +
-    geom_segment(aes(x = -0.6, xend = -0.1, y = -0.5, yend = -0.5), arrow = arrow(ends = 'first', length = unit(5, 'pt')), colour = brewer.pal(11, 'RdBu')[10]) +
+    geom_segment(aes(x = -0.7, xend = -0.1, y = -0.5, yend = -0.5), arrow = arrow(ends = 'first', length = unit(5, 'pt')), colour = brewer.pal(11, 'RdBu')[10]) +
     annotate(geom = 'text', x = 0.5, y = 0.1, label = 'pEMT', colour = brewer.pal(11, 'RdBu')[2]) +
-    annotate(geom = 'text', x = -0.6, y = 0.1, label = 'CAF', colour = brewer.pal(11, 'RdBu')[10]) +
+    annotate(geom = 'text', x = -0.7, y = 0.1, label = 'CAF', colour = brewer.pal(11, 'RdBu')[10]) +
     theme_test() +
     theme(plot.margin = unit(c(5.5, 20, 20, 5.5), 'pt')) +
     labs(x = 'Average pEMT-CAF score', y = TeX('Significance (-log_{10}(p))'))
@@ -663,163 +667,88 @@ dev.off()
 
 
 
-# Combined figure:
+top_dendro <- dendro(ct_hclust, 'bottom') + theme(plot.margin = unit(c(20, 0, 0, 0), 'pt'))
+right_dendro <- dendro(ct_hclust, 'left') + theme(plot.margin = unit(c(0, 20, 0, 0), 'pt'))
+corr_heatmap <- ct_hclust_heatmap +
+    theme(
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title = element_text(),
+        legend.position = 'none',
+        plot.margin = unit(c(0, 0, 5.5, 5.5), 'pt')
+    ) +
+    labs(x = 'Cancer types', y = 'Cancer types')
 
-pdf(
-    '../data_and_figures/scores_combined_figure.pdf',
-    width = 11.5,
-    height = 11
-)
+aligned_volcano_heatmap <- align_plots(scores_volcano_plot, corr_heatmap + theme(legend.position = 'none'), align = 'v', axis = 'l')
+aligned_top_dendro_heatmap <- align_plots(top_dendro, aligned_volcano_heatmap[[2]], align = 'v')
+aligned_right_dendro_heatmap <- align_plots(aligned_top_dendro_heatmap[[2]], right_dendro, align = 'h')
+
+# aligned_top_dendro_heatmap[[1]]$heights
+# aligned_right_dendro_heatmap[[1]]$heights
+# aligned_right_dendro_heatmap[[1]]$widths
+# aligned_right_dendro_heatmap[[2]]$widths
+
+# Remove extra spacing added between heatmap and dendrograms by align_plots():
+aligned_right_dendro_heatmap[[1]]$widths[9] <- unit(0, 'pt')
+
+pdf('../data_and_figures/final_figures_resubmission/4.pdf', width = 11.5, height = 11)
 
 plot_grid(
     blank_plot(),
     blank_plot(),
+    blank_plot(),
     plot_grid(
-        ggplot(plot_data[signif_val < 1], aes(x = ave_score, y = -log10(signif_val))) +
-            geom_vline(xintercept = 0, linetype = 'dashed', colour = 'grey', size = 0.25) +
-            geom_point(colour = 'grey40', alpha = 0.75) +
-            geom_text_repel( # Just the CAF labels
-                aes(label = gene),
-                data = plot_data[gene %in% c('DPT', 'ACTA2', 'BGN', 'DCN', 'COL1A1', 'COMP', 'VCAN', 'MMP2', 'COL3A1')],
-                nudge_x = 0.17,
-                size = 3,
-                point.padding = 0.2,
-                segment.size = 0.3
-            ) +
-            geom_text_repel( # Just the pEMT labels
-                aes(label = gene),
-                data = plot_data[gene %in% c('LAMC1', 'PVR', 'ITGA2', 'ITGB1', 'LAMC2', 'LAMA3', 'CALU')],
-                nudge_x = 0.12,
-                size = 3,
-                point.padding = 0.2,
-                segment.size = 0.3
-            ) +
-            geom_text_repel(
-                aes(label = gene),
-                data = plot_data[gene =='CD44'],
-                nudge_x = 0.1,
-                nudge_y = -1,
-                size = 3,
-                point.padding = 0.1,
-                segment.size = 0.3
-            ) +
-            geom_text_repel(
-                aes(label = gene),
-                data = plot_data[gene %in% c('VEGFA', 'COLGALT1', 'TPM4', 'DST')],
-                nudge_x = -0.15,
-                size = 3,
-                point.padding = 0.2,
-                segment.size = 0.3
-            ) +
-            geom_text_repel(
-                aes(label = gene),
-                data = plot_data[gene %in% c('ASPN', 'COL1A2', 'LUM', 'TAGLN', 'THY1', 'PCOLCE')],
-                nudge_x = -0.14,
-                size = 3,
-                point.padding = 0.2,
-                segment.size = 0.3
-            ) +
-            geom_text_repel(
-                aes(label = gene),
-                data = plot_data[gene %in% c('FAP', 'POSTN', 'COL5A1', 'COL6A2', 'SPARC', 'COL5A2')],
-                nudge_x = -0.175,
-                size = 3,
-                point.padding = 0.2,
-                segment.size = 0.3
-            ) +
-            geom_point(
-                data = plot_data[gene %in% c('SNAI1', 'SNAI2', 'TWIST1', 'ZEB1', 'ZEB2')],
-                size = 3,
-                colour = brewer.pal(4, 'Dark2')[4]
-            ) +
-            geom_label_repel(
-                aes(label = gene),
-                data = plot_data[gene == 'SNAI2'],
-                nudge_x = 0.13,
-                size = 3,
-                point.padding = 0.3,
-                segment.size = 0.3
-            ) +
-            geom_label_repel(
-                aes(label = gene),
-                data = plot_data[gene %in% c('SNAI1', 'TWIST1', 'ZEB1', 'ZEB2')],
-                nudge_x = -0.1,
-                size = 3,
-                point.padding = 0.3,
-                segment.size = 0.3
-            ) +
-            theme_test() +
-            theme(plot.margin = unit(c(5.5, 15, 20, 5.5), 'pt')) +
-            lims(x = c(-0.75, 0.55)) +
-            labs(x = 'Average pEMT-CAF score', y = latex2exp::TeX('Significance (-log_{10}(p))')),
-        ggplot(pca_data, aes(PC1, PC2)) +
-            geom_point(
-                aes(
-                    colour = mapvalues(
-                        kmeans_cluster_manual,
-                        c(1, 2, 3),
-                        c('Cluster 1 - Gynaecological', 'Cluster 2 - Squamous-like', 'Cluster 3 - Gastro-intestinal')
+        plot_grid(
+            aligned_volcano_heatmap[[1]],
+            plot_grid(
+                aligned_top_dendro_heatmap[[1]],
+                blank_plot(),
+                aligned_right_dendro_heatmap[[1]],
+                aligned_right_dendro_heatmap[[2]],
+                nrow = 2,
+                ncol = 2,
+                rel_heights = c(1, 5),
+                rel_widths = c(5.1, 0.9)
+            ),
+            nrow = 2,
+            ncol = 1
+        ),
+        get_legend(
+            ct_hclust_heatmap +
+                theme(legend.justification = c(0.15, 0.5)) +
+                guides(
+                    fill = guide_colourbar(
+                        direction = 'horizontal',
+                        title = 'Correlation\n',
+                        title.position = 'right',
+                        barwidth = unit(100, 'pt'),
+                        barheight = unit(10, 'pt')
                     )
                 )
-            ) +
-            scale_colour_manual(values = brewer.pal(3, 'Dark2')) +
-            geom_point(data = pca_data[thresh_pass == FALSE], colour = 'lightgrey') +
-            guides(shape = FALSE) +
-            theme_test() +
-            theme(
-                legend.position = 'bottom',
-                legend.direction = 'vertical',
-                legend.title = element_blank(),
-                legend.text = element_text(size = 11),
-                plot.margin = unit(c(20, 15, 5.5, 5.5), 'pt')
-            ),
+        ),
         nrow = 2,
         ncol = 1,
-        align = 'v'
+        rel_heights = c(19, 1)
     ),
+    blank_plot(),
     deconv_heatmap_dendro_plot(
-        c(
-            list(
-                heatmap = htmp_all_kmeans_distinct$heatmap +
-                    scale_fill_gradientn(
-                        colours = rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)),
-                        limits = c(-1, 1),
-                        breaks = c(-1, 0, 1),
-                        oob = scales::squish
-                    ) +
-                    theme(
-                        axis.text.x = element_text(
-                            angle = 55,
-                            hjust = 1,
-                            colour = pca_data[
-                                with(htmp_all_kmeans_distinct, analyses[ordering_analyses]),
-                                mapvalues(kmeans_cluster_manual, c(1, 2, 3), brewer.pal(3, 'Dark2'))
-                            ]
-                        ),
-                        legend.text = element_text(size = 9),
-                        legend.title = element_text(size = 9),
-                        legend.key.width = unit(5, 'pt'),
-                        legend.key.height = unit(5, 'pt')
-                    )
-            ),
-            htmp_all_kmeans_distinct[-1]
-        ),
+        scores_heatmap,
         direction = 'horizontal',
         title.position = 'top',
         title.hjust = 0.5,
         barwidth = unit(50, 'pt'),
         barheight = unit(7.5, 'pt'),
-        rel_widths = c(9, 1.25),
+        rel_widths = c(8.75, 1.5),
         rel_heights = c(0.75, 10)
     ),
     nrow = 2,
-    ncol = 2,
-    rel_widths = c(5, 6.5),
+    ncol = 3,
+    rel_widths = c(5, 0.5, 6),
     rel_heights = c(1, 20)
 ) +
-    draw_label('A', x = 0, y = 0.975, hjust = -0.1, vjust = 1.1, size = 16, fontface = 2) +
-    draw_label('B', x = 0, y = 0.475, hjust = -0.1, vjust = 1.1, size = 16, fontface = 2) +
-    draw_label('C', x = 0.5, y = 0.975, hjust = -0.1, vjust = 1.1, size = 16, fontface = 2)
+    draw_label('A', x = 0, y = 0.975, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2) +
+    draw_label('B', x = 0, y = 0.5, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2) +
+    draw_label('C', x = 0.5, y = 0.975, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2)
 
 dev.off()
 
