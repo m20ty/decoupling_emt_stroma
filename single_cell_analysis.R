@@ -41,25 +41,42 @@ emt_markers <- fread('../../emt_markers.csv')[, gene := alias2SymbolTable(gene)]
 sc_metadata <- list(
 	brca = list(
 		tcga_cancer_types = 'BRCA',
-		read_quote = quote(fread('../data_and_figures/qian_breast_2020_reclassified.csv')[cell_type != 'ambiguous' & id != 'sc5rJUQ064_CCATGTCCATCCCATC', -c('cell_type_author', 'cell_type_lenient')]),
+		read_quote = quote(
+			fread('../data_and_figures/qian_breast_2020_reclassified.csv')[
+				cell_type != 'ambiguous' & id != 'sc5rJUQ064_CCATGTCCATCCCATC',
+				-c('cell_type_author', 'cell_type_lenient')
+			]
+		),
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 'mast', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = 'dendritic'
 	),
 	brca_lenient = list(
 		tcga_cancer_types = 'BRCA',
-		read_quote = quote(fread('../data_and_figures/qian_breast_2020_reclassified.csv')[cell_type_lenient != 'ambiguous' & id != 'sc5rJUQ064_CCATGTCCATCCCATC', -c('cell_type_author', 'cell_type')] %>% setnames('cell_type_lenient', 'cell_type')),
+		read_quote = quote(
+			fread('../data_and_figures/qian_breast_2020_reclassified.csv')[
+				cell_type_lenient != 'ambiguous' & id != 'sc5rJUQ064_CCATGTCCATCCCATC',
+				-c('cell_type_author', 'cell_type')
+			] %>% setnames('cell_type_lenient', 'cell_type')
+		),
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 'mast', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = 'dendritic'
 	),
 	coadread = list(
 		tcga_cancer_types = c('COAD', 'READ'),
-		read_quote = quote(fread('../data_and_figures/lee_crc_2020_smc_reclassified.csv')[cell_type != 'ambiguous', -c('cell_type_author', 'cell_type_lenient')]),
+		read_quote = quote(
+			fread('../data_and_figures/lee_crc_2020_smc_reclassified.csv')[cell_type != 'ambiguous', -c('cell_type_author', 'cell_type_lenient')]
+		),
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = c('epithelial', 'mast')
 	),
 	coadread_lenient = list(
 		tcga_cancer_types = c('COAD', 'READ'),
-		read_quote = quote(fread('../data_and_figures/lee_crc_2020_smc_reclassified.csv')[cell_type_lenient != 'ambiguous', -c('cell_type_author', 'cell_type')] %>% setnames('cell_type_lenient', 'cell_type')),
+		read_quote = quote(
+			fread('../data_and_figures/lee_crc_2020_smc_reclassified.csv')[
+				cell_type_lenient != 'ambiguous',
+				-c('cell_type_author', 'cell_type')
+			] %>% setnames('cell_type_lenient', 'cell_type')
+		),
 		initial_cell_types = c('b_cell', 'macrophage', 't_cell', 'caf', 'cancer'), # Endothelial cells become CAFs under lenient definition
 		rare_cell_types = c('epithelial', 'mast')
 	),
@@ -71,13 +88,20 @@ sc_metadata <- list(
     ),
 	lihc = list(
         tcga_cancer_types = 'LIHC',
-        read_quote = quote(fread('../data_and_figures/ma_liver_2019_reclassified.csv')[cell_type != 'ambiguous', -c('cell_type_author', 'cell_type_lenient')]),
+        read_quote = quote(
+			fread('../data_and_figures/ma_liver_2019_reclassified.csv')[cell_type != 'ambiguous', -c('cell_type_author', 'cell_type_lenient')]
+		),
 		initial_cell_types = c('endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = c('b_cell', 'hpc-like')
     ),
 	lihc_lenient = list(
         tcga_cancer_types = 'LIHC',
-        read_quote = quote(fread('../data_and_figures/ma_liver_2019_reclassified.csv')[cell_type_lenient != 'ambiguous', -c('cell_type_author', 'cell_type')] %>% setnames('cell_type_lenient', 'cell_type')),
+        read_quote = quote(
+			fread('../data_and_figures/ma_liver_2019_reclassified.csv')[
+				cell_type_lenient != 'ambiguous',
+				-c('cell_type_author', 'cell_type')
+			] %>% setnames('cell_type_lenient', 'cell_type')
+		),
 		initial_cell_types = c('endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = c('b_cell', 'hpc-like')
     ),
@@ -89,43 +113,78 @@ sc_metadata <- list(
 	),
 	# luad = list(
 		# tcga_cancer_types = 'LUAD',
-		# read_quote = quote(fread('../data_and_figures/qian_lung_2020_reclassified.csv')[disease == 'LUAD' & cell_type != 'ambiguous', -c('disease', 'cell_type_author', 'cell_type_lenient')]),
+		# read_quote = quote(
+		# 	fread('../data_and_figures/qian_lung_2020_reclassified.csv')[
+		# 		disease == 'LUAD' & cell_type != 'ambiguous',
+		# 		-c('disease', 'cell_type_author', 'cell_type_lenient')
+		# 	]
+		# ),
 		# initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
 		# rare_cell_types = c('alveolar', 'dendritic', 'epithelial', 'mast')
 	# ),
 	# luad_lenient = list(
 		# tcga_cancer_types = 'LUAD',
-		# read_quote = quote(fread('../data_and_figures/qian_lung_2020_reclassified.csv')[disease == 'LUAD' & cell_type_lenient != 'ambiguous', -c('disease', 'cell_type_author', 'cell_type')] %>% setnames('cell_type_lenient', 'cell_type')),
+		# read_quote = quote(
+		# 	fread('../data_and_figures/qian_lung_2020_reclassified.csv')[
+		# 		disease == 'LUAD' & cell_type_lenient != 'ambiguous',
+		# 		-c('disease', 'cell_type_author', 'cell_type')
+		# 	] %>% setnames('cell_type_lenient', 'cell_type')
+		# ),
 		# initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
 		# rare_cell_types = c('alveolar', 'dendritic', 'epithelial', 'mast')
 	# ),
     lusc = list(
         tcga_cancer_types = 'LUSC',
-        read_quote = quote(fread('../data_and_figures/qian_lung_2020_reclassified.csv')[disease == 'LUSC' & cell_type != 'ambiguous', -c('disease', 'cell_type_author', 'cell_type_lenient')]),
+        read_quote = quote(
+			fread('../data_and_figures/qian_lung_2020_reclassified.csv')[
+				disease == 'LUSC' & cell_type != 'ambiguous',
+				-c('disease', 'cell_type_author', 'cell_type_lenient')
+			]
+		),
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 'mast', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = c('dendritic', 'erythroblast')
     ),
 	lusc_lenient = list(
         tcga_cancer_types = 'LUSC',
-        read_quote = quote(fread('../data_and_figures/qian_lung_2020_reclassified.csv')[disease == 'LUSC' & cell_type_lenient != 'ambiguous', -c('disease', 'cell_type_author', 'cell_type')] %>% setnames('cell_type_lenient', 'cell_type')),
+        read_quote = quote(
+			fread('../data_and_figures/qian_lung_2020_reclassified.csv')[
+				disease == 'LUSC' & cell_type_lenient != 'ambiguous',
+				-c('disease', 'cell_type_author', 'cell_type')
+			] %>% setnames('cell_type_lenient', 'cell_type')
+		),
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 'mast', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = c('dendritic', 'erythroblast')
     ),
 	ov = list(
 		tcga_cancer_types = 'OV',
-		read_quote = quote(fread('../data_and_figures/qian_ovarian_2020_reclassified.csv')[cell_type != 'ambiguous' & !(id %in% c('scrSOL001_TCATTTGTCTGTCAAG', 'scrSOL004_TTGCCGTTCTCCTATA')), -c('cell_type_author', 'cell_type_lenient')]),
+		read_quote = quote(
+			fread('../data_and_figures/qian_ovarian_2020_reclassified.csv')[
+				cell_type != 'ambiguous' & !(id %in% c('scrSOL001_TCATTTGTCTGTCAAG', 'scrSOL004_TTGCCGTTCTCCTATA')),
+				-c('cell_type_author', 'cell_type_lenient')
+			]
+		),
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = NULL
 	),
 	ov_lenient = list(
 		tcga_cancer_types = 'OV',
-		read_quote = quote(fread('../data_and_figures/qian_ovarian_2020_reclassified.csv')[cell_type_lenient != 'ambiguous' & !(id %in% c('scrSOL001_TCATTTGTCTGTCAAG', 'scrSOL004_TTGCCGTTCTCCTATA')), -c('cell_type_author', 'cell_type')] %>% setnames('cell_type_lenient', 'cell_type')),
+		read_quote = quote(
+			fread('../data_and_figures/qian_ovarian_2020_reclassified.csv')[
+				cell_type_lenient != 'ambiguous' & !(id %in% c('scrSOL001_TCATTTGTCTGTCAAG', 'scrSOL004_TTGCCGTTCTCCTATA')),
+				-c('cell_type_author', 'cell_type')
+			] %>% setnames('cell_type_lenient', 'cell_type')
+		),
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = NULL
 	),
     paad = list(
         tcga_cancer_types = 'PAAD',
-        read_quote = quote(fread('../data_and_figures/peng_pdac_2019_reclassified.csv')[cell_type != 'ambiguous' & !(id %in% c('T8_TGGTTCCTCGCATGGC', 'T17_CGTGTAACAGTACACT')), -'cell_type_author']),
+        read_quote = quote(
+			fread('../data_and_figures/peng_pdac_2019_reclassified.csv')[
+				cell_type != 'ambiguous' & !(id %in% c('T8_TGGTTCCTCGCATGGC', 'T17_CGTGTAACAGTACACT')),
+				-'cell_type_author'
+			]
+		),
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = c('acinar', 'ductal_2', 'endocrine')
     )
@@ -2228,12 +2287,7 @@ simulated_deconv_plots <- sapply(
     USE.NAMES = TRUE
 )
 
-cairo_pdf(
-    '../data_and_figures/simulated_deconv_figures.pdf',
-    width = 7,
-    height = 6,
-	onefile = TRUE
-)
+cairo_pdf('../data_and_figures/simulated_deconv_figures.pdf', width = 7, height = 6, onefile = TRUE)
 
 for(ct in names(simulated_deconv_plots)[!grepl('lenient', names(simulated_deconv_plots))]) {
 	deconv_plot(
@@ -2256,12 +2310,7 @@ for(ct in names(simulated_deconv_plots)[!grepl('lenient', names(simulated_deconv
 
 dev.off()
 
-cairo_pdf(
-    '../data_and_figures/simulated_deconv_figures_lenient.pdf',
-    width = 7,
-    height = 6,
-	onefile = TRUE
-)
+cairo_pdf('../data_and_figures/simulated_deconv_figures_lenient.pdf', width = 7, height = 6, onefile = TRUE)
 
 for(ct in names(simulated_deconv_plots)[grepl('lenient', names(simulated_deconv_plots))]) {
 	deconv_plot(

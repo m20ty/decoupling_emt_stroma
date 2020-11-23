@@ -21,32 +21,31 @@ deconv_plots <- readRDS('../data_and_figures/deconv_plots.rds')
 
 
 ct_to_keep <- c('blca_luminal_papillary', 'blca_basal_squamous', 'brca_luminal_a', 'brca_luminal_b', 'brca_basal_like', 'brca_her2_enriched',
-    'cesc', 'coad', 'esca_ac', 'esca_escc', 'hnsc_mesenchymal_basal', 'hnsc_classical', 'hnsc_atypical', 'lihc', 'luad_proximal_inflammatory',
-    'luad_proximal_proliferative', 'lusc_basal', 'lusc_classical', 'lusc_primitive', 'lusc_secretory', 'ov_differentiated', 'ov_immunoreactive',
-    'ov_proliferative', 'paad', 'read', 'stad_cin', 'stad_ebv', 'stad_msi', 'ucec')
-
+    'coad', 'esca_ac', 'hnsc_mesenchymal_basal', 'hnsc_classical', 'luad_proximal_inflammatory', 'luad_proximal_proliferative',
+    'luad_terminal_respiratory_unit', 'lusc_classical', 'lusc_secretory', 'ov_differentiated', 'ov_immunoreactive', 'ov_proliferative', 'paad',
+    'read', 'stad_cin', 'stad_msi', 'ucec')
 nice_names_for_figure <- c('BLCA - Luminal-Papillary', 'BLCA - Basal-Squamous', 'BRCA - Luminal A', 'BRCA - Luminal B', 'BRCA - Basal-like',
-    'BRCA - HER2-enriched', 'CESC', 'COAD', 'ESCA - Adenocarcinoma', 'ESCA - Squamous', 'HNSC - Malignant-Basal', 'HNSC - Classical',
-    'HNSC - Atypical', 'LIHC', 'LUAD - Squamoid', 'LUAD - Magnoid', 'LUSC - Basal', 'LUSC - Classical', 'LUSC - Primitive', 'LUSC - Secretory',
-    'OV - Differentiated', 'OV - Immunoreactive', 'OV - Proliferative', 'PAAD', 'READ', 'STAD - CIN', 'STAD - EBV', 'STAD - MSI', 'UCEC')
+    'BRCA - HER2-enriched', 'COAD', 'ESCA - Adenocarcinoma', 'HNSC - Malignant-Basal', 'HNSC - Classical', 'LUAD - Squamoid', 'LUAD - Magnoid',
+    'LUAD - Bronchioid', 'LUSC - Classical', 'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive', 'OV - Proliferative', 'PAAD', 'READ',
+    'STAD - CIN', 'STAD - MSI', 'UCEC')
 
 scores_data <- sapply(
     ct_to_keep,
     function(ct) {
-        
+
         cat(paste0(ct, ':\n'))
-        
+
         sample_ids_mat <- expression_data[deconv_data[[ct]]$sample_ids, set_colnames(t(.SD), id), .SDcols = -'id']
         max_n <- floor(length(deconv_data[[ct]]$genes_filtered)/3)
-        
+
         cat('\tComputing mes score\n')
         mes_score <- signature_score(sample_ids_mat, deconv_data[[ct]]$genes_filtered, nbin = 20, n = 100)
-        
+
         cat('\tComputing scores for random samples\n')
         gene_samples <- replicate(50, sample(deconv_data[[ct]]$genes_filtered, 20, replace = FALSE), simplify = FALSE)
         gene_sample_scores <- lapply(gene_samples, function(smpl) signature_score(sample_ids_mat, smpl, nbin = 20, n = 100))
         ave_mes_corr <- mean(sapply(gene_sample_scores, function(smpl_scores) cor(smpl_scores, mes_score)))
-        
+
         cat('\tComputing pEMT and CAF scores: ')
         pemt_caf_scores <- lapply(
             20:max_n,
@@ -62,7 +61,7 @@ scores_data <- sapply(
                 list(caf_scores = caf_scores, pemt_scores = pemt_scores)
             }
         )
-        
+
         cat('\tCompiling data and fitting model\n')
         pemt_caf_scores_corr <- data.table(
             ngenes = 20:(length(pemt_caf_scores) + 19),
@@ -70,7 +69,7 @@ scores_data <- sapply(
         )
         pemt_caf_scores_mod <- loess(score_corr ~ ngenes, pemt_caf_scores_corr, span = 0.5, degree = 1)
         pemt_caf_scores_corr[, loess_fit := predict(pemt_caf_scores_mod, .SD)]
-        
+
         list(
             mes_score = mes_score,
             gene_samples = gene_samples,
@@ -80,7 +79,7 @@ scores_data <- sapply(
             pemt_caf_scores_corr = pemt_caf_scores_corr,
             pemt_caf_scores_mod = pemt_caf_scores_mod
         )
-        
+
     },
     simplify = FALSE,
     USE.NAMES = TRUE
@@ -125,7 +124,7 @@ dev.off()
 #         )
 #     )
 # ) %>% melt(id.vars = 'cancer_type', measure.vars = c('ave_mes_corr', 'pemt_caf_corr'), variable.name = 'corr_type', value.name = 'corr')
-# 
+#
 # barplot_data[
 #     ,
 #     cancer_type := mapvalues(
@@ -137,7 +136,7 @@ dev.off()
 #         nice_names_for_figure
 #     )
 # ]
-# 
+#
 # ggplot(data = barplot_data, aes(x = cancer_type, y = corr, group = corr_type, fill = corr_type, colour = corr_type)) +
 #     geom_col(position = 'dodge') +
 #     theme_test() +
@@ -221,20 +220,20 @@ sample_ids_mat <- expression_data[deconv_data[[ct]]$sample_ids, set_colnames(t(.
 temp <- lapply(
     10:floor(length(deconv_data[[ct]]$genes_filtered)/3),
     function(i) {
-        
+
         if(i == 10) cat('\n')
         cat(rep('\b', ceiling(log10(i))), i, sep = '')
-        
+
         caf_scores <- with(
             deconv_data[[ct]],
             signature_score(sample_ids_mat, tail(genes_filtered[ordering], i), nbin = 20, n = 100)
         )
-        
+
         pemt_scores <- with(
             deconv_data[[ct]],
             signature_score(sample_ids_mat, head(genes_filtered[ordering], i), nbin = 20, n = 100)
         )
-        
+
         # pemt_caf_corr <- cor(
         #     with(
         #         deconv_data[[ct]],
@@ -242,11 +241,11 @@ temp <- lapply(
         #     ),
         #     caf_scores
         # )[, 1]
-        
+
         # list(caf_scores = caf_scores, pemt_caf_corr = pemt_caf_corr)
-        
+
         list(caf_scores = caf_scores, pemt_scores = pemt_scores)
-        
+
     }
 )
 
