@@ -1,5 +1,5 @@
 filter_for_groups <- function(
-    
+
     grouped_data,
     group_var = 'cell_type',
     groups = c('fibroblast', 'cancer'),
@@ -13,9 +13,9 @@ filter_for_groups <- function(
         'ZEB1',
         'ZEB2'
     )
-    
+
 ) {
-    
+
     # grouped_data should consist of columns whose 'sizes' we want to measure and compare
     # between groups, along with a single annotation column whose name should be supplied to
     # group_var and which gives the group assignment to each row.  FUN is the function that
@@ -24,9 +24,9 @@ filter_for_groups <- function(
     # require to be bigger than the other groups.  The function filters for those columns for
     # which this condition is satisfied, along with the elements of the argument to_keep,
     # which are put back in if they get filtered out.
-    
+
     FUN <- match.fun(FUN)
-    
+
     tdt(
         grouped_data[
             ,
@@ -43,7 +43,7 @@ filter_for_groups <- function(
         n_bigger >= n_req,
         unique(c(id, to_keep))
     ]
-    
+
 }
 
 
@@ -81,13 +81,13 @@ filter_for_groups <- function(
 # We could also try biclustering...
 
 order_spin_nh_gw_olo = function(x, method = c('GW', 'OLO')) {
-    
+
     method <- match.arg(method)
-    
+
     spin_nh_ordering <- as.vector(seriation::seriate(dist(t(x)), method = 'SPIN_NH')[[1]])
-    
+
     .NC <- ncol(x)
-    
+
     spin_nh_ordering[
         c(
             seriation::seriate(
@@ -116,11 +116,11 @@ order_spin_nh_gw_olo = function(x, method = c('GW', 'OLO')) {
             )[[1]]$order + x[, .NC %/% 2]
         )
     ]
-    
+
 }
 
 single_cell_analysis <- function(
-    
+
     single_cell_data,
     genes = NULL,
     id_var = 'id',
@@ -163,19 +163,19 @@ single_cell_analysis <- function(
     gd_legend_height = 10,
     gd_legend_direction = 'vertical',
     gd_legend_margin = c(20, 0, 0, 0)
-    
+
 ) {
-    
+
     genes_filter_fun <- match.fun(genes_filter_fun)
     cells_filter_fun <- match.fun(cells_filter_fun)
     genes_order_fun <- match.fun(genes_order_fun)
     cells_order_fun <- match.fun(cells_order_fun)
     expression_summary_fun <- match.fun(expression_summary_fun)
-    
+
     if(is.null(genes) & is.null(genes_filtered)) {
         stop('Please supply either genes or genes_filtered.')
     }
-    
+
     if(!is.null(genes_filtered)) {
         genes <- genes_filtered
     } else {
@@ -199,16 +199,16 @@ single_cell_analysis <- function(
             )
         )
     }
-    
+
     single_cell_data[
         get(group_var) %in% groups,
         genes_detected := sum(as.numeric(.SD) > 0),
         by = id_var,
         .SDcols = -group_var
     ]
-    
+
     setkeyv(single_cell_data, id_var)
-    
+
     if(!is.null(cells_filtered)) {
         cells <- cells_filtered
     } else {
@@ -223,7 +223,7 @@ single_cell_analysis <- function(
             ]
         ]
     }
-    
+
     if(!is.null(cells_order)) {
         ordering_cells <- cells_order
     } else {
@@ -243,7 +243,7 @@ single_cell_analysis <- function(
             USE.NAMES = TRUE
         )
     }
-    
+
     if(!is.null(genes_order)) {
         ordering_genes <- genes_order
     } else {
@@ -254,7 +254,7 @@ single_cell_analysis <- function(
             ]
         )
     }
-    
+
     heatmaps <- sapply(
         groups,
         function(grp) {
@@ -312,18 +312,18 @@ single_cell_analysis <- function(
         simplify = FALSE,
         USE.NAMES = TRUE
     )
-    
+
     heatmap_annotations <- genes[
         ordering_genes
     ]
-    
+
     heatmap_annotations[!(heatmap_annotations %in% annotations)] <- ''
-    
+
     axis_labels <- heat_map_labels_repel(
         heatmap_annotations,
         edge = 'right'
     )
-    
+
     expression_summary <- sapply(
         groups,
         function(grp) {
@@ -366,7 +366,7 @@ single_cell_analysis <- function(
         simplify = FALSE,
         USE.NAMES = TRUE
     )
-    
+
     genes_detected <- sapply(
         groups,
         function(grp) {
@@ -429,7 +429,7 @@ single_cell_analysis <- function(
         simplify = FALSE,
         USE.NAMES = TRUE
     )
-    
+
     figure_widths <- switch(
         (
             single_cell_data[
@@ -456,13 +456,13 @@ single_cell_analysis <- function(
             )
         )
     )
-    
+
     # Remove genes_detected column from single_cell_data before output:
-    
+
     single_cell_data[, genes_detected := NULL]
-    
+
     # Output:
-    
+
     list(
         plots = c(
             setNames(
@@ -485,7 +485,7 @@ single_cell_analysis <- function(
         ordering_cells = ordering_cells,
         ordering_genes = ordering_genes
     )
-    
+
 }
 
 
@@ -493,7 +493,7 @@ single_cell_analysis <- function(
 
 
 sc_groups <- function(
-    
+
     genes,
     sc_data,
     id_var = 'id',
@@ -522,31 +522,31 @@ sc_groups <- function(
     scores_filter_fun = function(x) {log2(mean(10*(2^x - 1)) + 1) >= 4},
     min_sig_size = 40,
     seed = NULL
-    
+
 ) {
-    
+
     # It's important that the only non-numeric (i.e. non-gene) variables in <sc_data> are <id_var>
     # and <group_var>.
-    
+
     # Note that if <score_cells> is set to TRUE, scores for the cells are calculated using the
     # signature_score() function, and the cells are then ordered by these scores - in particular,
     # the <cells_order_fun> argument is ignored.  In this case the function also returns an object
 	# called all_genes_filtered, which is the genes obtained by applying <scores_filter_fun> (and
 	# NOT <genes_filter_fun> to the set of all genes in the dataset.  The signature genes for
 	# scoring are taken from all_genes_filtered, as are the control genes used in defining scores.
-    
+
     genes_filter_fun <- match.fun(genes_filter_fun)
     cells_filter_fun <- match.fun(cells_filter_fun)
     genes_order_fun <- match.fun(genes_order_fun)
     cells_order_fun <- match.fun(cells_order_fun)
-    
+
     sc_data[
         get(group_var) %in% groups,
         genes_detected := sum(as.numeric(.SD) > 0),
         by = id_var,
         .SDcols = -c(group_var, patient_var)
     ]
-    
+
     cells <- sc_data[
         get(group_var) %in% groups & genes_detected >= genes_detected_threshold,
         get(id_var)[
@@ -557,9 +557,9 @@ sc_groups <- function(
             )
         ]
     ]
-    
+
     setkeyv(sc_data, id_var)
-    
+
     genes <- sort(
         unique(
             c(
@@ -577,9 +577,9 @@ sc_groups <- function(
             )
         )
     )
-    
+
     if(score_cells) {
-        
+
         all_genes_filtered <- sc_data[
             cells
         ][
@@ -587,15 +587,15 @@ sc_groups <- function(
             names(.SD)[apply(.SD, 2, scores_filter_fun)],
             .SDcols = -c(id_var, group_var, patient_var, 'genes_detected')
         ]
-        
+
         surviving_genes <- genes[genes %in% all_genes_filtered]
-        
+
         if(length(surviving_genes) >= min_sig_size) {
-            
+
             sig_genes <- surviving_genes
-            
+
         } else {
-            
+
             sig_genes <- c(
                 surviving_genes,
                 names(
@@ -616,16 +616,16 @@ sc_groups <- function(
                     ]
                 )
             )
-            
+
         }
-        
+
         if(!is.null(patient_var)) {
-            
+
             # There is an element of randomness in calculating the scores, presumably due to
             # sampling genes from the bins.  So we include an option to set a seed.
-            
+
             if(!is.null(seed)) {set.seed(seed)}
-            
+
             scores <- sc_data[
                 cells,
                 setNames(
@@ -647,13 +647,13 @@ sc_groups <- function(
                 .SDcols = c('id', all_genes_filtered),
                 by = patient_var
             ][, -..patient_var]
-            
+
             setkey(scores, cell_id)
-            
+
         } else {
-            
+
             if(!is.null(seed)) {set.seed(seed)}
-            
+
             scores <- setNames(
                 as.data.table(
                     # scrabble::score(
@@ -679,11 +679,11 @@ sc_groups <- function(
                 ),
                 c('cell_id', 'score')
             )
-            
+
             setkey(scores, cell_id)
-            
+
         }
-        
+
         ordering_cells <- sapply(
             groups,
             function(grp) {
@@ -697,9 +697,9 @@ sc_groups <- function(
             simplify = FALSE,
             USE.NAMES = TRUE
         )
-        
+
     } else {
-        
+
         ordering_cells <- sapply(
             groups,
             function(grp) {
@@ -715,18 +715,18 @@ sc_groups <- function(
             simplify = FALSE,
             USE.NAMES = TRUE
         )
-        
+
     }
-    
+
     ordering_genes <- genes_order_fun(
         sc_data[
             cells,
             ..genes
         ]
     )
-    
+
     # Output:
-    
+
     out <- list(
         data = sc_data[
             ,
@@ -737,7 +737,7 @@ sc_groups <- function(
         ordering_cells = ordering_cells,
         ordering_genes = ordering_genes
     )
-    
+
     if(score_cells) {
         out <- c(
             out,
@@ -748,9 +748,9 @@ sc_groups <- function(
             )
         )
     }
-    
+
     out
-    
+
 }
 
 
@@ -758,7 +758,7 @@ sc_groups <- function(
 
 
 sc_groups_heatmap <- function(
-    
+
     sc_groups_list,
     id_var = 'id',
     group_var = 'cell_type',
@@ -829,31 +829,31 @@ sc_groups_heatmap <- function(
     gd_legend_box_margin = NULL,
     # gd_legend_margin = c(25, 0, 0, 0)
     ...
-    
+
 ) {
-    
+
     # <...> is for extra arguments to guide_colourbar(), to tweak the legend format.
-    
+
     annotations_side <- match.arg(annotations_side)
     gd_legend_direction <- match.arg(gd_legend_direction)
     h_legend_direction <- match.arg(h_legend_direction)
-    
+
     if(!is.null(es_fun)) {
         es_fun <- match.fun(es_fun)
     }
-    
+
     es_plot_type <- match.arg(es_plot_type)
-    
+
     single_cell_data <- sc_groups_list$data
     cells <- sc_groups_list[[names(sc_groups_list)[startsWith(names(sc_groups_list), 'cells')]]]
     genes <- sc_groups_list[[names(sc_groups_list)[startsWith(names(sc_groups_list), 'genes')]]]
     ordering_cells <- sc_groups_list$ordering_cells
     ordering_genes <- sc_groups_list$ordering_genes
-    
+
     if(is.null(groups)) {groups <- unique(single_cell_data$cell_type)}
-    
+
     setkeyv(single_cell_data, id_var)
-    
+
     heatmaps <- sapply(
         groups,
         function(grp) {
@@ -937,7 +937,7 @@ sc_groups_heatmap <- function(
         simplify = FALSE,
         USE.NAMES = TRUE
     )
-    
+
     heatmap_legend <- get_legend(
         ggplot(
             data.table(id = 'x', gene = 'x', expression_level = 1),
@@ -963,17 +963,17 @@ sc_groups_heatmap <- function(
             guides(fill = guide_colourbar(title.position = h_legend_title_position, ...)) +
             labs(fill = h_legend_title)
     )
-    
+
     heatmap_annotations <- genes[
         ordering_genes
     ]
-    
+
     heatmap_annotations[!(heatmap_annotations %in% annotations)] <- ''
-    
+
     # Specifying annotations_side = 'left' actually means we want the <edge> argument in
     # heat_map_labels_repel to be 'right', and vice versa, hence the call to mapvalues()
     # in the following.
-    
+
     axis_labels <- heat_map_labels_repel(
         heatmap_annotations,
         edge = plyr::mapvalues(
@@ -991,9 +991,9 @@ sc_groups_heatmap <- function(
         force = annotations_force,
         box.padding = annotations_box_padding
     )
-    
+
     if(es_plot_type == 'bar') {
-        
+
         if(is.null(es_upper_limit)) {
             es_upper_limit <- single_cell_data[
                 cells,
@@ -1001,9 +1001,9 @@ sc_groups_heatmap <- function(
                 .SDcols = genes
             ]
         }
-        
+
         if(is.null(es_fun)) {
-            
+
             expression_summary_data <- sapply(
                 groups,
                 function(grp) {
@@ -1020,9 +1020,9 @@ sc_groups_heatmap <- function(
                 simplify = FALSE,
                 USE.NAMES = TRUE
             )
-            
+
         } else {
-            
+
             expression_summary_data <- sapply(
                 groups,
                 function(grp) {
@@ -1039,9 +1039,9 @@ sc_groups_heatmap <- function(
                 simplify = FALSE,
                 USE.NAMES = TRUE
             )
-            
+
         }
-        
+
         expression_summary <- sapply(
             groups,
             function(grp) {
@@ -1103,17 +1103,17 @@ sc_groups_heatmap <- function(
             simplify = FALSE,
             USE.NAMES = TRUE
         )
-        
+
     } else { # Then es_plot_type == 'line'.
-        
+
         if(is.null(es_runmean_window)) {
             es_runmean_window <- nrow(single_cell_data)/20
         }
-        
+
         if(is.null(es_fun)) {
-            
+
             setkey(sc_groups_list$scores, cell_id)
-            
+
             expression_summary_data <- sapply(
                 groups,
                 function(grp) {
@@ -1133,9 +1133,9 @@ sc_groups_heatmap <- function(
                 simplify = FALSE,
                 USE.NAMES = TRUE
             )
-            
+
         } else {
-            
+
             expression_summary_data <- sapply(
                 groups,
                 function(grp) {
@@ -1158,9 +1158,9 @@ sc_groups_heatmap <- function(
                 simplify = FALSE,
                 USE.NAMES = TRUE
             )
-            
+
         }
-        
+
         es_upper_limit <- ceiling(
             2*max(
                 sapply(
@@ -1169,7 +1169,7 @@ sc_groups_heatmap <- function(
                 )
             )
         )/2
-        
+
         # es_lower_limit <- -ceiling(
         #     2*max(
         #         sapply(
@@ -1178,7 +1178,7 @@ sc_groups_heatmap <- function(
         #         )
         #     )
         # )/2
-        
+
         es_lower_limit <- min(
             floor(
                 2*min(
@@ -1190,7 +1190,7 @@ sc_groups_heatmap <- function(
             )/2,
             0
         )
-        
+
         # es_linegraph_breaks <- switch(
         #     (es_upper_limit < 2) + 1,
         #     seq(
@@ -1204,26 +1204,26 @@ sc_groups_heatmap <- function(
         #         by = floor(log2(2*es_upper_limit))/2
         #     )
         # )
-        
+
         dist_btw_breaks <- (((es_upper_limit - es_lower_limit)/es_min_break_interval) %/%
                                 c(2, 3))*es_min_break_interval
-        
+
         n_breaks <- 1 +
             (es_upper_limit %/% dist_btw_breaks) +
             (abs(es_lower_limit) %/% dist_btw_breaks)
-        
+
         dist_btw_breaks <- switch(
             (n_breaks[1] == n_breaks[2]) + 1,
             dist_btw_breaks[which.max(n_breaks[n_breaks <= 4])],
             max(dist_btw_breaks)
         )
-        
+
         es_linegraph_breaks <- dist_btw_breaks*seq(
             from = -(abs(es_lower_limit) %/% dist_btw_breaks),
             to = es_upper_limit %/% dist_btw_breaks,
             by = 1
         )
-        
+
         expression_summary <- sapply(
             groups,
             function(grp) {
@@ -1302,9 +1302,9 @@ sc_groups_heatmap <- function(
             simplify = FALSE,
             USE.NAMES = TRUE
         )
-        
+
     }
-    
+
     genes_detected <- sapply(
         groups,
         function(grp) {
@@ -1380,7 +1380,7 @@ sc_groups_heatmap <- function(
         simplify = FALSE,
         USE.NAMES = TRUE
     )
-    
+
     genes_detected_legend <- get_legend(
         ggplot(
             data.table(id = 'x', genes_detected = 1),
@@ -1408,7 +1408,7 @@ sc_groups_heatmap <- function(
             guides(fill = guide_colourbar(title.position = gd_legend_title_position, ...)) +
             labs(fill = gd_legend_title)
     )
-    
+
     figure_widths <- switch(
         (
             single_cell_data[
@@ -1440,7 +1440,7 @@ sc_groups_heatmap <- function(
             ]
         )
     )
-    
+
     out <- list(
         plots = c(
             list(
@@ -1473,13 +1473,13 @@ sc_groups_heatmap <- function(
         es_plot_type = es_plot_type,
         es_title = es_title
     )
-    
+
     if(es_plot_type == 'line') {
         out <- c(out, list(es_upper_limit = es_upper_limit))
     }
-    
+
     out
-    
+
 }
 
 
@@ -1487,7 +1487,7 @@ sc_groups_heatmap <- function(
 
 
 cowplot_sc <- function(
-    
+
     sc_groups_figures,
     heights = switch(
         (sc_groups_figures$es_plot_type == 'bar') + 1,
@@ -1537,16 +1537,16 @@ cowplot_sc <- function(
     es_y_axis_title_size = 11,
     es_panel_border_size = NULL,
     x_axis_titles_space = 0.2
-    
+
 ) {
-    
+
     if(sc_groups_figures$es_plot_type == 'bar') {
-        
+
         # Since the code for this case is out of date it probably won't work, so let's just
         # use stop():
-        
+
         stop("Code for es_plot_type == 'bar' case is out of date and won't work.")
-        
+
         plot_grid(
             plot_grid(
                 plot_grid(
@@ -1604,23 +1604,23 @@ cowplot_sc <- function(
             nrow = 3,
             rel_heights = heights
         )
-        
+
     } else { # Then sc_groups_figures$es_plot_type == 'line'.
-        
+
         legend_space_scaled <- switch(
             (legend_space == 0) + 1,
             sum(unlist(sc_groups_figures$figure_widths))*legend_space,
             NULL
         )
-        
+
         cols_without_legends <- length(sc_groups_figures$groups) + 1
-        
+
         total_cols <- switch(
             (legend_space == 0) + 1,
             cols_without_legends + 1,
             cols_without_legends
         )
-        
+
         rel_widths_all_cols <- switch(
             (sc_groups_figures$annotations_side == 'left') + 1,
             c(
@@ -1640,31 +1640,31 @@ cowplot_sc <- function(
                 legend_space_scaled
             )
         )
-        
+
         if(legend_space > 0) {
-            
+
             genes_detected_panel_plotlist <- c(
                 list(blank_plot()),
                 sc_groups_figures$plots$genes_detected,
                 list(blank_plot())
             )
-            
+
         } else if(sc_groups_figures$annotations_side == 'right') {
-            
+
             genes_detected_panel_plotlist <- c(
                 sc_groups_figures$plots$genes_detected,
                 list(blank_plot())
             )
-            
+
         } else if(sc_groups_figures$annotations_side == 'left') {
-            
+
             genes_detected_panel_plotlist <- c(
                 list(blank_plot()),
                 sc_groups_figures$plots$genes_detected
             )
-            
+
         }
-        
+
         genes_detected_panel <- plot_grid(
             plotlist = genes_detected_panel_plotlist,
             ncol = total_cols,
@@ -1672,11 +1672,11 @@ cowplot_sc <- function(
             rel_widths = rel_widths_all_cols,
             align = 'h'
         )
-        
+
         if(sc_groups_figures$annotations_side == 'left') {
-            
+
             if(legend_space > 0) {
-                
+
                 heatmap_and_legends_panel <- plot_grid(
                     plot_grid(
                         plotlist = c(
@@ -1703,9 +1703,9 @@ cowplot_sc <- function(
                     nrow = 1,
                     rel_widths = c(1, legend_space)
                 )
-                
+
             } else {
-                
+
                 heatmap_and_legends_panel <- plot_grid(
                     plotlist = c(
                         list(sc_groups_figures$plots$annotations),
@@ -1720,13 +1720,13 @@ cowplot_sc <- function(
                     ),
                     align = 'h'
                 )
-                
+
             }
-            
+
         } else {
-            
+
             if(legend_space > 0) {
-                
+
                 heatmap_and_legends_panel <- plot_grid(
                     plot_grid(
                         sc_groups_figures$plots$genes_detected_legend,
@@ -1753,9 +1753,9 @@ cowplot_sc <- function(
                     nrow = 1,
                     rel_widths = c(legend_space, 1)
                 )
-                
+
             } else {
-                
+
                 heatmap_and_legends_panel <- plot_grid(
                     plotlist = c(
                         sc_groups_figures$plots$heatmaps,
@@ -1770,17 +1770,17 @@ cowplot_sc <- function(
                     ),
                     align = 'h'
                 )
-                
+
             }
-            
+
         }
-        
+
         # Linegraph panel:
-        
+
         # The lineplots and their x axes are plotted on two separate rows, which are then
         # combined.  The following makes lists for each of these two rows, depending on
         # <annotations_side> and <legend_space>.
-        
+
         linegraphs_x_axes_list <- lapply(
             sc_groups_figures$groups,
             function(grp) {
@@ -1796,9 +1796,9 @@ cowplot_sc <- function(
                     )
             }
         )
-        
+
         if(sc_groups_figures$annotations_side == 'left') {
-            
+
             linegraphs_list <- c(
                 list(
                     ggdraw(
@@ -1835,28 +1835,28 @@ cowplot_sc <- function(
                     }
                 )
             )
-            
+
             linegraphs_x_axes_list <- c(
                 list(blank_plot()),
                 linegraphs_x_axes_list
             )
-            
+
             if(legend_space > 0) {
-                
+
                 linegraphs_list <- c(
                     linegraphs_list,
                     list(blank_plot())
                 )
-                
+
                 linegraphs_x_axes_list <- c(
                     linegraphs_x_axes_list,
                     list(blank_plot())
                 )
-                
+
             }
-            
+
         } else {
-            
+
             linegraphs_list <- c(
                 lapply(
                     sc_groups_figures$plots$expression_summary,
@@ -1895,31 +1895,31 @@ cowplot_sc <- function(
                         )
                 )
             )
-            
+
             linegraphs_x_axes_list <- c(
                 linegraphs_x_axes_list,
                 list(blank_plot())
             )
-            
+
             if(legend_space > 0) {
-                
+
                 linegraphs_list <- c(
                     list(blank_plot()),
                     linegraphs_list
                 )
-                
+
                 linegraphs_x_axes_list <- c(
                     list(blank_plot()),
                     linegraphs_x_axes_list
                 )
-                
+
             }
-            
+
         }
-        
+
         # Now make the linegraphs panel by making two separate rows - one for the graphs and
         # one for their x axes - and then combining these:
-        
+
         linegraph_panel <- plot_grid(
             plot_grid( # This call to plot_grid is for the actual graphs, without x axis titles
                 plotlist = linegraphs_list,
@@ -1937,7 +1937,7 @@ cowplot_sc <- function(
             nrow = 2,
             rel_heights = c(1, x_axis_titles_space)
         )
-        
+
         plot_grid(
             genes_detected_panel,
             heatmap_and_legends_panel,
@@ -1946,9 +1946,9 @@ cowplot_sc <- function(
             nrow = 3,
             rel_heights = heights
         )
-        
+
     }
-    
+
 }
 
 
@@ -1956,7 +1956,7 @@ cowplot_sc <- function(
 
 
 cowplot_sc_rare_shared <- function(
-    
+
     sc_groups_figures,
     heights = c(2, 20, 4),
     legend_space = 0.1,
@@ -1996,17 +1996,17 @@ cowplot_sc_rare_shared <- function(
     ),
     heatmap_title = '',
     heatmap_title_vjust = 1.2
-    
+
 ) {
-    
+
     legend_space_scaled <- switch(
         (legend_space == 0) + 1,
         sum(unlist(sc_groups_figures$figure_widths))*legend_space,
         NULL
     )
-    
+
     total_cols <- switch((legend_space == 0) + 1, 3, 2)
-    
+
     rel_widths_all_cols <- switch(
         (sc_groups_figures$annotations_side == 'left') + 1,
         c(
@@ -2026,33 +2026,33 @@ cowplot_sc_rare_shared <- function(
             legend_space_scaled
         )
     )
-    
+
     # Genes detected panel:
-    
+
     if(legend_space > 0) {
-        
+
         genes_detected_panel_plotlist <- c(
             list(blank_plot()),
             list(sc_groups_figures$plots$genes_detected),
             list(blank_plot())
         )
-        
+
     } else if(sc_groups_figures$annotations_side == 'right') {
-        
+
         genes_detected_panel_plotlist <- c(
             list(sc_groups_figures$plots$genes_detected),
             list(blank_plot())
         )
-        
+
     } else if(sc_groups_figures$annotations_side == 'left') {
-        
+
         genes_detected_panel_plotlist <- c(
             list(blank_plot()),
             list(sc_groups_figures$plots$genes_detected)
         )
-        
+
     }
-    
+
     genes_detected_panel <- plot_grid(
         plotlist = genes_detected_panel_plotlist,
         ncol = total_cols,
@@ -2060,13 +2060,13 @@ cowplot_sc_rare_shared <- function(
         rel_widths = rel_widths_all_cols,
         align = 'h'
     )
-    
+
     # Heatmaps and legends panel:
-    
+
     if(sc_groups_figures$annotations_side == 'left') {
-        
+
         if(legend_space > 0) {
-            
+
             heatmap_and_legends_panel <- plot_grid(
                 plot_grid(
                     plotlist = list(
@@ -2109,9 +2109,9 @@ cowplot_sc_rare_shared <- function(
                     vjust = heatmap_title_vjust,
                     size = 14
                 )
-            
+
         } else {
-            
+
             heatmap_and_legends_panel <- plot_grid(
                 plotlist = list(
                     sc_groups_figures$plots$annotations$rare +
@@ -2142,13 +2142,13 @@ cowplot_sc_rare_shared <- function(
                     vjust = heatmap_title_vjust,
                     size = 14
                 )
-            
+
         }
-        
+
     } else {
-        
+
         if(legend_space > 0) {
-            
+
             heatmap_and_legends_panel <- plot_grid(
                 plot_grid(
                     sc_groups_figures$plots$genes_detected_legend,
@@ -2191,9 +2191,9 @@ cowplot_sc_rare_shared <- function(
                     vjust = heatmap_title_vjust,
                     size = 14
                 )
-            
+
         } else {
-            
+
             heatmap_and_legends_panel <- plot_grid(
                 plotlist = list(
                     sc_groups_figures$plots$heatmaps$rare,
@@ -2224,15 +2224,15 @@ cowplot_sc_rare_shared <- function(
                     vjust = heatmap_title_vjust,
                     size = 14
                 )
-            
+
         }
-        
+
     }
-    
+
     # Linegraph panel:
-    
+
     if(sc_groups_figures$annotations_side == 'left') {
-        
+
         linegraphs_list <- c(
             list(
                 ggdraw(
@@ -2260,18 +2260,18 @@ cowplot_sc_rare_shared <- function(
                 )
             )
         )
-        
+
         if(legend_space > 0) {
-            
+
             linegraphs_list <- c(
                 linegraphs_list,
                 list(blank_plot())
             )
-            
+
         }
-        
+
     } else {
-        
+
         linegraphs_list <- c(
             list(
                 sc_groups_figures$plots$expression_summary + theme(
@@ -2299,28 +2299,28 @@ cowplot_sc_rare_shared <- function(
                     )
             )
         )
-        
+
         if(legend_space > 0) {
-            
+
             linegraphs_list <- c(
                 list(blank_plot()),
                 linegraphs_list
             )
-            
+
         }
-        
+
     }
-    
+
     # Now make the linegraphs panel by making two separate rows - one for the graphs and
     # one for their x axes - and then combining these:
-    
+
     linegraph_panel <- plot_grid(
         plotlist = linegraphs_list,
         ncol = total_cols,
         nrow = 1,
         rel_widths = rel_widths_all_cols
     )
-    
+
     plot_grid(
         genes_detected_panel,
         heatmap_and_legends_panel,
@@ -2329,7 +2329,7 @@ cowplot_sc_rare_shared <- function(
         nrow = 3,
         rel_heights = heights
     )
-    
+
 }
 
 
@@ -2337,7 +2337,7 @@ cowplot_sc_rare_shared <- function(
 
 
 score_dist <- function(
-    
+
     sc_data,
     cells,
     genes_filter_fun,
@@ -2348,30 +2348,30 @@ score_dist <- function(
     n_replicate = 50,
     null_cor_threshold = 0.95,
     plot_title = ''
-    
+
 ) {
-    
+
     genes_filter_fun <- match.fun(genes_filter_fun)
-    
+
     control_method <- match.arg(control_method)
-    
+
     setkey(sc_data, id)
-    
+
     # In the following, can we be sure that sc_data has id, patient and cell_type columns?
-    
+
     all_genes_filtered <- sc_data[
         cells,
         names(.SD)[apply(.SD, 2, genes_filter_fun)],
         .SDcols = -c('id', 'patient', 'cell_type')
     ]
-    
+
     if(!is.null(seed)) set.seed(seed)
-    
+
     if(control_method == 'shuffle') {
-        
+
         # The following computes the null distribution by shuffling the elements of
         # each gene vector.
-        
+
         dt <- sc_data[
             cells,
             .(
@@ -2400,22 +2400,22 @@ score_dist <- function(
             by = gene,
             .SDcols = -'patient'
         ]
-        
+
         minx <- min(dt[, -'gene'])
         maxx <- max(dt[, -'gene'])
-        
+
         xvals <- seq(
             from = minx,
             to = maxx,
             length.out = nrow(dt)
         )
-        
+
         pdf_funs <- sapply(
             names(dt[, -'gene']),
             function(cor_type) {
-                
+
                 density_fun <- approxfun(density(dt[[cor_type]]))
-                
+
                 df_fun <- approxfun(
                     data.table(
                         x = xvals
@@ -2429,17 +2429,17 @@ score_dist <- function(
                         by = x
                     ]
                 )
-                
+
             },
             simplify = FALSE,
             USE.NAMES = TRUE
         )
-        
+
     } else {
-        
+
         # The following computes the null distribution by scoring for a random sample
         # of genes.
-        
+
         null_scores <- replicate(
             n_replicate,
             scrabble::score(
@@ -2463,7 +2463,7 @@ score_dist <- function(
             ),
             simplify = FALSE
         )
-        
+
         dt <- sc_data[
             cells,
             c(
@@ -2491,16 +2491,16 @@ score_dist <- function(
             by = gene,
             .SDcols = -'patient'
         ]
-        
+
         minx <- min(dt[, -'gene'])
         maxx <- max(dt[, -'gene'])
-        
+
         xvals <- seq(
             from = minx,
             to = maxx,
             length.out = nrow(dt)
         )
-        
+
         pdf_funs <- list(
             emt_cor = pdf_funs$emt_cor,
             null_cor = approxfun(
@@ -2520,19 +2520,19 @@ score_dist <- function(
                 ]
             )
         )
-        
+
     }
-    
+
     prob_funs <- sapply(
         pdf_funs,
         function(pfun) {
-            
+
             # In the following, we divide by the total area under the curve so
             # that we get a true CDF, i.e. the maximum value it takes is 1.  I
             # think this shouldn't be necessary, because the density() function
             # should give a curve the area under which is 1, but I think we get
             # some error in the various applications of approxfun().
-            
+
             cdf_fun <- approxfun(
                 x = xvals,
                 y = sapply(
@@ -2550,7 +2550,7 @@ score_dist <- function(
                     upper = maxx
                 )$value
             )
-            
+
             quantile_fun <- function(x) {
                 uniroot(
                     function(y) cdf_fun(y) - x,
@@ -2558,23 +2558,23 @@ score_dist <- function(
                     upper = maxx
                 )$root
             }
-            
+
             list(
                 pdf_fun = pfun,
                 cdf_fun = cdf_fun,
                 quantile_fun = quantile_fun
             )
-            
+
         },
         simplify = FALSE,
         USE.NAMES = TRUE
     )
-    
+
     # Take a quantile of the null distribution as a threshold for correlation
     # with EMT score:
-    
+
     threshold <- prob_funs$null_cor$quantile_fun(null_cor_threshold)
-    
+
     density_data <- data.table(
         x = xvals
     )[
@@ -2584,7 +2584,7 @@ score_dist <- function(
             sapply(x, prob_funs$null_cor$pdf_fun)
         )
     ]
-    
+
     density_plot <- ggplot(data = density_data) +
         geom_line(
             aes(x = x, y = y_emt, colour = 'Corr. with EMT score'),
@@ -2618,11 +2618,11 @@ score_dist <- function(
             title = plot_title
         ) +
         theme_test()
-    
+
     # The null distributions may be useful for determining when we should continue
     # with the analysis - if there is no meaningful difference between the true and
     # null distributions, then we can just put this cancer type aside.
-    
+
     list(
         density_data = density_data,
         threshold = threshold,
@@ -2630,7 +2630,7 @@ score_dist <- function(
         prob_funs = prob_funs,
         score_cor_data = dt
     )
-    
+
 }
 
 
@@ -2638,7 +2638,7 @@ score_dist <- function(
 
 
 rare_vs_shared_emt <- function(
-    
+
     sc_data,
     genes,
     score_dist_data,
@@ -2647,26 +2647,26 @@ rare_vs_shared_emt <- function(
     seed = NULL,
     shared_threshold_quantile = 0.4,
     rare_threshold_quantile = 0.6
-    
+
 ) {
-    
+
     setkey(score_dist_data$score_cor_data, gene)
-    
+
     set.seed(args_list$seed)
-    
+
     # In the following, we're ordering the genes in the heatmaps using the correlations
     # with the EMT scores.  This doesn't look so good when the heatmaps are showing
     # expression levels, because of the variation in expression levels between genes.
     # It looks better when we convert to Z scores (i.e. scale the genes), because this
     # cancels out the effect of the expression levels.
-    
+
     # We define the rare EMT genes using skewness of the distribution defined by the
     # ordered gene vectors in the Z score heatmaps.  To get an appropriate threshold
     # for the skewness, we re-calculate Z scores from data that has been shuffled cell-
     # wise, i.e. the expression levels for each cell have been shuffled.  When the cells
     # are ordered again by EMT score, all the genes have some skew, and we use quantiles
     # of the skewnesses across genes as thresholds for rare and shared EMT.
-    
+
     sc_groups_list <- do.call(
         sc_groups,
         args = c(
@@ -2688,9 +2688,9 @@ rare_vs_shared_emt <- function(
             args_list[names(args_list) != 'seed']
         )
     )
-    
+
     # Calculate Z scores from true and shuffled data:
-    
+
     z_score_data_shuffled <- copy(sc_groups_list$data)[
         ,
         (sc_groups_list$genes_filtered) := lapply(
@@ -2699,15 +2699,15 @@ rare_vs_shared_emt <- function(
         ),
         .SDcols = sc_groups_list$genes_filtered
     ]
-    
+
     # First take copy of the data from sc_groups_list, so we can change the original
     # by assignment:
-    
+
     data_copy <- copy(sc_groups_list$data)
-    
+
     # We've used a copy of the data for shuffling, so we can replace the original
     # data with Z scores without copying:
-    
+
     sc_groups_list$data[
         ,
         (sc_groups_list$genes_filtered) := lapply(
@@ -2716,9 +2716,9 @@ rare_vs_shared_emt <- function(
         ),
         .SDcols = sc_groups_list$genes_filtered
     ]
-    
+
     set.seed(args_list$seed)
-    
+
     skewnesses <- sc_groups_list$data[
         sc_groups_list$cells_filtered
     ][
@@ -2741,7 +2741,7 @@ rare_vs_shared_emt <- function(
         ),
         .SDcols = -c('id', 'cell_type', 'genes_detected', 'patient')
     ]
-    
+
     thresholds <- setNames(
         z_score_data_shuffled[
             sc_groups_list$cells_filtered
@@ -2767,7 +2767,7 @@ rare_vs_shared_emt <- function(
         ],
         c('shared', 'rare')
     )
-    
+
     rare_emt_genes <- score_dist_data$score_cor_data[
         sc_groups_list$genes_filtered
     ][
@@ -2777,7 +2777,7 @@ rare_vs_shared_emt <- function(
         order(-emt_cor),
         gene
     ]
-    
+
     shared_emt_genes <- data_copy[
         sc_groups_list$cells_filtered,
         sc_groups_list$genes_filtered[
@@ -2786,14 +2786,14 @@ rare_vs_shared_emt <- function(
         ],
         .SDcols = sc_groups_list$genes_filtered
     ]
-    
+
     shared_emt_genes <- score_dist_data$score_cor_data[
         shared_emt_genes
     ][
         order(-emt_cor),
         gene
     ]
-    
+
     c(
         list(sc_groups_list = sc_groups_list),
         list(score_dist_data = score_dist_data),
@@ -2807,7 +2807,7 @@ rare_vs_shared_emt <- function(
             )
         )
     )
-    
+
 }
 
 
@@ -2815,7 +2815,7 @@ rare_vs_shared_emt <- function(
 
 
 simulate_counts <- function(
-    
+
     types,
     initial_types = NULL,
     proportions_vec = seq(0.1, 0.8, by = 0.1),
@@ -2834,15 +2834,15 @@ simulate_counts <- function(
         simplify = FALSE,
         USE.NAMES = TRUE
     )
-    
+
 ) {
-    
+
     # This function simulates counts for a collection of types using a specified density function
     # (uniform density by default) and arguments.  The types argument can either be a number,
     # indicating the number of types for which you want to simulate counts, or a vector of type
     # names (e.g. names of cell types), in which case the simulated counts will be annotated with
     # these names.
-    
+
     # Additionally, the user can specify "initial" types (again, either a number or vector of
     # type names) and a vector of proportions.  In this case, the total for the initial types will
     # be sampled first using a normal distribution (with mean and standard deviation derived from
@@ -2851,25 +2851,25 @@ simulate_counts <- function(
     # approximately as specified in proportions_vec (it is not exact, due to integer rounding).
     # The counts for the individual elements of initial_types are again sampled using density_fun
     # and scaled so that their total equals the count sampled via normal distribution.
-    
+
     density_fun <- match.fun(density_fun)
-    
+
     if(is.numeric(types) & length(types) == 1) {
         types <- 1:types
     }
-    
+
     if(!is.null(initial_types)) {
-        
+
         if(is.numeric(initial_types) & length(initial_types) == 1) {
             initial_types <- 1:initial_types
         }
-        
+
         if(sum(initial_types %in% types) < length(initial_types)) {
             stop('Not all of initial_types are in types.')
         }
-        
+
     }
-    
+
     counts_table <- as.data.table( # Generate counts for each type using density_fun:
         sapply(
             types,
@@ -2888,19 +2888,19 @@ simulate_counts <- function(
             USE.NAMES = TRUE
         )
     )
-    
+
     if(is.null(initial_types)) {
-        
+
         return(counts_table)
-        
+
     } else {
-        
+
         other_types <- types[!(types %in% initial_types)]
-        
+
         # Generate combined count for initial_types by sampling from the set of integers
         # 1:(2*max_mean_count) using a normal distribution with mean and sd derived from
         # max_mean_count and sd_frac, scaled using the supplied proportions:
-        
+
         counts_table <- cbind(
             rbindlist(
                 lapply(
@@ -2961,11 +2961,11 @@ simulate_counts <- function(
                     by = proportion,
                     .SDcols = other_types
                     ]
-        
+
         return(list(counts_table = counts_table, initial_types = initial_types))
-        
+
     }
-    
+
 }
 
 
@@ -2973,7 +2973,7 @@ simulate_counts <- function(
 
 
 sample_indices <- function(types_vec, counts_table) {
-    
+
     apply(
         counts_table,
         1,
@@ -2981,31 +2981,31 @@ sample_indices <- function(types_vec, counts_table) {
             sapply(
                 names(s),
                 function(type) {
-                    
+
                     N <- sum(types_vec == type)
                     inds <- which(types_vec == type)
-                    
+
                     # If we're trying to sample more indices than actually exist for a given
                     # type, take all indices for that type the appropriate number of times,
                     # then sample for the remaining number.  This means some indices will be
                     # chosen multiple times.
-                    
+
                     # switch(
                         # (s[[type]] > N) + 1,
                         # sample(inds, s[[type]]),
                         # c(rep(inds, s[[type]] %/% N), sample(inds, s[[type]] %% N))
                     # )
-					
+
 					# I changed the above to just sample with replacement, which is conceptually simpler and arguably more appropraite:
 					sample(inds, s[[type]], replace = TRUE)
-                    
+
                 },
                 simplify = FALSE,
                 USE.NAMES = TRUE
             )
         }
     )
-    
+
 }
 
 
@@ -3013,7 +3013,7 @@ sample_indices <- function(types_vec, counts_table) {
 
 
 type_contrib <- function(
-    
+
     data,
     cols,
     counts_table,
@@ -3021,14 +3021,14 @@ type_contrib <- function(
     types_var = 'cell_type',
     initial_types = NULL,
     normalise_fun = function(x) {x/quantile(x[x > 0], 0.95)}
-    
+
 ) {
-    
+
     # This function is much faster if the data contains only the relevant columns.  If it
     # contains many more, we'll take just the relevant subset, to save computation time.  This
     # involves taking a copy, so it would save memory if we supplied to the function only the
     # columns that we need, namely those defined by genes and types_var.
-    
+
     if(ncol(data) > length(cols) + 100) {
         data <- data[, c(..types_var, ..cols)]
         warning(
@@ -3037,27 +3037,27 @@ type_contrib <- function(
             "It would be more efficient to subset the data beforehand."
         )
     }
-    
+
     # Optionally normalise the columns of interest using normalise_fun:
-    
+
     if(!is.null(normalise_fun)) {
-        
+
         normalise_fun <- match.fun(normalise_fun)
-        
+
         # Start by taking a copy of (the relevant subset of) the data, so that we don't change the columns of the original data table.
         data <- data[, c(..types_var, ..cols)]
         data[, (cols) := lapply(.SD, normalise_fun), .SDcols = cols]
-        
+
     }
-    
+
     if(is.null(initial_types)) {
-        
+
         # If initial_types is not specified, we calculate the proportions and contributions of
         # all the types.  For this option, counts_table should have one column per type and no
         # other columns.
-        
+
         types <- unique(data[[types_var]])
-        
+
         data.table(
             simulation = unlist(lapply(1:nrow(counts_table), rep, length(types))),
             type = rep(types, nrow(counts_table)),
@@ -3081,14 +3081,14 @@ type_contrib <- function(
                 )
             )
         )
-        
+
     } else {
-        
+
         # If initial_types is specified, we'll calculate only the combined proportion of contribution of
         # the initial types, and we'll take for the content proportions the median_proportion column of
         # counts_table.  Note that taking sum over a data table sums all the elements, like summing a
         # matrix.  We don't need to do e.g. sum(rowSums()).
-        
+
         data.table(
             simulation = 1:nrow(counts_table), # nrow(counts_table) should equal length(sampled_indices)
             proportion_content = counts_table$median_proportion,
@@ -3099,9 +3099,9 @@ type_contrib <- function(
                 )
             )
         )
-        
+
     }
-    
+
 }
 
 
@@ -3116,7 +3116,7 @@ type_contrib <- function(
 # differing but comparable categories.
 
 simulated_tumours_lineplot <- function(
-    
+
     single_cell_data,
     genes,
     types_var = 'cell_type',
@@ -3159,40 +3159,43 @@ simulated_tumours_lineplot <- function(
     point_size = NULL,
     point_stroke = NULL,
     line_size = NULL,
+    error_bars = FALSE,
+    error_bars_width = 0.01,
+    error_bars_size = 0.25, # I think 0.5 is the default; I guess the same is true for grid_line_size.
     grid_line_size = 0.25,
     panel_border_size = NULL,
     ...
-    
+
 ) {
-    
+
     # This is a wrapper function that runs the sampling and aggreating functions above for
     # several cell types, then makes a lineplot.
-	
+
 	# Note that the order of <initial_types> (if given) determines the order in which the corresponding lines and points are plotted,
 	# the last one being plotted last and therefore appearing on top.  This is done by supplying ggplot() with a factor of initial
 	# types with levels in the order that they appear in <initial_types>.
-    
+
     # The <add_zero_one> argument is used to specify that you want to add points (0, 0) and/
     # or (1, 1) to the plot.  Supply 0 (the default) if you want the (0, 0) point; 1 if
     # you want (1, 1); and c(0, 1) if you want both.
-    
+
     # The ... is for additional arguments to the simulate_counts() function.  I anticipate
     # it being used mostly to adjust max_mean_count to suit the supplied dataset.
-    
+
     cell_types <- unique(single_cell_data[[types_var]])
 	if(is.null(initial_types)) {initial_types <- cell_types}
 	if(!is.null(normalise_fun)) {normalise_fun <- match.fun(normalise_fun)}
-    
-    plot_data <- rbindlist(
+
+    proportions_table <- rbindlist(
         lapply(
 			initial_types,
             # cell_types,
             function(ct) {
-                
+
                 simulated_counts <- simulate_counts(cell_types, initial_types = ct, ...)
-                
+
                 sampled_indices <- sample_indices(single_cell_data[[types_var]], simulated_counts$counts_table[, ..cell_types])
-                
+
                 proportions_table <- type_contrib(
                     single_cell_data[, c(..types_var, ..genes)],
                     genes,
@@ -3201,38 +3204,45 @@ simulated_tumours_lineplot <- function(
                     initial_types = ct,
 					normalise_fun = normalise_fun
                 )[, initial_type := ct]
-                
-                proportions_table
-                
+
+                return(proportions_table)
+
             }
         )
-    )[, .(mean_proportion_contrib = mean(proportion_contrib)), by = .(initial_type, proportion_content)]
-    
+    )
+
+    plot_data <- proportions_table[
+        ,
+        .(mean_proportion_contrib = mean(proportion_contrib), sd_proportion_contrib = sd(proportion_contrib)),
+        by = .(initial_type, proportion_content)
+    ]
+
     if(!is.null(add_zero_one)) {
         plot_data <- rbind(
             plot_data,
             data.table(
-                initial_type = rep(unique(plot_data$initial_type, length(add_zero_one))),
+                initial_type = rep(unique(plot_data$initial_type), length(add_zero_one)),
                 proportion_content = unlist(lapply(add_zero_one, rep, length(unique(plot_data$initial_type)))),
-                mean_proportion_contrib = unlist(lapply(add_zero_one, rep, length(unique(plot_data$initial_type))))
+                mean_proportion_contrib = unlist(lapply(add_zero_one, rep, length(unique(plot_data$initial_type)))),
+                sd_proportion_contrib = unlist(lapply(add_zero_one, rep, length(unique(plot_data$initial_type))))
             )
         )#[order(initial_type, proportion_content)]
     }
-	
+
 	plot_data[, initial_type := factor(initial_type, levels = initial_types)]
 	plot_data <- plot_data[order(initial_type, proportion_content)]
-    
+
     lineplot <- ggplot(
         data = plot_data,
-        aes(x = proportion_content, y = mean_proportion_contrib, colour = initial_type)# colour = factor(initial_type, levels = initial_types)
+        aes(x = proportion_content, y = mean_proportion_contrib, colour = initial_type) # colour = factor(initial_type, levels = initial_types)
     )
-    
+
     if(is.null(line_size)) {
         lineplot <- lineplot + geom_line()
     } else {
         lineplot <- lineplot + geom_line(size = line_size)
     }
-    
+
     if(is.null(point_size)) {
         if(is.null(point_stroke)) {
             lineplot <- lineplot + geom_point(shape = 0)
@@ -3246,7 +3256,15 @@ simulated_tumours_lineplot <- function(
             lineplot <- lineplot + geom_point(shape = 0, size = point_size, stroke = point_stroke)
         }
     }
-    
+
+    if(error_bars) {
+        lineplot <- lineplot + geom_errorbar(
+            aes(ymin = mean_proportion_contrib - sd_proportion_contrib, ymax = mean_proportion_contrib + sd_proportion_contrib),
+            width = error_bars_width,
+            size = error_bars_size
+        )
+    }
+
     lineplot <- lineplot +
         # geom_line(size = line_size) +
         # geom_point(shape = 0, size = point_size, stroke = point_stroke) +
@@ -3276,13 +3294,13 @@ simulated_tumours_lineplot <- function(
             )
         ) +
         labs(x = x_axis_title, y = y_axis_title, colour = legend_title, title = plot_title)
-    
+
     if(!is.null(legend_key_size)) {
         lineplot <- lineplot + theme(legend.key.size = legend_key_size)
     }
-    
+
     list(data = plot_data, lineplot = lineplot)
-    
+
 }
 
 
@@ -3290,7 +3308,7 @@ simulated_tumours_lineplot <- function(
 
 
 simulated_tumours_data <- function(
-    
+
     sc_mat,
     types,
     initial_types = 'cancer',
@@ -3301,13 +3319,13 @@ simulated_tumours_data <- function(
     show_progress = TRUE,
     restore_log = TRUE,
     ...
-    
+
 ) {
-    
+
     # The ... is for additional arguments to the simulate_counts() function.
-    
+
     cell_types <- unique(types)
-    
+
     simulated_counts <- simulate_counts(
         cell_types,
         initial_types = initial_types,
@@ -3315,23 +3333,23 @@ simulated_tumours_data <- function(
         n = n,
         ...
     )
-    
+
     sampled_indices <- sample_indices(
         types,
         simulated_counts$counts_table[, ..cell_types]
     )
-    
+
     # The lapply() application in which we construct expr is much faster if we prepare the data
     # beforehand, i.e. subset genes and reverse the log.  Originally I simply used the following
     # very simple code to achieve this:
-    
+
     # data_for_aggregating <- 2^sc_data[, ..genes] - 1
-    
+
     # This is quite fast, but it requires taking a copy and thus uses a lot of memory - too much
     # in the case of Lambrechts's lung scRNA-seq data, when R runs out of memory and throws an
     # error.  The same is true for the following, in which lapply() presumably has to remember
     # everything it produces until the last iteration, when it returns it all at once:
-    
+
     # sc_data[
     #     ,
     #     (genes) := lapply(
@@ -3342,13 +3360,13 @@ simulated_tumours_data <- function(
     #     ),
     #     .SDcols = genes
     # ]
-    
+
     # So we have no choice but to use a for loop.  I settled on the following, which uses set()
     # and thus should be much faster than a for loop which uses `:=` in every iteration.  It's
     # still pretty slow, so it would be ideal if we could detect how much memory we have
     # available, calculate how much we would need for 2^sc_data[, ..genes] - 1, and
     # run the for loop only when there isn't enough available memory.
-    
+
     # for(g in genes) {
     #     set(
     #         sc_data,
@@ -3356,67 +3374,67 @@ simulated_tumours_data <- function(
     #         value = round(2^sc_data[[g]] - 1, 4)
     #     )
     # }
-    
+
     sc_mat <- round(2^sc_mat - 1, 4)
-    
+
     if(show_progress) {
-        
+
         cat(
             length(sampled_indices),
             'profiles to build.  Currently on iteration:\n'
         )
-        
+
         expr <- t( # Transpose because genes end up as rows after sapply()
             sapply(
                 1:length(sampled_indices),
                 function(i) {
-                    
+
                     cat(
                         rep('\b', ceiling(log10(i))),
                         i,
                         sep = ''
                     )
-                    
+
                     colSums(sc_mat[unlist(sampled_indices[[i]]), ])
-                    
+
                 }
             )
         )
-        
+
         # expr <- log2(
         #     rbindlist(
         #         lapply(
         #             1:length(sampled_indices),
         #             function(i) {
-        #                 
+        #
         #                 cat(
         #                     rep('\b', ceiling(log10(i))),
         #                     i,
         #                     sep = ''
         #                 )
-        #                 
+        #
         #                 as.list(
         #                     colSums(
         #                         sc_mat[unlist(sampled_indices[[i]]), ..genes]
         #                     )
         #                 )
-        #                 
+        #
         #             }
         #         )
         #     ) + 1
         # )
-        
+
         cat('\nDone!')
-        
+
     } else {
-        
+
         expr <- t( # Transpose because genes end up as rows after sapply()
             sapply(
                 1:length(sampled_indices),
                 function(i) colSums(sc_mat[unlist(sampled_indices[[i]]), ])
             )
         )
-        
+
         # expr <- log2(
         #     rbindlist(
         #         lapply(
@@ -3431,25 +3449,25 @@ simulated_tumours_data <- function(
         #         )
         #     ) + 1
         # )
-        
+
     }
-    
+
     rownames(expr) <- paste0(id_prefix, 1:length(sampled_indices))
-    
+
     # expr[
     #     ,
     #     id := paste0(id_prefix, .I)
     # ]
-    
+
     # setcolorder(expr, 'id')
-    
+
     meta <- simulated_counts$counts_table[
         ,
         .(purity = cancer/sum(as.numeric(.SD))),
         by = .(id = paste0(id_prefix, row.names(simulated_counts$counts_table))),
         .SDcols = cell_types
     ]
-    
+
     # if(restore_log) {
     #     for(g in genes) {
     #         set(
@@ -3459,16 +3477,16 @@ simulated_tumours_data <- function(
     #         )
     #     }
     # }
-    
+
     if(restore_log) {
         expr <- round(log2(expr + 1), 4)
     }
-    
+
     list(
         expression_data = expr,
         meta_data = meta
     )
-    
+
 }
 
 
@@ -3476,7 +3494,7 @@ simulated_tumours_data <- function(
 
 
 gene_stat <- function(
-    
+
     sc_groups_list,
     x_fun = mean,
     y_fun = var,
@@ -3486,15 +3504,15 @@ gene_stat <- function(
         tau = 0.75
     ),
     cond_fun = NULL
-    
+
 ) {
-    
+
     x_fun <- match.fun(x_fun)
     y_fun <- match.fun(y_fun)
     mod_fun <- match.fun(mod_fun)
-    
+
     setkey(sc_groups_list$data, id)
-    
+
     stat_data <- sc_groups_list$data[
         sc_groups_list$cells_filtered
         ][
@@ -3506,7 +3524,7 @@ gene_stat <- function(
             ),
             .SDcols = sc_groups_list$genes_filtered
             ]
-    
+
     mod <- do.call(
         mod_fun,
         args = c(
@@ -3518,12 +3536,12 @@ gene_stat <- function(
             )
         )
     )
-    
+
     list(
         data = stat_data,
         mod = mod
     )
-    
+
 }
 
 
@@ -3531,7 +3549,7 @@ gene_stat <- function(
 
 
 rare_genes <- function(
-    
+
     gene_stat_data,
     y_mod_cond_fun = `>`,
     x_cond_fun = function(v) {v > quantile(v, 0.25)},
@@ -3541,19 +3559,19 @@ rare_genes <- function(
     y_lab = NULL,
     rare_genes_colour = 'darkorange',
     mod_line_colour = 'royalblue3'
-    
+
 ) {
-    
+
     y_mod_cond_fun <- match.fun(y_mod_cond_fun)
     x_cond_fun <- match.fun(x_cond_fun)
     y_cond_fun <- match.fun(y_cond_fun)
-    
+
     rare_genes_data <- gene_stat_data$data[
         y_mod_cond_fun(y, predict(gene_stat_data$mod, newdata = gene_stat_data$data))
         ][
             x_cond_fun(x) & y_cond_fun(y)
             ]
-    
+
     rare_genes_plot <- qplot(
         x,
         y,
@@ -3580,10 +3598,10 @@ rare_genes <- function(
             colour = mod_line_colour
         ) +
         theme_test()
-    
+
     list(
         genes = rare_genes_data$gene,
         plot = rare_genes_plot
     )
-    
+
 }

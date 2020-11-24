@@ -1,3 +1,5 @@
+# This script doesn't produce all the rebuttal figures: the code for making R1 can be found in sc_deconv_comp.R.
+
 library(data.table) # 1.12.8
 library(ggplot2) # This is version 3.3.1 on my laptop's WSL setup but 3.3.0 on WEXAC.
 library(cowplot) # 1.0.0
@@ -491,7 +493,10 @@ immune_sigs <- sapply(
     immune_cell_types,
     function(ct) {
 
-        sig_cor <- cell_type_markers[cell_type == ct & gene %in% names(sc_data), cor(sc_data[, unique(gene), with = FALSE], immune_scores[, ..ct])[, 1]]
+        sig_cor <- cell_type_markers[
+            cell_type == ct & gene %in% names(sc_data),
+            cor(sc_data[, unique(gene), with = FALSE], immune_scores[, ..ct])[, 1]
+        ]
 
         if(sum(sig_cor > 0.6) < 10) {
             if(length(sig_cor) <= 10) {
@@ -731,25 +736,42 @@ emt_markers <- fread('../../emt_markers.csv')[, gene := alias2SymbolTable(gene)]
 sc_metadata <- list(
 	brca = list(
 		tcga_cancer_types = 'BRCA',
-		read_quote = quote(fread('../data_and_figures/qian_breast_2020_reclassified.csv')[cell_type != 'ambiguous' & id != 'sc5rJUQ064_CCATGTCCATCCCATC', -c('cell_type_author', 'cell_type_lenient')]),
+		read_quote = quote(
+            fread('../data_and_figures/qian_breast_2020_reclassified.csv')[
+                cell_type != 'ambiguous' & id != 'sc5rJUQ064_CCATGTCCATCCCATC',
+                -c('cell_type_author', 'cell_type_lenient')
+            ]
+        ),
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 'mast', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = 'dendritic'
 	),
 	brca_lenient = list(
 		tcga_cancer_types = 'BRCA',
-		read_quote = quote(fread('../data_and_figures/qian_breast_2020_reclassified.csv')[cell_type_lenient != 'ambiguous' & id != 'sc5rJUQ064_CCATGTCCATCCCATC', -c('cell_type_author', 'cell_type')] %>% setnames('cell_type_lenient', 'cell_type')),
+		read_quote = quote(
+            fread('../data_and_figures/qian_breast_2020_reclassified.csv')[
+                cell_type_lenient != 'ambiguous' & id != 'sc5rJUQ064_CCATGTCCATCCCATC',
+                -c('cell_type_author', 'cell_type')
+            ] %>% setnames('cell_type_lenient', 'cell_type')
+        ),
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 'mast', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = 'dendritic'
 	),
 	coadread = list(
 		tcga_cancer_types = c('COAD', 'READ'),
-		read_quote = quote(fread('../data_and_figures/lee_crc_2020_smc_reclassified.csv')[cell_type != 'ambiguous', -c('cell_type_author', 'cell_type_lenient')]),
+		read_quote = quote(
+            fread('../data_and_figures/lee_crc_2020_smc_reclassified.csv')[cell_type != 'ambiguous', -c('cell_type_author', 'cell_type_lenient')]
+        ),
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = c('epithelial', 'mast')
 	),
 	coadread_lenient = list(
 		tcga_cancer_types = c('COAD', 'READ'),
-		read_quote = quote(fread('../data_and_figures/lee_crc_2020_smc_reclassified.csv')[cell_type_lenient != 'ambiguous', -c('cell_type_author', 'cell_type')] %>% setnames('cell_type_lenient', 'cell_type')),
+		read_quote = quote(
+            fread('../data_and_figures/lee_crc_2020_smc_reclassified.csv')[
+                cell_type_lenient != 'ambiguous',
+                -c('cell_type_author', 'cell_type')
+            ] %>% setnames('cell_type_lenient', 'cell_type')
+        ),
 		initial_cell_types = c('b_cell', 'macrophage', 't_cell', 'caf', 'cancer'), # Endothelial cells become CAFs under lenient definition
 		rare_cell_types = c('epithelial', 'mast')
 	),
@@ -761,13 +783,20 @@ sc_metadata <- list(
     ),
 	lihc = list(
         tcga_cancer_types = 'LIHC',
-        read_quote = quote(fread('../data_and_figures/ma_liver_2019_reclassified.csv')[cell_type != 'ambiguous', -c('cell_type_author', 'cell_type_lenient')]),
+        read_quote = quote(
+            fread('../data_and_figures/ma_liver_2019_reclassified.csv')[cell_type != 'ambiguous', -c('cell_type_author', 'cell_type_lenient')]
+        ),
 		initial_cell_types = c('endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = c('b_cell', 'hpc-like')
     ),
 	lihc_lenient = list(
         tcga_cancer_types = 'LIHC',
-        read_quote = quote(fread('../data_and_figures/ma_liver_2019_reclassified.csv')[cell_type_lenient != 'ambiguous', -c('cell_type_author', 'cell_type')] %>% setnames('cell_type_lenient', 'cell_type')),
+        read_quote = quote(
+            fread('../data_and_figures/ma_liver_2019_reclassified.csv')[
+                cell_type_lenient != 'ambiguous',
+                -c('cell_type_author', 'cell_type')
+            ] %>% setnames('cell_type_lenient', 'cell_type')
+        ),
 		initial_cell_types = c('endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = c('b_cell', 'hpc-like')
     ),
@@ -777,45 +806,58 @@ sc_metadata <- list(
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 'mast', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = 'dendritic'
 	),
-	# luad = list(
-		# tcga_cancer_types = 'LUAD',
-		# read_quote = quote(fread('../data_and_figures/qian_lung_2020_reclassified.csv')[disease == 'LUAD' & cell_type != 'ambiguous', -c('disease', 'cell_type_author', 'cell_type_lenient')]),
-		# initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
-		# rare_cell_types = c('alveolar', 'dendritic', 'epithelial', 'mast')
-	# ),
-	# luad_lenient = list(
-		# tcga_cancer_types = 'LUAD',
-		# read_quote = quote(fread('../data_and_figures/qian_lung_2020_reclassified.csv')[disease == 'LUAD' & cell_type_lenient != 'ambiguous', -c('disease', 'cell_type_author', 'cell_type')] %>% setnames('cell_type_lenient', 'cell_type')),
-		# initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
-		# rare_cell_types = c('alveolar', 'dendritic', 'epithelial', 'mast')
-	# ),
     lusc = list(
         tcga_cancer_types = 'LUSC',
-        read_quote = quote(fread('../data_and_figures/qian_lung_2020_reclassified.csv')[disease == 'LUSC' & cell_type != 'ambiguous', -c('disease', 'cell_type_author', 'cell_type_lenient')]),
+        read_quote = quote(
+            fread('../data_and_figures/qian_lung_2020_reclassified.csv')[
+                disease == 'LUSC' & cell_type != 'ambiguous',
+                -c('disease', 'cell_type_author', 'cell_type_lenient')
+            ]
+        ),
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 'mast', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = c('dendritic', 'erythroblast')
     ),
 	lusc_lenient = list(
         tcga_cancer_types = 'LUSC',
-        read_quote = quote(fread('../data_and_figures/qian_lung_2020_reclassified.csv')[disease == 'LUSC' & cell_type_lenient != 'ambiguous', -c('disease', 'cell_type_author', 'cell_type')] %>% setnames('cell_type_lenient', 'cell_type')),
+        read_quote = quote(
+            fread('../data_and_figures/qian_lung_2020_reclassified.csv')[
+                disease == 'LUSC' & cell_type_lenient != 'ambiguous',
+                -c('disease', 'cell_type_author', 'cell_type')
+            ] %>% setnames('cell_type_lenient', 'cell_type')
+        ),
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 'mast', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = c('dendritic', 'erythroblast')
     ),
 	ov = list(
 		tcga_cancer_types = 'OV',
-		read_quote = quote(fread('../data_and_figures/qian_ovarian_2020_reclassified.csv')[cell_type != 'ambiguous' & !(id %in% c('scrSOL001_TCATTTGTCTGTCAAG', 'scrSOL004_TTGCCGTTCTCCTATA')), -c('cell_type_author', 'cell_type_lenient')]),
+		read_quote = quote(
+            fread('../data_and_figures/qian_ovarian_2020_reclassified.csv')[
+                cell_type != 'ambiguous' & !(id %in% c('scrSOL001_TCATTTGTCTGTCAAG', 'scrSOL004_TTGCCGTTCTCCTATA')),
+                -c('cell_type_author', 'cell_type_lenient')
+            ]
+        ),
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = NULL
 	),
 	ov_lenient = list(
 		tcga_cancer_types = 'OV',
-		read_quote = quote(fread('../data_and_figures/qian_ovarian_2020_reclassified.csv')[cell_type_lenient != 'ambiguous' & !(id %in% c('scrSOL001_TCATTTGTCTGTCAAG', 'scrSOL004_TTGCCGTTCTCCTATA')), -c('cell_type_author', 'cell_type')] %>% setnames('cell_type_lenient', 'cell_type')),
+		read_quote = quote(
+            fread('../data_and_figures/qian_ovarian_2020_reclassified.csv')[
+                cell_type_lenient != 'ambiguous' & !(id %in% c('scrSOL001_TCATTTGTCTGTCAAG', 'scrSOL004_TTGCCGTTCTCCTATA')),
+                -c('cell_type_author', 'cell_type')
+            ] %>% setnames('cell_type_lenient', 'cell_type')
+        ),
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = NULL
 	),
     paad = list(
         tcga_cancer_types = 'PAAD',
-        read_quote = quote(fread('../data_and_figures/peng_pdac_2019_reclassified.csv')[cell_type != 'ambiguous' & !(id %in% c('T8_TGGTTCCTCGCATGGC', 'T17_CGTGTAACAGTACACT')), -'cell_type_author']),
+        read_quote = quote(
+            fread('../data_and_figures/peng_pdac_2019_reclassified.csv')[
+                cell_type != 'ambiguous' & !(id %in% c('T8_TGGTTCCTCGCATGGC', 'T17_CGTGTAACAGTACACT')),
+                -'cell_type_author'
+            ]
+        ),
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = c('acinar', 'ductal_2', 'endocrine')
     )
@@ -862,11 +904,6 @@ sc_cancer_caf_args <- list(
         genes_filter_fun = function(x) {log2(mean(10*(2^x - 1)) + 1) >= 4 | sum(x >= 7) >= length(x)/100},
         scores_filter_fun = function(x) {log2(mean(10*(2^x - 1)) + 1) >= 5.5 | sum(x >= 7) >= length(x)/100}
     ),
-	# luad_lenient = list(
-        # seed = 5226,
-        # genes_filter_fun = function(x) {log2(mean(10*(2^x - 1)) + 1) >= 4.5 | sum(x >= 7) >= length(x)/100},
-        # scores_filter_fun = function(x) {log2(mean(10*(2^x - 1)) + 1) >= 5.5 | sum(x >= 7) >= length(x)/100}
-    # ),
     lusc = list(
         seed = 2566,
         genes_filter_fun = function(x) {log2(mean(10*(2^x - 1)) + 1) >= 4 | sum(x >= 7) >= length(x)/100},
@@ -896,62 +933,65 @@ sc_cancer_caf_args <- list(
 
 deconv_plot_args_per_ct <- list(
     brca = list(
-        heatmap_annotations = c('COL1A2', 'COL5A2', 'ECM1', 'FN1', 'NOTCH2', 'RHOB', 'SNAI1', 'SNAI2', 'TWIST1', 'VCAN', 'VEGFA', 'VIM', 'ZEB1', 'ZEB2'),
+        heatmap_annotations = c('COL1A2', 'COL5A2', 'ECM1', 'FN1', 'NOTCH2', 'RHOB', 'VCAN', 'VEGFA'),
         plot_title = 'Breast'
     ),
 	brca_lenient = list(
-        heatmap_annotations = c('COL1A2', 'COL5A2', 'ECM1', 'FN1', 'NOTCH2', 'RHOB', 'SNAI1', 'SNAI2', 'TWIST1', 'VCAN', 'VEGFA', 'VIM', 'ZEB1', 'ZEB2'),
+        heatmap_annotations = c('COL1A2', 'COL5A2', 'ECM1', 'FN1', 'NOTCH2', 'RHOB', 'VCAN', 'VEGFA'),
         plot_title = 'Breast'
     ),
     coadread = list(
-        heatmap_annotations = c('AREG', 'COL1A1', 'COL3A1', 'CXCL1', 'DCN', 'FN1', 'GADD45A', 'PLOD3', 'SNAI1', 'SNAI2', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2'),
+        heatmap_annotations = c('AREG', 'COL1A1', 'COL3A1', 'CXCL1', 'DCN', 'FN1', 'GADD45A', 'PLOD3'),
         plot_title = 'Colorectal'
     ),
 	coadread_lenient = list(
-        heatmap_annotations = c('AREG', 'COL1A1', 'COL3A1', 'CXCL1', 'DCN', 'FN1', 'GADD45A', 'PLOD3', 'SNAI1', 'SNAI2', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2'),
+        heatmap_annotations = c('AREG', 'COL1A1', 'COL3A1', 'CXCL1', 'DCN', 'FN1', 'GADD45A', 'PLOD3'),
         plot_title = 'Colorectal'
     ),
     hnsc = list(
-        heatmap_annotations = c('ACTA2', 'COL1A2', 'COL3A1', 'LAMC2', 'PCOLCE', 'SDC1', 'SNAI1', 'SNAI2', 'TGFBI', 'TNC', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2'),
+        heatmap_annotations = c('ACTA2', 'COL1A2', 'COL3A1', 'LAMC2', 'PCOLCE', 'SDC1', 'TGFBI', 'TNC'),
         plot_title = 'Head and Neck'
     ),
     lihc = list(
-        heatmap_annotations = c('ACTA2', 'BGN', 'COL1A2', 'LAMC2', 'QSOX1', 'SNAI1', 'SNAI2', 'THY1', 'TNFRSF12A', 'TWIST1', 'VEGFA', 'VIM', 'ZEB1', 'ZEB2'),
+        heatmap_annotations = c('ACTA2', 'BGN', 'COL1A2', 'LAMC2', 'QSOX1', 'THY1', 'TNFRSF12A', 'VEGFA'),
         plot_title = 'Liver'
     ),
 	lihc_lenient = list(
-        heatmap_annotations = c('ACTA2', 'BGN', 'COL1A2', 'LAMC2', 'QSOX1', 'SNAI1', 'SNAI2', 'THY1', 'TNFRSF12A', 'TWIST1', 'VEGFA', 'VIM', 'ZEB1', 'ZEB2'),
+        heatmap_annotations = c('ACTA2', 'BGN', 'COL1A2', 'LAMC2', 'QSOX1', 'THY1', 'TNFRSF12A', 'VEGFA'),
         plot_title = 'Liver'
     ),
     luad = list(
-        heatmap_annotations = c('CALU', 'COL1A2', 'COL3A1', 'MMP2', 'QSOX1', 'SDC4', 'SNAI1', 'SNAI2', 'THY1', 'TWIST1', 'VEGFA', 'VIM', 'ZEB1', 'ZEB2'),
+        heatmap_annotations = c('CALU', 'COL1A2', 'COL3A1', 'MMP2', 'QSOX1', 'SDC4', 'THY1', 'VEGFA'),
         plot_title = 'Lung Adenocarcinoma'
     ),
-	# luad_lenient = list(
-        # heatmap_annotations = c('ACTA2', 'COL1A1', 'COL1A2', 'ITGB1', 'LAMC2', 'QSOX1', 'RHOB', 'SNAI1', 'SNAI2', 'THY1', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2'),
-        # plot_title = 'Lung Adenocarcinoma'
-    # ),
     lusc = list( # Need to change annotations from here downwards...
-        heatmap_annotations = c('COL1A2', 'COL3A1', 'FAP', 'IGFBP2', 'PFN2', 'SDC1', 'SNAI1', 'SNAI2', 'THY1', 'TNC', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2'),
+        heatmap_annotations = c('COL1A2', 'COL3A1', 'FAP', 'IGFBP2', 'PFN2', 'SDC1', 'THY1', 'TNC'),
         plot_title = 'Lung squamous'
     ),
 	lusc_lenient = list(
-        heatmap_annotations = c('COL1A2', 'COL3A1', 'FAP', 'IGFBP2', 'PFN2', 'SDC1', 'SNAI1', 'SNAI2', 'THY1', 'TNC', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2'),
+        heatmap_annotations = c('COL1A2', 'COL3A1', 'FAP', 'IGFBP2', 'PFN2', 'SDC1', 'THY1', 'TNC'),
         plot_title = 'Lung squamous'
     ),
     ov = list(
-        heatmap_annotations = c('ACTA2', 'CDH2', 'COL3A1', 'FAP', 'LAMC1', 'MMP1', 'PFN2', 'SNAI1', 'SNAI2', 'THY1', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2'),
+        heatmap_annotations = c('ACTA2', 'CDH2', 'COL3A1', 'FAP', 'LAMC1', 'MMP1', 'PFN2', 'THY1'),
         plot_title = 'Ovarian'
     ),
 	ov_lenient = list(
-        heatmap_annotations = c('ACTA2', 'CDH2', 'COL3A1', 'FAP', 'LAMC1', 'MMP1', 'PFN2', 'SNAI1', 'SNAI2', 'THY1', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2'),
+        heatmap_annotations = c('ACTA2', 'CDH2', 'COL3A1', 'FAP', 'LAMC1', 'MMP1', 'PFN2', 'THY1'),
         plot_title = 'Ovarian'
     ),
     paad = list(
-        heatmap_annotations = c('COL1A2', 'COL3A1', 'DCN', 'FAP', 'LAMC2', 'QSOX1', 'SDC4', 'SNAI1', 'SNAI2', 'TWIST1', 'VEGFA', 'VIM', 'ZEB1', 'ZEB2'),
+        heatmap_annotations = c('COL1A2', 'COL3A1', 'DCN', 'FAP', 'LAMC2', 'QSOX1', 'SDC4', 'VEGFA'),
         plot_title = 'Pancreatic'
     )
 )
+
+for(ct in names(deconv_plot_args_per_ct)) {
+    deconv_plot_args_per_ct[[ct]]$heatmap_annotations <- c(
+        deconv_plot_args_per_ct[[ct]]$heatmap_annotations,
+        'SNAI1', 'SNAI2', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2'
+    )
+}
 
 simulated_deconvs <- readRDS('../data_and_figures/simulated_deconvs.rds')
 
@@ -988,7 +1028,11 @@ sc_sim_deconv_comp <- sapply(
 		sc_deconv_comp <- sapply(
 			c('cancer', 'caf'),
 			function(x) {
-				plot_data <- copy(sc_data[cell_type == x])[, complexity := apply(.SD, 1, function(x) sum(x > 0)), .SDcols = -c('id', 'patient', 'cell_type')][
+				plot_data <- copy(sc_data[cell_type == x])[
+                    ,
+                    complexity := apply(.SD, 1, function(x) sum(x > 0)),
+                    .SDcols = -c('id', 'patient', 'cell_type')
+                ][
 					,
 					.SD[sample(1:.N, sample_sizes[[ct]], prob = complexity)]
 				][, complexity := NULL][, c('id', simulated_deconvs[[ct]]$genes_filtered), with = FALSE]
@@ -1273,7 +1317,8 @@ plot_grid(
                     plot_grid(
                         plot_grid(
                             blank_plot(),
-                            plot_grid(get_y_axis(lineplots[[ct]]$lineplot)) + draw_label('Proportion of gene expression', x = 0.4, y = 0.5, vjust = 1.3, angle = 90, size = 12),
+                            plot_grid(get_y_axis(lineplots[[ct]]$lineplot)) +
+                                draw_label('Proportion of gene expression', x = 0.4, y = 0.5, vjust = 1.3, angle = 90, size = 12),
                             blank_plot(),
                             sc_sim_deconv_comp_figures$axis_labels,
                             blank_plot() +
@@ -1303,7 +1348,8 @@ plot_grid(
                                             axis.text = element_blank(),
                                             axis.title = element_blank()
                                         ),
-                                        plot_grid(get_x_axis(lineplots[[ct]]$lineplot)) + draw_label('Proportion of cell mixture', x = 0.5, y = 0.55, vjust = -0.5, size = 12),
+                                        plot_grid(get_x_axis(lineplots[[ct]]$lineplot)) +
+                                            draw_label('Proportion of cell mixture', x = 0.5, y = 0.55, vjust = -0.5, size = 12),
                                         nrow = 2,
                                         ncol = 1,
                                         rel_heights = c(15, 5)
@@ -1418,7 +1464,8 @@ sc_metadata <- list(
 			seed = 6185,
 			genes_filter_fun = function(x) 1:200,
 			plot_title = 'Colorectal',
-			heatmap_annotations = c('AREG', 'COL1A1', 'COL3A1', 'CXCL1', 'DCN', 'FN1', 'GADD45A', 'PLOD3', 'SNAI1', 'SNAI2', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2')
+			heatmap_annotations = c('AREG', 'COL1A1', 'COL3A1', 'CXCL1', 'DCN', 'FN1', 'GADD45A', 'PLOD3', 'SNAI1', 'SNAI2', 'TWIST1', 'VIM',
+                                    'ZEB1', 'ZEB2')
 		),
 		sample_size = 800,
 		sim_deconv_filter = 0.17,
@@ -1722,7 +1769,8 @@ simulated_deconv_filtered <- simulated_deconv
 
 filtered_genes <- gene_averages_cancer_caf[
     ,
-    .(pass = ave_exp[cell_type == 'cancer'] > sc_metadata[[ct]]$sim_deconv_filter | ave_exp[cell_type == 'caf'] > sc_metadata[[ct]]$sim_deconv_filter),
+    .(pass = ave_exp[cell_type == 'cancer'] > sc_metadata[[ct]]$sim_deconv_filter |
+        ave_exp[cell_type == 'caf'] > sc_metadata[[ct]]$sim_deconv_filter),
     by = gene
 ][pass == TRUE, as.character(gene)]
 
@@ -1908,7 +1956,8 @@ plot_grid(
         plot_grid(
             plot_grid(
                 blank_plot(),
-                plot_grid(get_y_axis(lineplots$coadread$lineplot)) + draw_label('Proportion of gene expression', x = 0.4, y = 0.5, vjust = 1.3, angle = 90, size = 12),
+                plot_grid(get_y_axis(lineplots$coadread$lineplot)) +
+                    draw_label('Proportion of gene expression', x = 0.4, y = 0.5, vjust = 1.3, angle = 90, size = 12),
                 blank_plot(),
                 sc_sim_deconv_comp_figures_tpm$axis_labels,
                 blank_plot() +
@@ -1939,7 +1988,8 @@ plot_grid(
                                 axis.text = element_blank(),
                                 axis.title = element_blank()
                             ),
-                            plot_grid(get_x_axis(lineplots$coadread$lineplot)) + draw_label('Proportion of cell mixture', x = 0.5, y = 0.55, vjust = -0.5, size = 12),
+                            plot_grid(get_x_axis(lineplots$coadread$lineplot)) +
+                                draw_label('Proportion of cell mixture', x = 0.5, y = 0.55, vjust = -0.5, size = 12),
                             nrow = 2,
                             ncol = 1,
                             rel_heights = c(15, 5)
@@ -1975,7 +2025,8 @@ plot_grid(
         plot_grid(
             plot_grid(
                 blank_plot(),
-                plot_grid(get_y_axis(all_figures$coadread$lineplot_scran)) + draw_label('Proportion of gene expression', x = 0.4, y = 0.5, vjust = 1.3, angle = 90, size = 12),
+                plot_grid(get_y_axis(all_figures$coadread$lineplot_scran)) +
+                    draw_label('Proportion of gene expression', x = 0.4, y = 0.5, vjust = 1.3, angle = 90, size = 12),
                 blank_plot(),
                 sc_sim_deconv_comp_figures_scran$axis_labels,
                 blank_plot() +
@@ -2006,7 +2057,8 @@ plot_grid(
                                 axis.text = element_blank(),
                                 axis.title = element_blank()
                             ),
-                            plot_grid(get_x_axis(all_figures$coadread$lineplot_scran)) + draw_label('Proportion of cell mixture', x = 0.5, y = 0.55, vjust = -0.5, size = 12),
+                            plot_grid(get_x_axis(all_figures$coadread$lineplot_scran)) +
+                                draw_label('Proportion of cell mixture', x = 0.5, y = 0.55, vjust = -0.5, size = 12),
                             nrow = 2,
                             ncol = 1,
                             rel_heights = c(15, 5)
@@ -2105,4 +2157,356 @@ plot_grid(
     rel_heights = c(1, 15)
 ) %>% print
 
+dev.off()
+
+
+
+
+
+# Correlations between pEMT and CAF signatures:
+
+expression_data <- fread('../../TCGA_data/tcga_expression_data.csv', key = 'id')
+meta_data <- fread('../../TCGA_data/tcga_meta_data.csv', key = 'id')
+
+expression_data <- expression_data[meta_data[sample_type != 'normal', id]]
+meta_data <- meta_data[sample_type != 'normal']
+
+deconv_data <- readRDS('../data_and_figures/deconv_data.rds')
+deconv_plots <- readRDS('../data_and_figures/deconv_plots.rds')
+
+ct_to_keep <- c('blca_luminal_papillary', 'blca_basal_squamous', 'brca_luminal_a', 'brca_luminal_b', 'brca_basal_like', 'brca_her2_enriched',
+    'coad', 'esca_ac', 'hnsc_mesenchymal_basal', 'hnsc_classical', 'luad_proximal_inflammatory', 'luad_proximal_proliferative',
+    'luad_terminal_respiratory_unit', 'lusc_classical', 'lusc_secretory', 'ov_differentiated', 'ov_immunoreactive', 'ov_proliferative', 'paad',
+    'read', 'stad_cin', 'stad_msi', 'ucec')
+nice_names_for_figure <- c('BLCA - Luminal-Papillary', 'BLCA - Basal-Squamous', 'BRCA - Luminal A', 'BRCA - Luminal B', 'BRCA - Basal-like',
+    'BRCA - HER2-enriched', 'COAD', 'ESCA - Adenocarcinoma', 'HNSC - Malignant-Basal', 'HNSC - Classical', 'LUAD - Squamoid', 'LUAD - Magnoid',
+    'LUAD - Bronchioid', 'LUSC - Classical', 'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive', 'OV - Proliferative', 'PAAD', 'READ',
+    'STAD - CIN', 'STAD - MSI', 'UCEC')
+
+scores_data <- sapply(
+    ct_to_keep,
+    function(ct) {
+
+        cat(paste0(ct, ':\n'))
+
+        sample_ids_mat <- expression_data[deconv_data[[ct]]$sample_ids, set_colnames(t(.SD), id), .SDcols = -'id']
+        max_n <- floor(length(deconv_data[[ct]]$genes_filtered)/3)
+
+        cat('\tComputing mes score\n')
+        mes_score <- signature_score(sample_ids_mat, deconv_data[[ct]]$genes_filtered, nbin = 20, n = 100)
+
+        cat('\tComputing scores for random samples\n')
+        gene_samples <- replicate(50, sample(deconv_data[[ct]]$genes_filtered, 20, replace = FALSE), simplify = FALSE)
+        gene_sample_scores <- lapply(gene_samples, function(smpl) signature_score(sample_ids_mat, smpl, nbin = 20, n = 100))
+        ave_mes_corr <- mean(sapply(gene_sample_scores, function(smpl_scores) cor(smpl_scores, mes_score)))
+
+        cat('\tComputing pEMT and CAF scores: ')
+        pemt_caf_scores <- lapply(
+            20:max_n,
+            function(i) {
+                if(i == 20) {
+                    cat('1/', max_n - 19, sep = '')
+                } else {
+                    cat(rep('\b', ceiling(log10(i - 19)) + 1 + ceiling(log10(max_n - 19))), i - 19, '/', max_n - 19, sep = '')
+                }
+                caf_scores <- with(deconv_data[[ct]], signature_score(sample_ids_mat, tail(genes_filtered[ordering], i), nbin = 20, n = 100))
+                pemt_scores <- with(deconv_data[[ct]], signature_score(sample_ids_mat, head(genes_filtered[ordering], i), nbin = 20, n = 100))
+                if(i == floor(length(deconv_data[[ct]]$genes_filtered)/3)) cat('\n')
+                list(caf_scores = caf_scores, pemt_scores = pemt_scores)
+            }
+        )
+
+        cat('\tCompiling data and fitting model\n')
+        pemt_caf_scores_corr <- data.table(
+            ngenes = 20:(length(pemt_caf_scores) + 19),
+            score_corr = sapply(pemt_caf_scores, function(x) cor(x$pemt_scores, x$caf_scores))
+        )
+        pemt_caf_scores_mod <- loess(score_corr ~ ngenes, pemt_caf_scores_corr, span = 0.5, degree = 1)
+        pemt_caf_scores_corr[, loess_fit := predict(pemt_caf_scores_mod, .SD)]
+
+        list(
+            mes_score = mes_score,
+            gene_samples = gene_samples,
+            gene_sample_scores = gene_sample_scores,
+            ave_mes_corr = ave_mes_corr,
+            pemt_caf_scores = pemt_caf_scores,
+            pemt_caf_scores_corr = pemt_caf_scores_corr,
+            pemt_caf_scores_mod = pemt_caf_scores_mod
+        )
+
+    },
+    simplify = FALSE,
+    USE.NAMES = TRUE
+)
+
+barplot_data <- rbindlist(
+    lapply(
+        ct_to_keep,
+        function(ct) data.table(
+            cancer_type = ct,
+            Strict = scores_data[[ct]]$pemt_caf_scores_corr[ngenes == 20, loess_fit],
+            Lenient = scores_data[[ct]]$pemt_caf_scores_corr[ngenes == max(ngenes), loess_fit]
+        )
+    )
+) %>% melt(id.vars = 'cancer_type', measure.vars = c('Strict', 'Lenient'), variable.name = 'Signature threshold', value.name = 'corr')
+
+barplot_data[
+    ,
+    c('cancer_type', 'Signature threshold') := .(
+        mapvalues(
+            factor(
+                cancer_type,
+                levels = .SD[`Signature threshold` == 'Lenient', cancer_type[order(-corr)]]
+                # levels = .SD[, .(corr_diff = abs(diff(corr))), by = cancer_type][order(-corr_diff), cancer_type]
+            ),
+            ct_to_keep,
+            nice_names_for_figure
+        ),
+        factor(`Signature threshold`, levels = c('Lenient', 'Strict'))
+    )
+]
+
+summary_barplot <- ggplot(
+    data = barplot_data,
+    aes(x = cancer_type, y = corr, group = `Signature threshold`, fill = `Signature threshold`, colour = `Signature threshold`)
+) +
+    geom_hline(yintercept = 0, size = 0.5, colour = 'grey') +
+    geom_col(position = 'dodge', width = 0.7) +
+    theme_test() +
+    theme(axis.text.x = element_text(angle = 55, hjust = 1)) +
+    labs(x = NULL, y = 'Correlation', fill = NULL, colour = NULL)
+
+scatterplot_data <- rbindlist(
+    lapply(
+        c('blca_basal_squamous', 'brca_luminal_b', 'luad_proximal_inflammatory'),
+        function(ct) cbind(cancer_type = ct, scores_data[[ct]]$pemt_caf_scores_corr)
+    )
+)
+
+scatterplots <- ggplot(data = scatterplot_data) +
+    geom_point(aes(x = ngenes, y = score_corr), alpha = 0.5) +
+    geom_path(aes(x = ngenes, y = loess_fit), colour = 'royalblue') +
+    facet_wrap(~mapvalues(cancer_type, ct_to_keep, nice_names_for_figure, warn_missing = FALSE), nrow = 1, scales = 'free') +
+    theme_test() +
+    theme(plot.title = element_text(margin = margin(b = 30))) +
+    labs(x = 'Number of genes in signatures', y = 'Correlation between signature scores', title = 'Correlation of pEMT and CAF signatures')
+
+pdf('../data_and_figures/final_figures_resubmission/R5.pdf', width = 10, height = 7)
+plot_grid(
+    plot_grid(
+        scatterplots,
+        summary_barplot + theme(plot.margin = unit(c(20, 5.5, 5.5, 5.5), 'pt'), legend.position = 'none'),
+        nrow = 2,
+        ncol = 1,
+        axis = 'l',
+        align = 'v'
+    ),
+    plot_grid(blank_plot(), get_legend(summary_barplot + theme(legend.justification = c(0, 0.9))), nrow = 2, ncol = 1),
+    nrow = 1,
+    ncol = 2,
+    rel_widths = c(11, 1)
+)
+dev.off()
+
+
+
+
+
+# Subset of lineplots with "error bars":
+
+sc_metadata_subset <- list(
+	coadread = list(
+		tcga_cancer_types = c('COAD', 'READ'),
+		read_quote = quote(
+            fread('../data_and_figures/lee_crc_2020_smc_reclassified.csv')[cell_type != 'ambiguous', -c('cell_type_author', 'cell_type_lenient')]
+        ),
+		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
+		rare_cell_types = c('epithelial', 'mast'),
+        seed = 3361,
+        max_mean_count = 1000,
+        plot_title = 'Colorectal'
+	),
+    hnsc = list(
+        tcga_cancer_types = 'HNSC',
+        read_quote = quote(fread('../data_and_figures/puram_hnscc_2017_reclassified.csv')[cell_type != 'ambiguous', -'cell_type_author']),
+		initial_cell_types = c('endothelial', 'macrophage', 'mast', 't_cell', 'caf', 'cancer'),
+		rare_cell_types = c('b_cell', 'dendritic', 'myocyte'),
+        seed = 8511,
+        max_mean_count = 100,
+        plot_title = 'Head and Neck'
+    ),
+	luad = list(
+		tcga_cancer_types = 'LUAD',
+		read_quote = quote(fread('../data_and_figures/kim_luad_2020_reclassified.csv')[cell_type != 'ambiguous', -'cell_type_author']),
+		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 'mast', 't_cell', 'caf', 'cancer'),
+		rare_cell_types = 'dendritic',
+        seed = 1096,
+        max_mean_count = 1000,
+        plot_title = 'Lung Adenocarcinoma'
+	)
+)
+
+genes_list_subset <- readRDS('../data_and_figures/sc_genes_list.rds')[c('coadread', 'hnsc', 'luad')]
+
+lineplots_sd <- sapply(
+    names(sc_metadata_subset),
+    function(cohort) {
+
+		cat(paste0(cohort, '\n'))
+        sc_data <- eval(sc_metadata_subset[[cohort]]$read_quote)
+		sc_data[
+            ,
+            cell_type := mapvalues(
+                cell_type,
+                sc_metadata_subset[[cohort]]$rare_cell_types,
+                rep('rare', length(sc_metadata_subset[[cohort]]$rare_cell_types))
+            )
+        ]
+        set.seed(sc_metadata_subset[[cohort]]$seed)
+        cell_types <- unique(sc_data$cell_type)
+    	initial_types <- sc_metadata_subset[[cohort]]$initial_cell_types
+
+        proportions_table <- rbindlist(
+            lapply(
+    			initial_types,
+                # cell_types,
+                function(ct) {
+                    simulated_counts <- simulate_counts(cell_types, initial_types = ct, max_mean_count = sc_metadata_subset[[cohort]]$max_mean_count)
+                    sampled_indices <- sample_indices(sc_data$cell_type, simulated_counts$counts_table[, ..cell_types])
+                    proportions_table <- type_contrib(
+                        sc_data[, c('cell_type', genes_list_subset[[cohort]]$filtered_cancer_caf), with = FALSE],
+                        genes_list_subset[[cohort]]$filtered_cancer_caf,
+                        simulated_counts$counts_table,
+                        sampled_indices,
+                        initial_types = ct,
+    					normalise_fun = NULL
+                    )[, initial_type := ct]
+                    return(proportions_table)
+                }
+            )
+        )
+
+        plot_data <- proportions_table[
+            ,
+            .(mean_proportion_contrib = mean(proportion_contrib), sd_proportion_contrib = sd(proportion_contrib)),
+            by = .(initial_type, proportion_content)
+        ]
+
+        plot_data <- rbind(
+            plot_data,
+            data.table(
+                initial_type = unique(plot_data$initial_type),
+                proportion_content = rep(0, length(unique(plot_data$initial_type))),
+                mean_proportion_contrib = rep(0, length(unique(plot_data$initial_type))),
+                sd_proportion_contrib = rep(0, length(unique(plot_data$initial_type)))
+            )
+        )
+
+        plot_data[, initial_type := factor(initial_type, levels = initial_types)]
+    	plot_data <- plot_data[order(initial_type, proportion_content)]
+
+        lineplot <- ggplot(data = plot_data, aes(x = proportion_content, y = mean_proportion_contrib, colour = initial_type)) +
+            geom_line() +
+            geom_point(shape = 0) +
+            geom_errorbar(
+                aes(ymin = mean_proportion_contrib - sd_proportion_contrib, ymax = mean_proportion_contrib + sd_proportion_contrib),
+                width = 0.01,
+                size = 0.25
+            ) +
+            theme(
+                panel.background = element_blank(),
+                panel.border = element_rect(fill = NA, colour = 'black'),
+                panel.grid.minor = element_blank(),
+                panel.grid.major.x = element_blank(),
+                panel.grid.major.y = element_line(colour = 'grey', size = 0.25, linetype = 'dotted')
+            ) +
+            scale_y_continuous(
+                limits = c(0, 1),
+                breaks = c(0, 0.25, 0.5, 0.75, 1),
+                labels = c('0' = '0', '0.25' = '0.25', '0.5' = '0.5', '0.75' = '0.75', '1' = '1'),
+                expand = c(0.02, 0.02)
+            ) +
+            scale_x_continuous(expand = c(0.02, 0.02)) +
+            scale_colour_manual(
+                labels = c(
+    				'b_cell' = 'B cell',
+    				'cancer' = 'Cancer',
+    				'endothelial' = 'Endothelial',
+    				'caf' = 'CAF',
+    				'macrophage' = 'Macrophage',
+    				'mast' = 'Mast',
+    				't_cell' = 'T cell'
+    			),
+                values = c(
+    				'b_cell' = '#8DD3C7',
+    				'cancer' = '#FB8072',
+    				'endothelial' = '#BC80BD',
+    				'caf' = '#FDB462',
+    				'macrophage' = '#80B1D3',
+    				'mast' = '#FCCDE5',
+    				't_cell' = '#B3DE69'
+    			)
+            ) +
+            labs(
+                x = 'Proportion of cell mixture',
+                y = 'Proportion of gene expression',
+                colour = 'Cell type',
+                title = sc_metadata_subset[[cohort]]$plot_title
+            )
+
+        return(list(lineplot = lineplot, plot_data = plot_data, proportions_table = proportions_table))
+
+    },
+    simplify = FALSE,
+    USE.NAMES = TRUE
+)
+
+dummy_legend_plot <- ggplot(
+    data = data.table(
+        x = 1:7,
+        y = 1,
+        f = factor(
+            c('b_cell', 'caf', 'cancer', 'endothelial', 'macrophage', 'mast', 't_cell'),
+            levels = c('b_cell', 'caf', 'cancer', 'endothelial', 'macrophage', 'mast', 't_cell')
+        )
+    )
+) +
+    geom_tile(aes(x = x, y = y, fill = f)) +
+    scale_fill_manual(
+        labels = c(
+            'b_cell' = 'B cell',
+            'caf' = 'CAF',
+            'cancer' = 'Cancer',
+            'endothelial' = 'Endothelial',
+            'macrophage' = 'Macrophage',
+            'mast' = 'Mast',
+            't_cell' = 'T cell'
+        ),
+        values = c(
+            'b_cell' = '#8DD3C7',
+            'caf' = '#FDB462',
+            'cancer' = '#FB8072',
+            'endothelial' = '#BC80BD',
+            'macrophage' = '#80B1D3',
+			'mast' = '#FCCDE5',
+            't_cell' = '#B3DE69'
+        )
+    ) +
+    labs(fill = 'Cell type') +
+    theme(legend.key = element_rect(size = 1, colour = 'white'), legend.key.size = unit(15, 'pt'))
+
+dummy_legend <- get_legend(dummy_legend_plot)
+
+pdf('../data_and_figures/sim_bulk_lineplots_errorbars.pdf', width = 12, height = 3.5)
+plot_grid(
+    lineplots_sd$coadread$lineplot + theme(legend.position = 'none'),
+    lineplots_sd$hnsc$lineplot + theme(legend.position = 'none') + labs(y = NULL),
+    lineplots_sd$luad$lineplot + theme(legend.position = 'none') + labs(y = NULL),
+    dummy_legend,
+    nrow = 1,
+    ncol = 4,
+    rel_widths = c(1, 1, 1, 0.5),
+    align = 'v',
+    axis = 'l'
+)
 dev.off()

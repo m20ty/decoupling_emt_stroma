@@ -181,7 +181,10 @@ summary_barplot <- ggplot(
     labs(x = NULL, y = 'Correlation', fill = NULL, colour = NULL)
 
 scatterplot_data <- rbindlist(
-    lapply(c('blca_basal_squamous', 'lusc_classical', 'read'), function(ct) cbind(cancer_type = ct, scores_data[[ct]]$pemt_caf_scores_corr))
+    lapply(
+        c('blca_basal_squamous', 'brca_luminal_b', 'luad_proximal_inflammatory'),
+        function(ct) cbind(cancer_type = ct, scores_data[[ct]]$pemt_caf_scores_corr)
+    )
 )
 
 scatterplots <- ggplot(data = scatterplot_data) +
@@ -213,41 +216,41 @@ dev.off()
 
 
 
-ct <- 'brca_luminal_a'
-
-sample_ids_mat <- expression_data[deconv_data[[ct]]$sample_ids, set_colnames(t(.SD), id), .SDcols = -'id']
-
-temp <- lapply(
-    10:floor(length(deconv_data[[ct]]$genes_filtered)/3),
-    function(i) {
-
-        if(i == 10) cat('\n')
-        cat(rep('\b', ceiling(log10(i))), i, sep = '')
-
-        caf_scores <- with(
-            deconv_data[[ct]],
-            signature_score(sample_ids_mat, tail(genes_filtered[ordering], i), nbin = 20, n = 100)
-        )
-
-        pemt_scores <- with(
-            deconv_data[[ct]],
-            signature_score(sample_ids_mat, head(genes_filtered[ordering], i), nbin = 20, n = 100)
-        )
-
-        # pemt_caf_corr <- cor(
-        #     with(
-        #         deconv_data[[ct]],
-        #         expression_data[sample_ids, head(genes_filtered[ordering], i), with = FALSE]
-        #     ),
-        #     caf_scores
-        # )[, 1]
-
-        # list(caf_scores = caf_scores, pemt_caf_corr = pemt_caf_corr)
-
-        list(caf_scores = caf_scores, pemt_scores = pemt_scores)
-
-    }
-)
-
-# plot(1:length(temp), sapply(temp, function(x) mean(x$pemt_caf_corr)))
-plot(1:length(temp), sapply(temp, function(x) cor(x$pemt_scores, x$caf_scores)))
+# ct <- 'brca_luminal_a'
+#
+# sample_ids_mat <- expression_data[deconv_data[[ct]]$sample_ids, set_colnames(t(.SD), id), .SDcols = -'id']
+#
+# temp <- lapply(
+#     10:floor(length(deconv_data[[ct]]$genes_filtered)/3),
+#     function(i) {
+#
+#         if(i == 10) cat('\n')
+#         cat(rep('\b', ceiling(log10(i))), i, sep = '')
+#
+#         caf_scores <- with(
+#             deconv_data[[ct]],
+#             signature_score(sample_ids_mat, tail(genes_filtered[ordering], i), nbin = 20, n = 100)
+#         )
+#
+#         pemt_scores <- with(
+#             deconv_data[[ct]],
+#             signature_score(sample_ids_mat, head(genes_filtered[ordering], i), nbin = 20, n = 100)
+#         )
+#
+#         # pemt_caf_corr <- cor(
+#         #     with(
+#         #         deconv_data[[ct]],
+#         #         expression_data[sample_ids, head(genes_filtered[ordering], i), with = FALSE]
+#         #     ),
+#         #     caf_scores
+#         # )[, 1]
+#
+#         # list(caf_scores = caf_scores, pemt_caf_corr = pemt_caf_corr)
+#
+#         list(caf_scores = caf_scores, pemt_scores = pemt_scores)
+#
+#     }
+# )
+#
+# # plot(1:length(temp), sapply(temp, function(x) mean(x$pemt_caf_corr)))
+# plot(1:length(temp), sapply(temp, function(x) cor(x$pemt_scores, x$caf_scores)))

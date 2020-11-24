@@ -1817,6 +1817,7 @@ lineplots <- sapply(
             genes_list[[ct]]$filtered_cancer_caf,
 			initial_types = sc_metadata[[ct]]$initial_cell_types,
 			normalise_fun = NULL,
+		    x_axis_title = 'Proportion of cell mixture',
             plot_title = sc_cancer_caf_heatmaps_args[[ct]]$annotations_title,
             max_mean_count = max_mean_counts[[gsub('_lenient', '', ct)]],
 			legend_labels = c(
@@ -1945,7 +1946,7 @@ plot_grid(
     ncol = 1,
     rel_heights = c(1, 1.1) # Because lower plots are squashed by larger bottom margin
 ) %>% plot_grid(dummy_legend, nrow = 1, ncol = 2, rel_widths = c(10.5, 1)) +
-    draw_label('Proportion of tumour', x = 0.47, y = 0, vjust = -0.5, size = 12) +
+    draw_label('Proportion of cell mixture', x = 0.47, y = 0, vjust = -0.5, size = 12) +
     draw_label('Proportion of gene expression', x = 0, y = 0.5, vjust = 1.3, angle = 90, size = 12)
 
 dev.off()
@@ -1997,7 +1998,7 @@ plot_grid(
     ncol = 1,
     rel_heights = c(1, 1.1) # Because lower plots are squashed by larger bottom margin
 ) %>% plot_grid(dummy_legend, nrow = 1, ncol = 2, rel_widths = c(8, 1)) +
-    draw_label('Proportion of tumour', x = 0.47, y = 0, vjust = -0.5, size = 12) +
+    draw_label('Proportion of cell mixture', x = 0.47, y = 0, vjust = -0.5, size = 12) +
     draw_label('Proportion of gene expression', x = 0, y = 0.5, vjust = 1.3, angle = 90, size = 12)
 
 dev.off()
@@ -3647,343 +3648,56 @@ sapply(names(deconv_data), function(ct) cor(deconv_data[[ct]]$new_scores, deconv
 
 
 
-# Main figure with aligned lineplots and deconv plots:
-
-pdf(
-    '../data_and_figures/simulated_bulk_all_figures.pdf',
-    width = 14,
-    height = 8.5
-)
-
-plot_grid(
-    blank_plot(),
-    plot_grid(
-        plotlist = c(
-            lapply(
-                c('hnsc', 'lung', 'paad', 'lihc'),
-                function(ct) {
-                    plot_grid(
-                        plotlist = c(
-                            list(
-                                lineplots[[ct]]$lineplot +
-                                    theme(
-                                        legend.position = 'none',
-                                        plot.margin = unit(c(5.5, 3.5, 55, 3.5), 'pt'),
-                                        axis.text.y = switch((ct == 'hnsc') + 1, element_blank(), NULL),
-                                        plot.title = element_text(size = 14.5)
-                                    ) +
-                                    labs(x = NULL, y = switch((ct == 'hnsc') + 1, NULL, waiver()))
-                            ),
-                            lapply(
-                                simulated_deconv_plots[[ct]]$plots[
-                                    c('purity_bar', 'ccle_bar', 'extra_bar')
-                                    ],
-                                function(g) {
-                                    g + theme(
-                                        legend.position = 'none',
-                                        plot.margin = unit(c(0, 3.5, 2, 3.5), 'pt')
-                                    )
-                                }
-                            ),
-                            list(
-                                simulated_deconv_plots[[ct]]$plots$heatmap +
-                                    theme(
-                                        legend.position = 'none',
-                                        axis.title.y = element_text(vjust = -7.2),
-                                        plot.margin = unit(c(0, 3.5, 0, 3.5), 'pt')
-                                    ) +
-                                    labs(title = NULL, y = switch((ct == 'hnsc') + 1, NULL, waiver())),
-                                simulated_deconv_plots[[ct]]$plots$axis_labels
-                            )
-                        ),
-                        nrow = 6,
-                        ncol = 1,
-                        rel_heights = c(23, 1, 1, 1, 15, 5),
-                        align = 'v'
-                    )
-                }
-            ),
-            list(
-                plot_grid(
-                    plotlist = c(
-                        list(get_legend(dummy_legend_plot + theme(legend.justification = 'left'))),
-                        lapply(
-                            c('purity_bar', 'ccle_bar', 'extra_bar', 'heatmap'),
-                            function(plot_type) {
-                                get_legend(
-                                    simulated_deconv_plots$hnsc$plots[[plot_type]] +
-                                        theme(
-                                            legend.title = element_text(size = 9),
-                                            legend.justification = c(0, switch((plot_type == 'heatmap') + 1, 1, 0))
-                                        ) +
-                                        guides(fill = guide_colourbar(title.position = 'right')) +
-                                        labs(
-                                            fill = mapvalues(
-                                                plot_type,
-                                                c('purity_bar', 'ccle_bar', 'extra_bar', 'heatmap'),
-                                                c(
-                                                    'Correlation\nwith purity',
-                                                    'Tumours vs.\ncell lines',
-                                                    'scRNA-seq:\nCAF vs. cancer',
-                                                    'Correlation'
-                                                ),
-                                                warn_missing = FALSE
-                                            )
-                                        )
-                                )
-                            }
-                        ),
-                        list(blank_plot())
-                    ),
-                    nrow = 6,
-                    ncol = 1,
-                    rel_heights = c(23, 3, 3, 3, 9, 5)
-                )
-            )
-        ),
-        nrow = 1,
-        ncol = 5,
-        rel_widths = c(1.14, 1, 1, 1, 0.6)
-    ),
-    nrow = 2,
-    ncol = 1,
-    rel_heights = c(1, 20)
-) +
-    draw_label('A', x = 0, y = 0.975, hjust = -0.1, vjust = 1.1, size = 16, fontface = 2) +
-    draw_label('B', x = 0, y = 0.515, hjust = -0.1, vjust = 1.1, size = 16, fontface = 2) +
-    draw_label(
-        'Proportion of tumour',
-        x = 0.452,
-        y = 0.55,
-        size = 11
-    )
-
-dev.off()
-
-
-
-
-
-# Make plots to compare EMT and CAF genes in single cell analysis vs simulated bulk
-# deconvolution and vs TCGA bulk deconvolution:
+# Make plots to compare EMT and CAF genes in single cell analysis vs simulated bulk deconvolution and vs TCGA bulk deconvolution:
 
 simulated_deconvs <- readRDS('../data_and_figures/simulated_deconvs.rds')
-
-simulated_bulk_data <- fread(
-    '../data_and_figures/simulated_bulk_data.csv',
-    key = 'id'
-)
-
+simulated_bulk_data <- fread('../data_and_figures/simulated_bulk_data.csv', key = 'id')
 deconv_data <- readRDS('../data_and_figures/deconv_data.rds')
 
-ct_to_keep <- c(
-    # 'acc',
-    'blca_luminal_papillary',
-    'blca_basal_squamous',
-    'brca_luminal_a',
-    'brca_luminal_b',
-    'brca_basal_like_karaayvaz',
-    'brca_her2_enriched',
-    # 'brca_normal_like',
-    'cesc',
-    # 'chol',
-    'coad',
-    'esca_ac',
-    'esca_escc',
-    'hnsc_mesenchymal_basal',
-    'hnsc_classical',
-    'hnsc_atypical',
-    'lihc',
-    'luad_proximal_inflammatory',
-    'luad_proximal_proliferative',
-    'lusc_basal',
-    'lusc_classical',
-    'lusc_primitive',
-    'lusc_secretory',
-    # 'meso',
-    'ov_differentiated',
-    'ov_immunoreactive',
-    'ov_proliferative',
-    'paad',
-    'read',
-    'skcm_immune',
-    'skcm_keratin',
-    'skcm_mitf_low',
-    'stad_cin',
-    'stad_ebv',
-    'stad_msi',
-    # 'thca',
-    'ucec'
-    # 'uvm'
-)
+ct_to_keep <- c('blca_luminal_papillary', 'blca_basal_squamous', 'brca_luminal_a', 'brca_luminal_b', 'brca_basal_like', 'brca_her2_enriched',
+    'coad', 'esca_ac', 'hnsc_mesenchymal_basal', 'hnsc_classical', 'luad_proximal_inflammatory', 'luad_proximal_proliferative',
+    'luad_terminal_respiratory_unit', 'lusc_classical', 'lusc_secretory', 'ov_differentiated', 'ov_immunoreactive', 'ov_proliferative', 'paad',
+    'read', 'stad_cin', 'stad_msi', 'ucec')
+nice_names_for_figure <- c('BLCA - Luminal-Papillary', 'BLCA - Basal-Squamous', 'BRCA - Luminal A', 'BRCA - Luminal B', 'BRCA - Basal-like',
+    'BRCA - HER2-enriched', 'COAD', 'ESCA - Adenocarcinoma', 'HNSC - Malignant-Basal', 'HNSC - Classical', 'LUAD - Squamoid', 'LUAD - Magnoid',
+    'LUAD - Bronchioid', 'LUSC - Classical', 'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive', 'OV - Proliferative', 'PAAD', 'READ',
+    'STAD - CIN', 'STAD - MSI', 'UCEC')
 
-deconv_data <- deconv_data[ct_to_keep]
-
-nice_names_for_figure <- c(
-    # 'ACC',
-    'BLCA - Luminal-Papillary',
-    'BLCA - Basal-Squamous',
-    'BRCA - Luminal A',
-    'BRCA - Luminal B',
-    'BRCA - Basal-like',
-    'BRCA - HER2-enriched',
-    # 'BRCA - Normal-like',
-    'CESC',
-    # 'CHOL',
-    'COADREAD - Colon',
-    'ESCA - Adenocarcinoma',
-    'ESCA - Squamous',
-    'HNSC - Malignant-Basal',
-    'HNSC - Classical',
-    'HNSC - Atypical',
-    'LIHC',
-    'LUAD - Squamoid',
-    'LUAD - Magnoid',
-    'LUSC - Basal',
-    'LUSC - Classical',
-    'LUSC - Primitive',
-    'LUSC - Secretory',
-    # 'MESO',
-    'OV - Differentiated',
-    'OV - Immunoreactive',
-    'OV - Proliferative',
-    'PAAD',
-    'COADREAD - Rectum',
-    'SKCM - Immune',
-    'SKCM - Keratin',
-    'SKCM - MITF-low',
-    'STAD - CIN',
-    'STAD - EBV',
-    'STAD - MSI',
-    # 'THCA',
-    'UCEC'
-    # 'UVM'
-)
-
-names(deconv_data) <- mapvalues(
-    names(deconv_data),
-    names(deconv_data),
-    nice_names_for_figure
-)
-
-# deconv_names <- names(deconv_data)[
-#     !grepl('^UVM|^MESO|^ACC|^SKCM|^CHOL|^THCA', names(deconv_data))
-# ]
-
-deconv_names <- names(deconv_data)
-
+# The following doesn't make sense any more...
 sc_to_bulk_names <- list(
-    hnsc = c(
-        'HNSC - Malignant-Basal',
-        'HNSC - Classical',
-        'HNSC - Atypical'
-    ),
-    lung = c(
-        'LUAD - Squamoid',
-        'LUAD - Magnoid',
-        'LUSC - Basal',
-        'LUSC - Classical',
-        'LUSC - Primitive',
-        'LUSC - Secretory'
-    ),
-    brca = c(
-        'BRCA - Luminal A',
-        'BRCA - Luminal B',
-        'BRCA - Basal-like',
-        'BRCA - HER2-enriched'
-        # 'BRCA - Normal-like'
-    ),
-    coadread = c(
-        'COADREAD - Colon',
-        'COADREAD - Rectum'
-    ),
-    paad = 'PAAD',
+	brca = c('BRCA - Luminal A', 'BRCA - Luminal B', 'BRCA - Basal-like', 'BRCA - HER2-enriched'),
+    coadread = c('COADREAD - Colon', 'COADREAD - Rectum'),
+    hnsc = c('HNSC - Malignant-Basal', 'HNSC - Classical', 'HNSC - Atypical'),
     lihc = 'LIHC',
-    tnbc = c(
-        'BRCA - Luminal A',
-        'BRCA - Luminal B',
-        'BRCA - Basal-like',
-        'BRCA - HER2-enriched'
-        # 'BRCA - Normal-like'
-    )
+    lung = c('LUAD - Squamoid', 'LUAD - Magnoid', 'LUSC - Basal', 'LUSC - Classical', 'LUSC - Primitive', 'LUSC - Secretory'),
+    paad = 'PAAD'
 )
 
 # Get genes from single cell data and TCGA deconv data:
-
-genes_sc <- unique(
-    unlist(
-        lapply(
-            sc_cancer_caf,
-            `[[`,
-            'genes_filtered'
-        )
-    )
-)
-
-genes_tcga <- unique(
-    unlist(
-        lapply(
-            deconv_data[unlist(sc_to_bulk_names)],
-            `[[`,
-            'genes_filtered'
-        )
-    )
-)
-
-genes_simulated <- unique(
-    unlist(
-        lapply(
-            simulated_deconvs,
-            `[[`,
-            'genes_filtered'
-        )
-    )
-)
+genes_sc <- unique(unlist(lapply(sc_cancer_caf, `[[`, 'genes_filtered')))
+genes_tcga <- unique(unlist(lapply(deconv_data[unlist(sc_to_bulk_names)], `[[`, 'genes_filtered')))
+genes_simulated <- unique(unlist(lapply(simulated_deconvs, `[[`, 'genes_filtered')))
 
 # Calculate scores from transformed bulk (TCGA and simulated) expression data:
-
 scores_data_tcga <- deconv_scores(
     expression_data,
     deconv_data[unlist(sc_to_bulk_names)],
     scale_fun = function(x) x/(3*sd(x[!is.na(x)])),
     transform_data = TRUE,
-    additional_genes = unique(
-        c(
-            genes_sc[genes_sc %in% names(expression_data)],
-            genes_simulated[genes_simulated %in% names(expression_data)]
-        )
-    )
+    additional_genes = unique(c(genes_sc[genes_sc %in% names(expression_data)], genes_simulated[genes_simulated %in% names(expression_data)]))
 )
 
-# Replace NAs in simulated_bulk_data with zeros:
+# There are some NAs in the following, which we allowed thanks to the altered scale_fun which ignores the NAs during the scaling.  Perhaps we should
+# remove these genes altogether.
 
-# simulated_bulk_data[
-#     ,
-#     names(simulated_bulk_data[, -'id']) := lapply(
-#         .SD,
-#         function(x) {mapvalues(x, NA, 0, warn_missing = FALSE)}
-#     ),
-#     .SDcols = -'id'
-# ]
-
-# There are some NAs in the following, which we allowed thanks to the altered scale_fun
-# which ignores the NAs during the scaling.  Perhaps we should remove these genes
-# altogether.
-
-# Note that since the simulated bulk data was defined from the single cell data, all the
-# genes in genes_sc will be in names(simulated_bulk_data).
+# Note that since the simulated bulk data was defined from the single cell data, all the genes in genes_sc will be in names(simulated_bulk_data).
 
 scores_data_simulated <- deconv_scores(
     simulated_bulk_data,
     simulated_deconvs,
     scale_fun = function(x) x/(3*sd(x[!is.na(x)])),
     transform_data = TRUE,
-    additional_genes = unique(
-        c(
-            genes_sc,
-            genes_tcga[genes_tcga %in% names(simulated_bulk_data)]
-        )
-    )
+    additional_genes = unique(c(genes_sc, genes_tcga[genes_tcga %in% names(simulated_bulk_data)]))
 )
 
 scores <- sapply(
@@ -3996,69 +3710,36 @@ scores <- sapply(
             c(
                 sc_cancer_caf[[ct]]$genes_filtered,
                 simulated_deconvs[[ct]]$genes_filtered,
-                unlist(
-                    lapply(
-                        deconv_data[sc_to_bulk_names[[ct]]],
-                        `[[`,
-                        'genes_filtered'
-                    )
-                )
+                unlist(lapply(deconv_data[sc_to_bulk_names[[ct]]], `[[`, 'genes_filtered'))
             )
         )
 
-        scores_tcga <- scores_data_tcga[
-            all_genes,
-            setNames(rowMeans(.SD), gene),
-            .SDcols = sc_to_bulk_names[[ct]]
-        ]
+        scores_tcga <- scores_data_tcga[all_genes, setNames(rowMeans(.SD), gene), .SDcols = sc_to_bulk_names[[ct]]]
 
-        scores_simulated <- scores_data_simulated[
-            all_genes,
-            setNames(get(ct), gene)
-        ]
+        scores_simulated <- scores_data_simulated[all_genes, setNames(get(ct), gene)]
 
         # In the following, would it be sensible to reverse the log before taking means?
 
-        # I was going to take the top and bottom 20 from the sorted vector of the following
-        # gene scores, then score genes by correlation with these head and tail genes.  But
-        # it's probably enough to use these scores as they are (or after log, to make them
-        # normally distributed).
+        # I was going to take the top and bottom 20 from the sorted vector of the following gene scores, then score genes by correlation with these
+		# head and tail genes.  But it's probably enough to use these scores as they are (or after log, to make them normally distributed).
 
-        scores_sc <- sc_data[
-            cell_type == 'cancer',
-            colMeans(.SD),
-            .SDcols = all_genes[all_genes %in% names(sc_data)]
-        ]/sc_data[
-            cell_type == 'fibroblast',
-            colMeans(.SD),
-            .SDcols = all_genes[all_genes %in% names(sc_data)]
-        ]
+        scores_sc <- sc_data[cell_type == 'cancer', colMeans(.SD), .SDcols = all_genes[all_genes %in% names(sc_data)]]/
+			sc_data[cell_type == 'fibroblast', colMeans(.SD), .SDcols = all_genes[all_genes %in% names(sc_data)]]
 
-        out <- data.table(
-            gene = all_genes,
-            sc_score = scores_sc[all_genes],
-            tcga_score = scores_tcga,
-            simulated_score = scores_simulated
-        )
+        out <- data.table(gene = all_genes, sc_score = scores_sc[all_genes], tcga_score = scores_tcga, simulated_score = scores_simulated)
 
-        out[
-            ,
-            sc_score := log10(sc_score)
-        ][
+        out[, sc_score := log10(sc_score)][
             ,
             c('sc_score', 'tcga_score', 'simulated_score') := lapply(
                 .SD,
                 function(x) {
                     sapply(
                         x,
-                        function(y) {
-                            switch(
-                                (!is.na(y) & !is.infinite(y)) + 1,
-                                NA,
-                                (y - mean(x[!is.na(x) & !is.infinite(x)]))/
-                                    sd(x[!is.na(x) & !is.infinite(x)])
-                            )
-                        }
+                        function(y) switch(
+                            (!is.na(y) & !is.infinite(y)) + 1,
+                            NA,
+                            (y - mean(x[!is.na(x) & !is.infinite(x)]))/sd(x[!is.na(x) & !is.infinite(x)])
+                        )
                     )
                 }
             ),
@@ -4163,7 +3844,12 @@ plot_var_pair <- function(
                             axis.text.y = switch((i %in% ((0:((n / n_col) - 1))*n_col + 1)) + 1, element_blank(), NULL),
                             axis.title = element_blank(),
                             plot.margin = unit(
-                                c(5.5, 5.5, switch((i %in% (n - n_col + 1):n) + 1, 5.5, 20), switch((i %in% ((0:((n / n_col) - 1))*n_col + 1)) + 1, 5.5, 20)),
+                                c(
+									5.5,
+									5.5,
+									switch((i %in% (n - n_col + 1):n) + 1, 5.5, 20),
+									switch((i %in% ((0:((n / n_col) - 1))*n_col + 1)) + 1, 5.5, 20)
+								),
                                 'pt'
                             )
                         )
@@ -4171,27 +3857,13 @@ plot_var_pair <- function(
             ),
             nrow = n_row,
             ncol = n_col,
-            # Don't need align = 'h' any more because no plots that aren't on the bottom
-            # row will have x axis text, and aligning introduces space where the x axis
-            # text would go if it was there...
+            # Don't need align = 'h' any more because no plots that aren't on the bottom row will have x axis text, and aligning introduces space
+			# where the x axis text would go if it was there...
             rel_widths = rel_widths,
             rel_heights = rel_heights
         ) +
-            draw_label(
-                var_axis_titles[1],
-                x = 0.5,
-                y = 0,
-                vjust = -0.5,
-                size = 12
-            ) +
-            draw_label(
-                var_axis_titles[2],
-                x = 0,
-                y = 0.5,
-                vjust = 1.3,
-                angle = 90,
-                size = 12
-            )
+            draw_label(var_axis_titles[1], x = 0.5, y = 0, vjust = -0.5, size = 12) +
+            draw_label(var_axis_titles[2], x = 0, y = 0.5, vjust = 1.3, angle = 90, size = 12)
 
     } else {
 
@@ -4215,7 +3887,11 @@ plot_var_pair <- function(
                             ) +
                             labs(title = plot_titles[i]) +
                             theme(
-                                axis.text.x = switch((i %in% (n_col*(n %/% n_col) - (n_col - (n %% n_col)) + 1):(n_col*(n %/% n_col))) + 1, element_blank(), NULL),
+                                axis.text.x = switch(
+									(i %in% (n_col*(n %/% n_col) - (n_col - (n %% n_col)) + 1):(n_col*(n %/% n_col))) + 1,
+									element_blank(),
+									NULL
+								),
                                 axis.text.y = switch((i %in% ((0:((n %/% n_col) - 1))*n_col + 1)) + 1, element_blank(), NULL),
                                 axis.title = element_blank(),
                                 plot.margin = unit(c(5.5, 5.5, 5.5, switch((i %in% ((0:((n %/% n_col) - 1))*n_col + 1)) + 1, 5.5, 20)), 'pt')
@@ -4260,26 +3936,10 @@ plot_var_pair <- function(
             ),
             nrow = 2,
             ncol = 1,
-            rel_heights = c(
-                sum(rel_heights[-length(rel_heights)]),
-                rel_heights[length(rel_heights)]
-            )
+            rel_heights = c(sum(rel_heights[-length(rel_heights)]), rel_heights[length(rel_heights)])
         ) +
-            draw_label(
-                var_axis_titles[1],
-                x = 0.5,
-                y = 0,
-                vjust = -0.5,
-                size = 12
-            ) +
-            draw_label(
-                var_axis_titles[2],
-                x = 0,
-                y = 0.5,
-                vjust = 1.3,
-                angle = 90,
-                size = 12
-            )
+            draw_label(var_axis_titles[1], x = 0.5, y = 0, vjust = -0.5, size = 12) +
+            draw_label(var_axis_titles[2], x = 0, y = 0.5, vjust = 1.3, angle = 90, size = 12)
 
     }
 
@@ -4291,11 +3951,7 @@ plot_var_pair <- function(
 
 # Write plots to PDF:
 
-pdf(
-    '../data_and_figures/signature_concordance.pdf',
-    width = 12,
-    height = 6
-)
+pdf('../data_and_figures/signature_concordance.pdf', width = 12, height = 6)
 
 plot_var_pair(
     c('sc_score', 'simulated_score'),
@@ -4332,31 +3988,11 @@ plot_var_pair(
 
 # Alternative, using pairwise intersections of gene sets:
 
-sc_genes <- sapply(
-    sc_cancer_caf,
-    `[[`,
-    'genes_filtered',
-    simplify = FALSE,
-    USE.NAMES = TRUE
-)
-
-simulated_genes <- sapply(
-    simulated_deconvs,
-    `[[`,
-    'genes_filtered',
-    simplify = FALSE,
-    USE.NAMES = TRUE
-)
-
+sc_genes <- sapply(sc_cancer_caf, `[[`, 'genes_filtered', simplify = FALSE, USE.NAMES = TRUE)
+simulated_genes <- sapply(simulated_deconvs, `[[`, 'genes_filtered', simplify = FALSE, USE.NAMES = TRUE)
 tcga_genes <- sapply(
     names(sc_to_bulk_names),
-    function(ct) {
-        unique(
-            unlist(
-                lapply(deconv_data[sc_to_bulk_names[[ct]]], `[[`, 'genes_filtered')
-            )
-        )
-    },
+    function(ct) unique(unlist(lapply(deconv_data[sc_to_bulk_names[[ct]]], `[[`, 'genes_filtered'))),
     simplify = FALSE,
     USE.NAMES = TRUE
 )
@@ -4448,12 +4084,7 @@ dev.off()
 
 # Single one (just TCGA deconv vs. scRNAseq) for paper supplementary:
 
-pdf(
-    '../data_and_figures/signature_concordance_sc_tcga.pdf',
-    width = 6,
-    height = 9
-)
-
+pdf('../data_and_figures/signature_concordance_sc_tcga.pdf', width = 6, height = 9)
 plot_var_pair(
     c('sc_score', 'tcga_score'),
     scores[c('hnsc', 'lung', 'paad', 'lihc', 'tnbc')],
@@ -4462,24 +4093,14 @@ plot_var_pair(
     sc_genes = sc_genes,
     tcga_genes = tcga_genes,
     collate_genes_fun = union,
-    plot_titles = sapply(
-        sc_cancer_caf_heatmaps_args[c('hnsc', 'lung', 'paad', 'lihc', 'tnbc')],
-        `[[`,
-        'annotations_title'
-    ),
+    plot_titles = sapply(sc_cancer_caf_heatmaps_args[c('hnsc', 'lung', 'paad', 'lihc', 'tnbc')], `[[`, 'annotations_title'),
     var_axis_titles = c('scRNA-seq score', 'TCGA deconvolution score'),
     rel_widths = c(1.115, 1),
     rel_heights = c(1, 1, 1.075)
 )
-
 dev.off()
 
-pdf(
-    '../data_and_figures/signature_concordance_sc_tcga_supp.pdf',
-    width = 6,
-    height = 3.2
-)
-
+pdf('../data_and_figures/signature_concordance_sc_tcga_supp.pdf', width = 6, height = 3.2)
 plot_var_pair(
     c('sc_score', 'tcga_score'),
     scores[c('brca', 'coadread')],
@@ -4488,1039 +4109,8 @@ plot_var_pair(
     sc_genes = sc_genes,
     tcga_genes = tcga_genes,
     collate_genes_fun = union,
-    plot_titles = sapply(
-        sc_cancer_caf_heatmaps_args[c('brca', 'coadread')],
-        `[[`,
-        'annotations_title'
-    ),
+    plot_titles = sapply(sc_cancer_caf_heatmaps_args[c('brca', 'coadread')], `[[`, 'annotations_title'),
     var_axis_titles = c('scRNA-seq score', 'TCGA deconvolution score'),
     rel_widths = c(1.115, 1)
 )
-
 dev.off()
-
-# gene_position_profiles <- sapply(
-#     names(sc_to_bulk_names),
-#     function(ct1) {
-#         sapply(
-#             sc_to_bulk_names[[ct1]],
-#             function(ct2) {
-#
-#                 common_genes <- intersect(
-#                     simulated_deconvs[[ct1]]$genes_filtered,
-#                     deconv_data[[ct2]]$genes_filtered
-#                 )
-#
-#                 ordered_genes_1 <- with(
-#                     simulated_deconvs[[ct1]],
-#                     genes_filtered[ordering][genes_filtered[ordering] %in% common_genes]
-#                 )
-#
-#                 ordered_genes_2 <- with(
-#                     deconv_data[[ct2]],
-#                     genes_filtered[ordering][genes_filtered[ordering] %in% common_genes]
-#                 )
-#
-#                 qplot(
-#                     x = 1:length(common_genes),
-#                     y = order(
-#                         order(ordered_genes_2)[
-#                             order(order(ordered_genes_1))
-#                         ]
-#                     ),
-#                     geom = 'line',
-#                     xlab = 'Position in TCGA deconv',
-#                     ylab = 'Position in simulated deconv',
-#                     main = paste(ct1, 'vs.', ct2)
-#                 ) + theme_test()
-#
-#             },
-#             simplify = FALSE,
-#             USE.NAMES = TRUE
-#         )
-#     },
-#     simplify = FALSE,
-#     USE.NAMES = TRUE
-# )
-#
-# plot_grid(
-#     plotlist = unlist(gene_position_profiles, recursive = FALSE),
-#     nrow = 7,
-#     ncol = 3,
-#     align = 'hv'
-# )
-
-
-
-
-
-# Another attempt at rare vs. shared EMT:
-
-deconv_data <- readRDS('../data_and_figures/deconv_data.rds')
-
-ct_to_keep <- c(
-    'blca_luminal_papillary',
-    'blca_basal_squamous',
-    'brca_luminal_a',
-    'brca_luminal_b',
-    'brca_basal_like',
-    'brca_her2_enriched',
-    'cesc',
-    'coad',
-    'esca_ac',
-    'esca_escc',
-    'hnsc_mesenchymal_basal',
-    'hnsc_classical',
-    'hnsc_atypical',
-    'lihc',
-    'luad_proximal_inflammatory',
-    'luad_proximal_proliferative',
-    'lusc_basal',
-    'lusc_classical',
-    'lusc_primitive',
-    'lusc_secretory',
-    'ov_differentiated',
-    'ov_immunoreactive',
-    'ov_proliferative',
-    'paad',
-    'read',
-    # 'skcm_immune',
-    # 'skcm_keratin',
-    # 'skcm_mitf_low',
-    'stad_cin',
-    'stad_ebv',
-    'stad_msi',
-    'ucec'
-)
-
-deconv_data <- deconv_data[ct_to_keep]
-
-nice_names_for_figure <- c(
-    'BLCA - Luminal-Papillary',
-    'BLCA - Basal-Squamous',
-    'BRCA - Luminal A',
-    'BRCA - Luminal B',
-    'BRCA - Basal-like',
-    'BRCA - HER2-enriched',
-    'CESC',
-    'COAD',
-    'ESCA - Adenocarcinoma',
-    'ESCA - Squamous',
-    'HNSC - Malignant-Basal',
-    'HNSC - Classical',
-    'HNSC - Atypical',
-    'LIHC',
-    'LUAD - Squamoid',
-    'LUAD - Magnoid',
-    'LUSC - Basal',
-    'LUSC - Classical',
-    'LUSC - Primitive',
-    'LUSC - Secretory',
-    'OV - Differentiated',
-    'OV - Immunoreactive',
-    'OV - Proliferative',
-    'PAAD',
-    'READ',
-    # 'SKCM - Immune',
-    # 'SKCM - Keratin',
-    # 'SKCM - MITF-low',
-    'STAD - CIN',
-    'STAD - EBV',
-    'STAD - MSI',
-    'UCEC'
-)
-
-names(deconv_data) <- mapvalues(
-    names(deconv_data),
-    names(deconv_data),
-    nice_names_for_figure
-)
-
-
-
-
-
-# The following takes a long time, so read from RDS if already done:
-
-# inter_intra_emt_all_cts <- readRDS('../data_and_figures/inter_intra_emt_all_cts.rds')
-
-inter_intra_emt_all_cts <- sapply(
-    # names(sc_metadata),
-    c('brca', 'coadread', 'hnsc', 'lihc', 'luad', 'paad'),
-    function(ct) {
-
-        sc_data <- eval(sc_metadata[[ct]]$read_quote)
-        setkey(sc_data, id)
-
-        # Take subset of tumours with at least 50 cancer cells:
-        sc_data <- sc_data[patient %in% sc_data[cell_type == 'cancer', .(N = .N), by = patient][N >= 50, patient]]
-
-        # Get all the sufficiently highly-expressed genes:
-        all_genes_filtered <- sc_data[
-            cell_type == 'cancer',
-            names(.SD)[apply(.SD, 2, sc_cancer_caf_args[[ct]]$genes_filter_fun)],
-            .SDcols = -c('id', 'patient', 'cell_type')
-        ]
-
-        # Compute bins for the genes based on average expression:
-        sc_mat <- sc_data[cell_type == 'cancer', set_colnames(t(.SD), id), .SDcols = all_genes_filtered]
-        gene_averages <- sort(rowMeans(sc_mat))
-        bins <- setNames(
-            cut(seq_along(gene_averages), breaks = length(gene_averages) %/% 110, labels = FALSE, include.lowest = TRUE),
-            names(gene_averages)
-        )
-
-        # Get EMT markers:
-        ct_emt_markers <- unique(
-            unlist(
-                lapply(
-                    deconv_data[grepl(paste(paste0('^', sc_metadata[[ct]]$tcga_cancer_types), collapse = '|'), names(deconv_data))],
-                    function(deconv) deconv$genes_filtered[deconv$ordering]
-                    # function(deconv) head(deconv$genes_filtered[deconv$ordering], length(deconv$genes_filtered)/3)
-                )
-            )
-        )
-        ct_emt_markers <- ct_emt_markers[ct_emt_markers %in% names(sc_data)]
-
-        # Filter EMT markers by expression levels:
-        ct_emt_markers <- sc_data[
-            cell_type == 'cancer',
-            ct_emt_markers[apply(.SD, 2, sc_cancer_caf_args[[ct]]$scores_filter_fun)],
-            .SDcols = ct_emt_markers
-        ]
-
-        # Define control gene sets for distribution of scores:
-        comparable_gene_sets <- lapply(ct_emt_markers, function(g) sample(names(bins)[bins == bins[g]], 100))
-        comparable_gene_sets <- lapply(1:100, function(i) sapply(comparable_gene_sets, `[`, i))
-
-        # Calculate EMT scores, then filter the EMT markers for correlation with these EMT scores, and recalculate the EMT scores using the
-		# filtered list.  I think it makes more sense to filter for correlation with the initial EMT score than with the Z score (below), since
-		# the Z score won't be on a comparable scale to the original distribution of expression levels (though this probably doesn't matter
-		# much), and the aim of the Z score is to remove variability arising from poor data quality, which might significantly affect the
-		# correlation with the Z scores.  EDIT: I don't think there's any difference between the correlations with EMT scores and with Z scores.
-
-        emt_scores <- rowMeans(
-            sapply(
-                ct_emt_markers,
-                function(g) {sc_mat[g, ] - colMeans(sc_mat[sample(names(bins)[bins == bins[g]], 100), ])},
-                USE.NAMES = TRUE
-            )
-        )
-
-        # sc_data[cell_type == 'cancer', sapply(ct_emt_markers, function(g) cor(get(g), emt_scores))] %>% sort %>% plot
-
-        ct_emt_markers <- sc_data[cell_type == 'cancer', ct_emt_markers[sapply(ct_emt_markers, function(g) cor(get(g), emt_scores)) > 0.3]]
-
-        emt_scores <- rowMeans(
-            sapply(
-                ct_emt_markers,
-                function(g) {sc_mat[g, ] - colMeans(sc_mat[sample(names(bins)[bins == bins[g]], 100), ])},
-                USE.NAMES = TRUE
-            )
-        )
-
-        # Calculate distribution of scores for control gene sets:
-
-        comparable_gene_sets_scores <- lapply(
-            comparable_gene_sets,
-            function(gli) {
-                rowMeans(
-                    sapply(
-                        gli,
-                        function(g) {sc_mat[g, ] - colMeans(sc_mat[sample(names(bins)[bins == bins[g]], 100), ])},
-                        USE.NAMES = TRUE
-                    )
-                )
-            }
-        )
-
-        # Define the EMT score as a Z score:
-
-        z_scores <- sapply(
-            names(emt_scores),
-            function(cell_id) {
-                distrib <- c(emt_scores[cell_id], sapply(comparable_gene_sets_scores, `[`, cell_id))
-                (emt_scores[cell_id] - mean(distrib))/sd(distrib)
-            },
-            USE.NAMES = FALSE
-        )
-
-        emt_scores <- sc_data[cell_type == 'cancer', .(id = id, patient = patient, emt_score = z_scores[id])][
-            order(patient, emt_score),
-            pos_frac := (1:.N)/.N,
-            by = patient
-        ]
-
-        emt_score_line <- ggplot(
-            emt_scores[pos_frac > 0.01 & pos_frac < 0.99],
-            aes(pos_frac, emt_score, group = patient, colour = as.character(patient))
-        ) +
-            scale_colour_manual(values = brewer.pal(12, 'Set3')[c(1, 3:10, 12, 11)][1:length(unique(emt_scores$patient))]) +
-            geom_line() +
-            theme_test()
-
-        inter_intra_emt <- emt_scores[
-            ,
-            .(
-                # inter_emt = .SD[pos_frac > 0.25 & pos_frac < 0.75, mean(emt_score)],
-                # intra_emt = .SD[pos_frac > 0.9 & pos_frac < 0.975, mean(emt_score)] - median(emt_score)
-                inter_emt = median(emt_score),
-                intra_emt = quantile(emt_score, 0.95) - median(emt_score)
-            ),
-            by = patient
-        ]
-
-        inter_intra_plot <- ggplot(inter_intra_emt, aes(inter_emt, intra_emt, colour = as.character(patient))) +
-            scale_colour_manual(values = brewer.pal(12, 'Set3')[c(1, 3:10, 12, 11)][1:length(unique(emt_scores$patient))]) +
-            geom_point() +
-            theme_test()
-
-        list(
-            plots = list(lineplot = emt_score_line, scatterplot = inter_intra_plot),# violin = emt_score_violin),
-            data = list(
-                cell_emt_scores = emt_scores,
-                inter_intra_emt_scores = inter_intra_emt,
-                all_genes_filtered = all_genes_filtered,
-                emt_markers_filtered = ct_emt_markers
-            )
-        )
-
-    },
-    simplify = FALSE,
-    USE.NAMES = TRUE
-)
-
-saveRDS(inter_intra_emt_all_cts, '../data_and_figures/inter_intra_emt_all_cts.rds')
-
-# emt_scores <- scrabble::score(
-#     sc_data[
-#         cell_type == 'cancer',
-#         set_colnames(t(.SD), id),
-#         .SDcols = all_genes_filtered
-#     ],
-#     list(ct_emt_markers),
-#     bin.control = TRUE,
-#     nbin = length(all_genes_filtered) %/% 110
-# )
-
-# emt_scores <- data.table(
-#     id = rownames(emt_scores),
-#     patient = sc_data[rownames(emt_scores), patient],
-#     emt_score = emt_scores[, 1]
-# )[
-#     order(patient, emt_score),
-#     pos_frac := (1:.N)/.N,
-#     by = patient
-# ]
-
-# emt_score_violin <- ggplot(
-	# emt_scores,
-	# aes(
-		# factor(patient, levels = emt_scores[, .(med = median(emt_score)), by = patient][order(med), patient]),
-		# emt_score,
-		# fill = as.character(patient)
-	# )
-# ) +
-	# scale_fill_manual(values = brewer.pal(12, 'Set3')[1:length(unique(emt_scores$patient))]) +
-	# geom_violin(draw_quantiles = 0.5) +
-	# theme_test()
-
-
-
-
-
-# Plots combining cancer types:
-
-emt_scores_all_cts <- rbindlist(
-    lapply(
-        names(inter_intra_emt_all_cts),
-        function(ct) {
-            merge(
-                cbind(
-                    cancer_type = ct,
-                    cancer_type_nice = sc_cancer_caf_heatmaps_args[[ct]]$annotations_title,
-                    inter_intra_emt_all_cts[[ct]]$data$cell_emt_scores
-                ),
-                inter_intra_emt_all_cts[[ct]]$data$inter_intra_emt_scores,
-                by = 'patient'
-            )
-        }
-    )
-)[
-    ,
-    patient_unique := paste(cancer_type, patient, sep = '.')
-]
-
-# inter_intra_emt_scores_all_cts <- rbindlist(
-#     lapply(
-#         names(inter_intra_emt_all_cts),
-#         function(ct) {
-#             cbind(
-#                 cancer_type = ct,
-#                 inter_intra_emt_all_cts[[ct]]$data$inter_intra_emt_scores
-#             )
-#         }
-#     )
-# )
-
-# inter_intra_emt_profiles <- ggplot(
-    # emt_scores_all_cts,#[pos_frac > 0.01 & pos_frac < 0.99],
-    # aes(
-        # pos_frac,
-        # emt_score,
-        # group = patient,
-        # # group = interaction(cancer_type, patient),
-        # colour = cancer_type_nice
-        # # alpha = intra_emt
-        # # size = intra_emt
-    # )
-# ) +
-    # # scale_size_continuous(range = c(0.4, 0.8)) +
-    # facet_grid(cols = vars(cancer_type_nice)) +
-    # geom_line() +
-    # scale_x_continuous(expand = c(0, 0)) +
-    # scale_y_continuous(expand = c(0, 0), breaks = c(-5, 0, 5)) +
-    # theme(
-        # panel.background = element_rect(fill = NA, colour = 'black'),
-        # panel.grid.major.y = element_line(colour = 'grey', size = 0.3, linetype = 'dotted'),
-        # panel.grid.minor.y = element_blank(),
-        # panel.grid.major.x = element_blank(),
-        # panel.grid.minor.x = element_blank(),
-        # axis.text.x = element_blank(),
-        # axis.ticks.x = element_blank(),
-        # strip.background = element_rect(colour = 'black'),
-        # strip.text = element_text(size = 14),
-        # legend.position = 'none'
-    # ) +
-    # labs(x = 'Cells', y = 'pEMT score')
-
-# inter_intra_emt_scatterplot <- ggplot(
-    # # unique(emt_scores_all_cts[, .(cancer_type_nice, inter_emt, intra_emt)]),
-    # unique(
-        # emt_scores_all_cts[
-            # ,
-            # .(
-                # cancer_type_nice = cancer_type_nice,
-                # inter_emt_scaled = scale(inter_emt),
-                # intra_emt_scaled = scale(intra_emt)
-            # )
-        # ]
-    # ),
-    # aes(inter_emt_scaled, intra_emt_scaled, colour = cancer_type_nice)
-# ) +
-    # geom_hline(yintercept = 0, size = 0.3, colour = 'grey', linetype = 'dotted') +
-    # geom_vline(xintercept = 0, size = 0.3, colour = 'grey', linetype = 'dotted') +
-    # geom_point() +
-    # theme_test() +
-    # labs(
-        # x = 'Inter-tumour pEMT heterogeneity score', # These are medians, but then scaled...
-        # y = 'Intra-tumour pEMT heterogeneity score',
-        # colour = 'Cancer type'
-    # )
-
-inter_intra_emt_profiles <- ggplot(
-    emt_scores_all_cts,
-    aes(
-        pos_frac,
-        emt_score,
-        group = patient,
-        # colour = cancer_type_nice
-        colour = scale(intra_emt)
-    )
-) +
-    facet_grid(cols = vars(cancer_type_nice)) +
-    geom_line() +
-    scale_x_continuous(expand = c(0, 0)) +
-    scale_y_continuous(expand = c(0, 0), breaks = c(-5, 0, 5)) +
-    scale_colour_gradientn(colours = colorRamps::blue2green(50)[11:45]) +
-    theme(
-        panel.background = element_rect(fill = NA, colour = 'black'),
-        panel.grid.major.y = element_line(colour = 'grey', size = 0.3, linetype = 'dotted'),
-        panel.grid.minor.y = element_blank(),
-        panel.grid.major.x = element_blank(),
-        panel.grid.minor.x = element_blank(),
-        axis.title.x = element_text(hjust = 0),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        strip.background = element_rect(colour = 'black'),
-        strip.text = element_text(size = 13),
-        # legend.position = 'bottom',
-        legend.position = c(1, -0.15),
-        legend.direction = 'horizontal',
-        legend.justification = 'right',
-        legend.key.height = unit(10, 'pt'),
-        legend.title = element_text(margin = margin(0, 2.5, 0, 0)),
-        plot.margin = unit(c(5.5, 5.5, 40, 5.5), 'pt')
-    ) +
-    labs(x = 'Cells', y = 'pEMT score', colour = 'Intra-tumour pEMT heterogeneity score\n')
-
-# Choosing colours:
-# set.seed(2030)
-# random_colours <- randomcoloR::distinctColorPalette(20)
-# This is what we get:
-# random_colours <- c('#d31fc1', '#7b32c9', '#3aeaaa', '#94e522', '#ed8ba4', '#e295cb', '#1f7fa5', '#f7da96', '#db5f3d', '#f293da',
-					# '#d82295', '#ef97ee', '#e512c2', '#ffccd8', '#99f7b5', '#199e8a', '#a3e22d', '#5eedc0', '#e88db0', '#c2f794')
-# See what they look like:
-# ggplot(data.table(x = letters[1:20])) +
-	# geom_tile(aes(x = x, y = 0, fill = x)) +
-	# scale_fill_manual(values = random_colours) +
-	# scale_x_discrete(labels = random_colours, expand = c(0, 0)) +
-	# scale_y_continuous(expand = c(0, 0)) +
-	# theme(
-		# axis.text.y = element_blank(),
-		# axis.title.y = element_blank(),
-		# axis.ticks.y = element_blank(),
-		# axis.text.x = element_text(angle = 90, hjust = 1),
-		# legend.position = 'none'
-	# )
-
-ct_colours = c(
-	'Breast' = '#CC8D81',
-	'Colorectal' = '#DCE144',
-    'Head and Neck' = '#7F9E9B',
-    'Liver' = '#D4527A',
-    'Lung Adeno.' = '#DF984C',
-    'Pancreatic' = '#8975DC'
-)
-
-inter_intra_emt_profiles_gtable <- ggplot_gtable(ggplot_build(inter_intra_emt_profiles))
-
-stript <- which(grepl('strip-t', inter_intra_emt_profiles_gtable$layout$name))
-
-for (i in stript) {
-
-    inter_intra_emt_profiles_gtable$grobs[[i]]$grobs[[1]]$children[[
-        which(grepl('rect', inter_intra_emt_profiles_gtable$grobs[[i]]$grobs[[1]]$childrenOrder))
-    ]]$gp$fill <-
-        # This sapply() loop makes the ct_colours lighter:
-        sapply(ct_colours, function(x) colorRampPalette(c(x, 'white'))(10)[4])[
-            inter_intra_emt_profiles_gtable$grobs[[i]]$grobs[[1]]$children[[
-                which(grepl('titleGrob', inter_intra_emt_profiles_gtable$grobs[[i]]$grobs[[1]]$childrenOrder))
-            ]]$children[[1]]$label
-        ]
-
-}
-
-inter_intra_emt_boxplot_data <- melt(
-    unique(
-        emt_scores_all_cts[
-            ,
-            .(
-                cancer_type_nice = cancer_type_nice,
-                `Inter-tumour pEMT heterogeneity` = scale(inter_emt)[, 1],
-                `Intra-tumour pEMT heterogeneity` = scale(intra_emt)[, 1]
-            )
-        ]
-    ),
-    id.vars = 'cancer_type_nice'
-)
-
-inter_intra_emt_boxplot <- ggplot(
-    inter_intra_emt_boxplot_data,
-    aes(x = cancer_type_nice, y = value)
-) +
-    # geom_boxplot(varwidth = TRUE, outlier.shape = NA) +
-    # stat_boxplot(geom = 'errorbar', width = 0.2) +
-    geom_boxplot(outlier.shape = NA, width = 0.5) +
-    geom_jitter(
-		data = inter_intra_emt_jitterplot_data,
-		aes(x = cancer_type_nice, y = value, colour = cancer_type_nice),
-        width = 0.2,
-        size = 2
-	) +
-	scale_colour_manual(values = ct_colours) +
-    facet_grid(cols = vars(variable)) +
-    theme_bw()
-
-# Add the following to see that the standard deviation really is the same for both x and
-# y (it's hard to believe from looking at the extreme y values!):
-
-# xlim(c(-4.5, 4.5)) +
-#     ylim(c(-4.5, 4.5)) +
-#     geom_hline(yintercept = 0) +
-#     geom_vline(xintercept = 0)
-
-pdf('../data_and_figures/inter_intra_emt.pdf', width = 10, height = 4)
-ggdraw(inter_intra_emt_profiles_gtable)
-print(inter_intra_emt_boxplot)
-dev.off()
-
-# pdf('../data_and_figures/inter_intra_emt_profiles.pdf', width = 10, height = 4)
-# inter_intra_emt_profiles
-# dev.off()
-
-# pdf('../data_and_figures/inter_intra_emt_scatterplot.pdf', width = 6, height = 4)
-# inter_intra_emt_scatterplot
-# dev.off()
-
-# pdf('../data_and_figures/inter_intra_emt_violin.pdf', width = 16, height = 6)
-
-# ggplot(
-    # emt_scores_all_cts,
-    # aes(
-        # factor(
-            # patient_unique,
-            # levels = emt_scores_all_cts[
-                # ,
-                # .(med = median(emt_score)),
-                # by = patient_unique
-            # ][
-                # order(med),
-                # patient_unique
-            # ]
-        # ),
-        # emt_score,
-        # fill = cancer_type
-    # )
-# ) +
-    # geom_violin(draw_quantiles = 0.5) +
-    # theme_test() +
-    # theme(axis.text.x = element_blank()) +
-    # labs(x = 'Patient', y = 'EMT score')
-
-# dev.off()
-
-
-
-
-
-# To make a "scheme" figure, showing what the inter- and intra-tumour heterogeneity
-# scores mean in terms of the profiles:
-
-# In the following, the colour '#5B8BAC' is half way between skyblue3 and skyblue4, and
-# can be obtained by the command colorRampPalette(c('skyblue3', 'skyblue4'))(3)[2].
-
-inter_intra_emt_scheme <- ggplot(
-    data.table(
-        y = c(
-            seq(qnorm(0.01, mean = 0, sd = 1), qnorm(0.99, mean = 0, sd = 1), length.out = 500),
-            seq(qnorm(0.01, mean = -1.5, sd = 0.6), qnorm(0.99, mean = -1.5, sd = 0.6), length.out = 500)
-        ),
-        grp = c(rep(2, 500), rep(1, 500))
-    )[
-        ,
-        x := c(
-            pnorm(y[1:500], mean = 0, sd = 1),
-            pnorm(y[501:1000], mean = -1.5, sd = 0.6)
-        )
-    ],
-    aes(x = x, y = y)
-) +
-    # geom_line(aes(group = as.character(grp), alpha = grp), col = 'dodgerblue3') +
-    geom_line(aes(group = as.character(grp), colour = as.character(grp))) +
-    geom_text_repel(
-        aes(x, y, label = l, colour = as.character(grp)),
-        data = data.table(x = 0.5, y = qnorm(0.5, mean = -1.5, sd = 0.6), l = 'median'),
-        # nudge_x = 0.2,
-        # nudge_y = -0.1,
-        nudge_x = 0.15,
-        nudge_y = -0.4,
-        segment.colour = 'darkgrey',
-        size = 3,
-        colour = 'sienna3'
-    ) +
-    geom_text_repel(
-        aes(x, y, label = l),
-        data = data.table(x = 0.5, y = qnorm(0.5), l = 'median'),
-        nudge_x = 0.05,
-        nudge_y = 0.8,
-        segment.colour = 'darkgrey',
-        size = 3,
-        colour = '#5B8BAC'
-    ) +
-    geom_text_repel(
-        aes(x, y, label = l),
-        data = data.table(x = 0.95, y = qnorm(0.95), l = '95th percentile'),
-        nudge_x = -0.2,
-        nudge_y = 0.4,
-        segment.colour = 'darkgrey',
-        size = 3,
-        colour = '#5B8BAC'
-    ) +
-    # scale_alpha_continuous(range = c(0.5, 1)) +
-    scale_colour_manual(values = c('1' = 'sienna3', '2' = '#5B8BAC')) +
-    scale_x_continuous(
-        # breaks = c(0.5, 0.95),
-        # labels = c('0.5' = '50%', '0.95' = '95%'),
-        expand = c(0.01, 0)
-    ) +
-    scale_y_continuous(
-        limits = c(qnorm(0.01, mean = -1.5, sd = 0.6) - 0.2, qnorm(0.99, mean = 0, sd = 1) + 0.2),
-        expand = c(0, 0)
-    ) +
-    geom_segment( # Arrow between profiles to indicate inter-tumour heterogeneity
-        aes(
-            x = 0.5,
-            y = qnorm(0.5, mean = -1.5, sd = 0.6) + 0.075,
-            xend = 0.5,
-            yend = qnorm(0.5, mean = 0, sd = 1) - 0.075
-        ),
-        arrow = arrow(ends = 'both', length = unit(5, 'pt'))
-    ) +
-    geom_segment( # Lower horizontal dashed line
-        aes(
-            x = 0.4025,
-            y = qnorm(0.5, mean = 0, sd = 1),
-            xend = 0.4975,
-            yend = qnorm(0.5, mean = 0, sd = 1)
-        ),
-        linetype = 'dashed',
-        colour = 'grey',
-        size = 0.25
-    ) +
-    geom_segment( # Upper horizontal dashed line
-        aes(
-            x = 0.4025,
-            y = qnorm(0.95, mean = 0, sd = 1),
-            xend = 0.9475,
-            yend = qnorm(0.95, mean = 0, sd = 1)
-        ),
-        linetype = 'dashed',
-        colour = 'grey',
-        size = 0.25
-    ) +
-    geom_segment( # Arrow between horizontal dashed lines to indicate intra-tumour heterogeneity
-        aes(
-            x = 0.4,
-            y = qnorm(0.5, mean = 0, sd = 1) + 0.05,
-            xend = 0.4,
-            yend = qnorm(0.95, mean = 0, sd = 1) - 0.05
-        ),
-        arrow = arrow(ends = 'both', length = unit(5, 'pt'))
-    ) +
-    # geom_segment( # Vertical dashed line from lower profile down to 0.5 on x axis
-    #     aes(
-    #         x = 0.5,
-    #         y = qnorm(0.01, mean = -1.5, sd = 0.6) - 0.2,
-    #         xend = 0.5,
-    #         yend = qnorm(0.5, mean = -1.5, sd = 0.6)
-    #     ),
-    #     linetype = 'dashed',
-    #     colour = 'grey',
-    #     size = 0.25
-    # ) +
-    # geom_segment( # Vertical dashed line from upper profile down to 0.95 on x axis
-    #     aes(
-    #         x = 0.95,
-    #         y = qnorm(0.01, mean = -1.5, sd = 0.6) - 0.2,
-    #         xend = 0.95,
-    #         yend = qnorm(0.95, mean = 0, sd = 1)
-    #     ),
-    #     linetype = 'dashed',
-    #     colour = 'grey',
-    #     size = 0.25
-    # ) +
-    geom_point(
-        aes(x, y, colour = as.character(grp)),
-        data = data.table(
-            x = c(0.5, 0.5, 0.95),
-            y = c(qnorm(0.5, mean = -1.5, sd = 0.6), qnorm(0.5), qnorm(0.95)),
-            grp = c(1, 2, 2)
-        )
-    ) +
-    annotate(
-        geom = 'text',
-        x = 0.38,
-        y = qnorm(0.5, mean = 0, sd = 1) + (qnorm(0.95, mean = 0, sd = 1) - qnorm(0.5, mean = 0, sd = 1))/2,
-        label = 'Intra-tumour\nheterogeneity',
-        hjust = 1,
-        size = 4
-    ) +
-    annotate(
-        geom = 'text',
-        x = 0.52,
-        y = qnorm(0.5, mean = -1.5, sd = 0.6) + 1,
-        label = 'Inter-tumour\nheterogeneity',
-        hjust = 0,
-        size = 4
-    ) +
-    theme_test() +
-    theme(
-        # axis.title.x = element_text(hjust = 0, vjust = 6),
-        # axis.text.y = element_blank(),
-        # axis.ticks.y = element_blank(),
-        axis.title.x = element_text(vjust = 6),
-        axis.text = element_blank(),
-        axis.ticks = element_blank(),
-        legend.position = 'none'
-    ) +
-    labs(x = 'Cells', y = 'pEMT score')
-    # labs(x = 'Sorted cells', y = 'pEMT score')
-
-pdf('../data_and_figures/inter_intra_emt_scheme.pdf', width = 3, height = 4)
-inter_intra_emt_scheme
-dev.off()
-
-
-
-
-
-# Combination in one aligned plot:
-
-aligned_plots_1 <- align_plots(
-    inter_intra_emt_scheme,
-    inter_intra_emt_scatterplot,
-    align = 'h'
-)
-
-aligned_plots_2 <- align_plots(
-    inter_intra_emt_scheme,
-    inter_intra_emt_profiles,
-    align = 'v',
-    axis = 'l'
-)
-
-aligned_plots_1[[1]]$widths[1] <- aligned_plots_2[[1]]$widths[1]
-
-pdf('../data_and_figures/inter_intra_emt.pdf', width = 10, height = 8.5)
-
-plot_grid(
-    blank_plot(),
-    plot_grid(
-        aligned_plots_1[[1]],
-        blank_plot(),
-        aligned_plots_1[[2]],
-        nrow = 1,
-        ncol = 3,
-        rel_widths = c(2.3, 0.7, 4)
-    ),
-    blank_plot(),
-    aligned_plots_2[[2]],
-    nrow = 4,
-    ncol = 1,
-    rel_heights = c(0.1, 1.05, 0.05, 1)
-) +
-    draw_label('A', x = 0, y = 0.975, hjust = -0.1, vjust = 1.1, size = 16, fontface = 2) +
-    draw_label('B', x = 0.425, y = 0.975, hjust = -0.1, vjust = 1.1, size = 16, fontface = 2) +
-    draw_label('C', x = 0, y = 0.475, hjust = -0.1, vjust = 1.1, size = 16, fontface = 2)
-
-dev.off()
-
-
-
-
-
-# Trial with just HNSC:
-
-sc_data <- eval(sc_metadata$hnsc$read_quote)
-
-setkey(sc_data, id)
-
-ct_emt_markers <- with(
-    deconv_data$`HNSC - Malignant-Basal`,
-    head(genes_filtered[ordering], 50)
-)
-
-ct_emt_markers <- sc_data[
-    cell_type == 'cancer',
-    ct_emt_markers[
-        apply(.SD, 2, sc_cancer_caf_args$hnsc$scores_filter_fun)
-    ],
-    .SDcols = ct_emt_markers
-]
-
-all_genes_filtered <- sc_data[
-    cell_type == 'cancer',
-    names(.SD)[
-        apply(.SD, 2, sc_cancer_caf_args$hnsc$genes_filter_fun)
-    ],
-    .SDcols = -c('id', 'patient', 'cell_type')
-]
-
-# Using scrabble::score():
-
-emt_scores <- scrabble::score(
-    sc_data[cell_type == 'cancer', set_colnames(t(.SD), id), .SDcols = all_genes_filtered],
-    list(ct_emt_markers),
-    bin.control = TRUE,
-    nbin = length(all_genes_filtered) %/% 110
-)
-
-emt_scores <- data.table(
-    id = rownames(emt_scores),
-    patient = sc_data[rownames(emt_scores), patient],
-    emt_score = emt_scores[, 1]
-)[
-    order(patient, emt_score),
-    pos_frac := (1:.N)/.N,
-    by = patient
-]
-
-# I think it's good to exclude at least the top and bottom 1% to eliminate really extreme
-# values.  We could even remove more, e.g. top and bottom 2.5%, so we have a sort of "95%
-# confidence interval".
-
-emt_score_plot <- ggplot(
-    emt_scores[pos_frac > 0.01 & pos_frac < 0.99],
-    aes(pos_frac, emt_score, group = patient, colour = as.character(patient))
-) +
-    scale_colour_manual(values = brewer.pal(12, 'Set3')[-c(2, 11)]) +
-    geom_line() +
-    theme_test()
-
-# My own implementation of scrabble::score():
-
-# mat <- sc_data[
-#     cell_type == 'cancer',
-#     set_colnames(t(.SD), id),
-#     .SDcols = all_genes_filtered
-# ]
-#
-# gene_averages <- sort(rowMeans(mat))
-#
-# bins <- setNames(
-#     cut(seq_along(gene_averages), breaks = 20, labels = FALSE, include.lowest = TRUE),
-#     names(gene_averages)
-# )
-#
-# emt_scores <- rowMeans(
-#     sapply(
-#         ct_emt_markers,
-#         function(g) {
-#             mat[g, ] - colMeans(mat[sample(names(bins)[bins == bins[g]], 100), ])
-#         },
-#         USE.NAMES = TRUE
-#     )
-# )
-#
-# emt_scores <- data.table(
-#     id = names(emt_scores),
-#     patient = sc_data[names(emt_scores), patient],
-#     emt_score = emt_scores
-# )[
-#     order(patient, emt_score),
-#     pos_frac := (1:.N)/.N, # .I doesn't work - it goes from 1 to nrow(emt_scores).
-#     by = patient
-# ]
-
-# Alternative implementation of scrabble::score() using data.table, which is actually slower:
-
-# gene_info <- sc_data[
-#     cell_type == 'cancer',
-#     .(
-#         gene = all_genes_filtered,
-#         average = colMeans(.SD)
-#     ),
-#     .SDcols = all_genes_filtered
-# ][
-#     order(average),
-#     bin := cut(seq_along(average), breaks = 20, labels = FALSE, include.lowest = TRUE)
-# ]
-#
-# emt_scores <- sc_data[
-#     cell_type == 'cancer',
-#     .(
-#         id = id,
-#         patient = patient,
-#         emt_score = rowMeans(
-#             sapply(
-#                 ct_emt_markers,
-#                 function(g) {
-#                     get(g) - rowMeans(
-#                         .SD[
-#                             ,
-#                             gene_info[bin == gene_info[gene == g, bin], sample(gene, 100)],
-#                             with = FALSE
-#                         ]
-#                     )
-#                 }
-#             )
-#         )
-#     )
-# ][
-#     order(patient, emt_score),
-#     pos_frac := (1:.N)/.N, # .I doesn't work - it goes from 1 to nrow(emt_scores).
-#     by = patient
-# ]
-
-# The following calculates the scores per tumour, but I'm not sure I want to do this for
-# the current analysis, because I want to preserve inter-tumour heterogeneity.
-
-# emt_scores <- sc_data[
-#     cell_type == 'cancer',
-#     .(
-#         id = id,
-#         emt_score = scrabble::score(
-#             set_colnames(t(.SD), id),
-#             list(ct_emt_markers),
-#             bin.control = TRUE,
-#             nbin = length(all_genes_filtered) %/% 110
-#         )[, 1]
-#     ),
-#     by = patient,
-#     .SDcols = all_genes_filtered
-# ][
-#     order(patient, emt_score),
-#     pos_frac := (1:.N)/.N,
-#     by = patient
-# ]
-
-# The following also calculates the scores per tumour, but goes one step further - it also
-# filters the gene lists on a per-tumour basis, so you have different gene lists for each
-# tumour.  This further reduces inter-tumour heterogeneity in the results.
-
-# emt_scores <- sc_data[
-#     cell_type == 'cancer',
-#     .(
-#         id = id,
-#         emt_score = scrabble::score(
-#             set_colnames(
-#                 t(
-#                     .SD[
-#                         ,
-#                         apply(.SD, 2, sc_cancer_caf_args$hnsc$genes_filter_fun),
-#                         with = FALSE
-#                     ]
-#                 ),
-#                 id
-#             ),
-#             list(
-#                 .SD[
-#                     ,
-#                     ct_emt_markers[
-#                         apply(.SD, 2, sc_cancer_caf_args$hnsc$scores_filter_fun)
-#                     ],
-#                     .SDcols = ct_emt_markers
-#                 ]
-#             ),
-#             bin.control = TRUE,
-#             nbin = 20,
-#             n = 80
-#         )[, 1]
-#     ),
-#     by = patient,
-#     .SDcols = -c('id', 'cell_type')
-# ][
-#     order(patient, emt_score),
-#     pos_frac := (1:.N)/.N,
-#     by = patient
-# ]
-
-# Try to assess inter- and intra-tumour heterogeneity:
-
-inter_intra_emt <- emt_scores[
-    ,
-    .(
-        inter_emt = .SD[pos_frac > 0.25 & pos_frac < 0.75, mean(emt_score)],
-        intra_emt = .SD[pos_frac > 0.9 & pos_frac < 0.975, mean(emt_score)] -
-            median(emt_score)
-    ),
-    by = patient
-]
-
-inter_intra_plot <- ggplot(
-    inter_intra_emt,
-    aes(inter_emt, intra_emt, colour = as.character(patient))
-) +
-    scale_colour_manual(values = brewer.pal(12, 'Set3')[-c(2, 11)]) +
-    geom_point() +
-    theme_test()
-
-# In the same figure:
-
-ggarrange(
-    emt_score_plot,
-    inter_intra_plot,
-    nrow = 2,
-    ncol = 1
-)

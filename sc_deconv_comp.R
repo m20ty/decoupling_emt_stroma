@@ -1431,7 +1431,7 @@ sc_deconv_comp_barplot_data <- rbindlist(
 				cell_type == 'cancer',
 				.SD[gene %in% with(deconv_data[[ct]], head(genes_filtered[ordering], 20)), mean(expression_level)] -
 					.SD[gene %in% with(deconv_data[[ct]], tail(genes_filtered[ordering], 20)), mean(expression_level)]
-				# by = cell_type # No point doing it per cell, because the centring means answer for one cell type is just minus the other
+				# by = cell_type # No point doing it per cell type, because the centring means answer for one cell type is just minus the other
 			]
 		)
 	)
