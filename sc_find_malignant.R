@@ -28,15 +28,15 @@ source('general_functions.R')
 
 
 # Datasets that we won't include:
-#	- Breast datasets from Chung and Karaayvaz - CNVs often indistinct and low cell number.  We have enough good samples from the Qian et al. breast dataset.
+#	- Breast datasets from Chung and Karaayvaz - CNVs often indistinct and low cell number.  We have enough good samples from the Qian breast dataset.
 #	- CRC datasets KUL3 and Qian are OK, but SMC gives more usable samples, and I think is better quality based on the genes detected curve.
 #	- Lung data from Song: infercna works quite well, but we still have fewer samples and fewer cells than the Qian data.
-#	- Izar ovarian 10x data (Qian 10x data is better and has at least 1 more usable sample) and SS2 data (I couldn't identify non-malignant cells very well).
+#	- Izar ovarian 10x data (Qian 10x data is better and has at least 1 more usable sample) and SS2 data (I can't identify non-malignant cells well).
 #	- PDAC data from Elyada - CNV inference didn't work well, and maybe have only 2 usable samples.
 
-# Note that for Lung data from Qian et al., if we want to separate into LUAD and LUSC we might still want to use the CNVs from the full dataset to help identify
-# the malignant cells for patient 1, since for this patient it looks a bit less clean when considering only the LUSC samples.  The normal reference might also
-# help here, but it looks complicated because there are ambiguous cases.  Perhaps it's easier to leave patient 1 out.
+# Note that for Lung data from Qian et al., if we want to separate into LUAD and LUSC we might still want to use the CNVs from the full dataset to
+# help identify the malignant cells for patient 1, since for this patient it looks a bit less clean when considering only the LUSC samples.  The
+# normal reference might also help here, but it looks complicated because there are ambiguous cases.  Perhaps it's easier to leave patient 1 out.
 
 # Samples to keep:
 
@@ -181,8 +181,8 @@ cohort_data <- list(
 			# cna_signal_thresholds = list(c(35, 35)),
 			# seed = 1892
 		# ),
-		# # Maybe we should leave out SMC17 - there seems to be a problem with likely nonmalignant cells appearing to have a deletion on chromosome 19,
-		# # which leads to negative correlations between these cells' CNA profiles and those of the candidate malignant cells.
+		# # Maybe we should leave out SMC17 - there seems to be a problem with likely nonmalignant cells appearing to have a deletion on chromosome
+        # # 19, which leads to negative correlations between these cells' CNA profiles and those of the candidate malignant cells.
 		# SMC17 = list(
 			# candidate_malignant_branches = list(list(c(2, 2, 2, 2), c(2, 2, 1))),
 			# cna_cor_thresholds = list(c(0.4, 0.5)),
@@ -740,65 +740,71 @@ cohort_data <- list(
 
 
 for(cohort in names(cohort_data)) {
-	
+
 	cat(paste0(cohort, ':\n\tReading data\n'))
-	
+
 	inferred_cna <- readRDS(paste0('../data_and_figures/inferred_cna_', cohort, '.rds'))
 	cell_clust <- readRDS(paste0('../data_and_figures/cna_clust_', cohort, '.rds'))
-	
+
 	x_line_breaks <- .chromosomeBreaks(rownames(inferred_cna[[1]]))
 	x_text_breaks <- round(.chromosomeBreaks(rownames(inferred_cna[[1]]), halfway = TRUE, hide = c('13', '18', '21', 'Y')))
-	
+
 	for(p in names(cohort_data[[cohort]])) {
-		
+
 		cat(paste0('\tPatient ', p, ':\n\t\tComputing CNA scores and correlation\n'))
-		
+
 		candidate_malignant <- lapply(
 			cohort_data[[cohort]][[p]]$candidate_malignant_branches,
 			function(x) lapply(x, function(y) labels(reduce(y, .f = `[[`, .init = as.dendrogram(cell_clust[[p]]))))
-		)
-		
-		candidate_malignant <- lapply(candidate_malignant, unlist)
-		
+		) # This list will have length equal to the number of suspected subclones
+
+		candidate_malignant <- lapply(candidate_malignant, unlist) # In case multiple branches correspond to the same subclone
+
 		assumed_nonmalignant <- colnames(inferred_cna[[p]])[!(colnames(inferred_cna[[p]]) %in% unlist(candidate_malignant))]
-		
+
 		classification_analysis <- lapply(
-			1:length(candidate_malignant),
+			1:length(candidate_malignant), # Iterate over the different subclones (returns list of length 1 if there's only one clone)
 			function(i) {
-				
+
 				candidate_malignant_mean_cna <- rowMeans(inferred_cna[[p]][, candidate_malignant[[i]]])
-				
+
 				cna_cor <- apply(
 					inferred_cna[[p]][, c(assumed_nonmalignant, candidate_malignant[[i]])],
 					2,
 					cor,
 					candidate_malignant_mean_cna
 				)
-				
+
 				cna_signal <- apply(
 					inferred_cna[[p]][, c(assumed_nonmalignant, candidate_malignant[[i]])],
 					2,
 					function(x) sum(x[candidate_malignant_mean_cna^2 >= quantile(candidate_malignant_mean_cna^2, 0.9)]^2)
 				)
-				
+
 				annotation_data_ref <- data.table(
 					cell_id = c(assumed_nonmalignant, candidate_malignant[[i]]),
 					cna_cor = cna_cor,
 					cna_signal = cna_signal
 				)[
 					,
-					classification := switch(
-						(cna_cor < cohort_data[[cohort]][[p]]$cna_cor_thresholds[[i]][1] & cna_signal < cohort_data[[cohort]][[p]]$cna_signal_thresholds[[i]][1]) + 1,
-						switch(
-							(cna_cor > cohort_data[[cohort]][[p]]$cna_cor_thresholds[[i]][2] & cna_signal > cohort_data[[cohort]][[p]]$cna_signal_thresholds[[i]][2]) + 1,
+					classification := switch( # If it's below both thresholds, then it's nonmalignant.  If not...
+						(cna_cor < cohort_data[[cohort]][[p]]$cna_cor_thresholds[[i]][1] &
+                            cna_signal < cohort_data[[cohort]][[p]]$cna_signal_thresholds[[i]][1]) + 1,
+						switch( # ...Then if it's above both thresholds, it's malignant; otherwise, it's ambiguous.
+							(cna_cor > cohort_data[[cohort]][[p]]$cna_cor_thresholds[[i]][2] &
+                                cna_signal > cohort_data[[cohort]][[p]]$cna_signal_thresholds[[i]][2]) + 1,
 							'ambiguous',
-							switch((length(candidate_malignant) > 1) + 1, 'malignant', paste('malignant clone', i))
+							switch( # Call it "malignant" if there's only one clone; "malignant clone i" if there are multiple subclones.
+                                (length(candidate_malignant) > 1) + 1,
+                                'malignant', # If candidate_malignant has length 1, there's only 1 clone
+                                paste('malignant clone', i) # If it has length > 1, there are multiple subclones.
+                            )
 						),
 						'nonmalignant'
 					),
 					by = cell_id
 				]
-				
+
 				cna_cor_signal_scatterplot <- ggplot(annotation_data_ref, aes(x = cna_cor, y = cna_signal, colour = classification)) +
 					geom_point(alpha = 0.5) +
 					scale_colour_manual(
@@ -807,19 +813,22 @@ for(cohort in names(cohort_data)) {
 							c(switch((length(candidate_malignant) > 1) + 1, 'malignant', paste('malignant clone', i)), 'ambiguous', 'nonmalignant')
 						)
 					) +
-					geom_vline(xintercept = cohort_data[[cohort]][[p]]$cna_cor_thresholds[[i]], colour = c('palegreen4', 'orangered4'), size = 0.3, linetype = 'dashed') +
-					geom_hline(yintercept = cohort_data[[cohort]][[p]]$cna_signal_thresholds[[i]], colour = c('palegreen4', 'orangered4'), size = 0.3, linetype = 'dashed') +
+					geom_vline(xintercept = cohort_data[[cohort]][[p]]$cna_cor_thresholds[[i]], colour = c('palegreen4', 'orangered4'), size = 0.3,
+                        linetype = 'dashed') +
+					geom_hline(yintercept = cohort_data[[cohort]][[p]]$cna_signal_thresholds[[i]], colour = c('palegreen4', 'orangered4'), size = 0.3,
+                        linetype = 'dashed') +
 					theme_test() +
 					labs(x = 'CNA correlation', y = 'CNA signal', title = p)
-				
+
 				list(data = annotation_data_ref, plot = cna_cor_signal_scatterplot)
-				
+
 			}
 		)
-		
+
 		# for(x in classification_analysis) print(x$plot)
 		# dev.off()
-		
+
+        # If there were multiple subclones, bind the multiple tables together:
 		if(length(classification_analysis) == 1) {
 			classification_data <- classification_analysis[[1]]$data
 		} else {
@@ -830,16 +839,20 @@ for(cohort in names(cohort_data)) {
 				)
 			)
 		}
-		
+
+        # The classification data still only contains data for one patient.  So a cell should appear multiple times in this table if and only if
+        # it was tested against multiple subclones, in which case, all cells will appear the same number of times, equal to the number of subclones.
+        # It therefore seems wasteful to check length(classification) per cell_id in the below...
+
 		cat('\t\tDefining final classifications\n')
-		
+
 		classification_data[
 			,
 			classification_final := switch(
 				(length(classification) == 1) + 1,
-				switch(
+				switch( # This should happen only where we're testing against multiple subclones.
 					(sum(grep('^malignant', classification)) > 0) + 1,
-					switch(
+					switch( # In this case, the cell isn't classified as malignant for any subclone but could have been classified as ambiguous.
 						('ambiguous' %in% classification) + 1,
 						switch(
 							(!(unique(cell_id) %in% cell_clust[[p]]$labels)) + 1,
@@ -848,13 +861,13 @@ for(cohort in names(cohort_data)) {
 						),
 						'ambiguous'
 					),
-					switch(
+					switch( # In this case, the cell was classified as malignant for at least one subclone.
 						(sum(grep('^malignant', classification)) == 1) + 1,
-						'ambiguous',
+						'ambiguous', # If it's classified as malignant w.r.t. more than one subclone, that makes it ambiguous.
 						classification[grep('^malignant', classification)]
 					)
 				),
-				switch(
+				switch( # In this case there's only one clone, and we just need to change classification to "refernece" where appropriate.
 					(!(cell_id %in% cell_clust[[p]]$labels) && classification == 'nonmalignant') + 1,
 					classification,
 					'reference'
@@ -862,19 +875,24 @@ for(cohort in names(cohort_data)) {
 			),
 			keyby = cell_id
 		]
-		
+
+        # Where multiple subclones were tested, classification_final will have multiple repeated entries, so take the unique ones:
 		classification_data_unique <- unique(classification_data[, .(cell_id, classification_final)])
-		
+
 		# Cell IDs are in alphabetical order within each classification, including when manually ordering the classifications:
 		# classification_data_unique[, sum(cell_id == sort(cell_id)) == .N, by = classification_final]
-		# classification_data_unique[c('malignant', 'ambiguous', 'nonmalignant', 'reference'), sum(cell_id == sort(cell_id)) == .N, by = classification_final]
-		
+		# classification_data_unique[
+        #     c('malignant', 'ambiguous', 'nonmalignant', 'reference'),
+        #     sum(cell_id == sort(cell_id)) == .N,
+        #     by = classification_final
+        # ]
+
 		setkey(classification_data_unique, classification_final)
-		
+
 		cat('\t\tMaking plots\n')
-		
+
 		set.seed(cohort_data[[cohort]][[p]]$seed)
-		
+
 		cell_ids_final <- classification_data_unique[
 			,
 			c(
@@ -885,14 +903,14 @@ for(cohort in names(cohort_data)) {
 				)
 			)
 		]
-		
+
 		clone_names <- classification_data_unique[grep('^malignant', classification_final), sort(unique(classification_final))]
-		
+
 		cell_ids_final <- classification_data_unique[
 			c(clone_names, 'ambiguous', 'nonmalignant', 'reference'),
 			cell_id[cell_id %in% cell_ids_final]
 		]
-		
+
 		y_line_breaks <- classification_data_unique[
 			c(clone_names, 'ambiguous', 'nonmalignant', 'reference')
 		][
@@ -900,7 +918,7 @@ for(cohort in names(cohort_data)) {
 			.(brks = .N),
 			by = classification_final
 		]$brks %>% cumsum
-		
+
 		y_text_breaks <- classification_data_unique[
 			c(clone_names, 'ambiguous', 'nonmalignant', 'reference')
 		][
@@ -911,7 +929,7 @@ for(cohort in names(cohort_data)) {
 			,
 			round(sapply(1:.N, function(i) {switch((i == 1) + 1, cumsum(line_break)[i - 1], 0) + text_break[i]}))
 		]
-		
+
 		cna_heatmap_final <- ggplot(
 			reshape2::melt(
 				inferred_cna[[p]][, cell_ids_final],
@@ -949,20 +967,22 @@ for(cohort in names(cohort_data)) {
 				panel.border = element_rect(colour = 'black', size = 0.5, fill = NA)
 			) +
 			labs(x = 'Chromosome', y = 'Cells', fill = 'Inferred CNA', title = p)
-		
+
 		cat('\t\tSaving data and plots\n')
-		
+
+        # Saving classification_data: I guess I opted to save classification_data instead of classification_data_unique, because the former contains
+        # subclone and CNA score/correlation information, and we can always reconstruct classification_data_unique.
 		fwrite(classification_data, paste0('../data_and_figures/sc_find_malignant/', cohort, '/', p, '_data.csv'))
-		
+
 		pdf(paste0('../data_and_figures/sc_find_malignant/', cohort, '/', p, '_figures.pdf'), width = 10, height = 8)
 		for(x in classification_analysis) print(x$plot)
 		print(cna_heatmap_final)
 		dev.off()
-		
+
 		cat('\t\tDone!\n')
-		
+
 	}
-	
+
 }
 
 

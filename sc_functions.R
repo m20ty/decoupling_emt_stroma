@@ -3161,7 +3161,7 @@ simulated_tumours_lineplot <- function(
     line_size = NULL,
     error_bars = FALSE,
     error_bars_width = 0.01,
-    error_bars_size = 0.25, # I think 0.5 is the default; I guess the same is true for grid_line_size.
+    error_bars_size = 0.25, # I think 0.5 is the ggplot2 default; I guess the same is true for grid_line_size.
     grid_line_size = 0.25,
     panel_border_size = NULL,
     ...

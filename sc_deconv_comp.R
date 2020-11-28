@@ -252,6 +252,7 @@ deconv_plots <- sapply(
 		    heatmap_legend_breaks = c(-0.6, -0.3, 0, 0.3, 0.6),
             heatmap_annotations = c('SNAI1', 'SNAI2', 'TWIST1', 'ZEB1', 'ZEB2'),
             heatmap_annotations_nudge = 0.3,
+			heatmap_annotations_side = 'left',
             purity_colours = rev(colorRampPalette(brewer.pal(11, "PuOr"))(50)),
             purity_colour_limits = c(-0.3, 0.3),
             purity_legend_breaks = c(-0.3, 0, 0.3),
@@ -415,7 +416,7 @@ sc_tcga_deconv_comp <- sapply(
 							axis.title.x = element_blank(),
 							axis.ticks = element_blank(),
 							axis.ticks.length = unit(0, 'pt'),
-							plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt')
+							plot.margin = unit(c(5.5, 5.5, 1.25, 0), 'pt')
 							# plot.margin = switch((x == 'cancer') + 1, unit(c(1.25, 5.5, 5.5, 5.5), 'pt'), unit(c(5.5, 5.5, 1.25, 5.5), 'pt'))
 						) +
 						labs(y = mapvalues(x, c('cancer', 'caf'), c('Cancer', 'CAF'), warn_missing = FALSE), fill = 'Relative\nexpression\nlevel')
@@ -485,11 +486,12 @@ sc_tcga_deconv_comp <- sapply(
         plot_data[, expression_level_cc := expression_level - mean(expression_level), by = id]
 
 		# Re-do running average per cell:
-		sc_deconv_comp_data[
+		# EDIT: is this working?  If we're using the genes from deconv_data[[ct]], surely it's not the filtered list?
+		plot_data[
 			,
 			expression_level_cc_rm := setNames(
-				runmean(setNames(expression_level_cc, gene)[with(deconv_data[[ct]], genes_filtered[ordering])], 30),
-				with(deconv_data[[ct]], genes_filtered[ordering])
+				runmean(setNames(expression_level_cc, gene)[with(deconv_filtered, genes_filtered[ordering])], 30),
+				with(deconv_filtered, genes_filtered[ordering])
 			)[as.character(gene)], # Melting made gene a factor, and this reordering doesn't work unless we coerce it to character
 			by = id
 		]
@@ -574,7 +576,7 @@ sc_tcga_deconv_comp <- sapply(
 			sc_heatmaps_filtered_data = plot_data,
 			gene_averages_cancer_caf = gene_averages_cancer_caf,
 			gene_averages_for_centring = gene_averages,
-			ordered_cell_ids <- sapply(sc_deconv_comp, `[[`, 'ordered_cell_ids', simplify = FALSE, USE.NAMES = TRUE)
+			ordered_cell_ids = sapply(sc_deconv_comp, `[[`, 'ordered_cell_ids', simplify = FALSE, USE.NAMES = TRUE)
 		)
 
 	},
