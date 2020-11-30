@@ -2310,23 +2310,23 @@ simulated_deconv_plots <- sapply(
 # Heatmaps showing expression of genes in single cells data, ordered as in the deconv results:
 
 # Can't use max_mean_counts because that means too few cells in some cases.
-sample_sizes <- list(
-    brca = 1000,
-	brca_lenient = 1000,
-    coadread = 800,
-	coadread_lenient = 800,
-    hnsc = 400,
-    lihc = 150,
-	lihc_lenient = 200,
-    luad = 1000,
-	# luad = 200,
-	# luad_lenient = 300,
-	lusc = 100,
-	lusc_lenient = 100,
-    ov = 1500,
-	ov_lenient = 2000,
-    paad = 1500
-)
+# sample_sizes <- list(
+#     brca = 1000,
+# 	brca_lenient = 1000,
+#     coadread = 800,
+# 	coadread_lenient = 800,
+#     hnsc = 400,
+#     lihc = 150,
+# 	lihc_lenient = 200,
+#     luad = 1000,
+# 	# luad = 200,
+# 	# luad_lenient = 300,
+# 	lusc = 100,
+# 	lusc_lenient = 100,
+#     ov = 1500,
+# 	ov_lenient = 2000,
+#     paad = 1500
+# )
 
 set.seed(4508) # Is it enough to set a single seed before the whole loop?
 
@@ -3174,7 +3174,7 @@ pemt_caf_brackets_params <- list(
 	paad = list(pemt_bracket_max = 29, caf_bracket_min = 71, pemt_label_hjust = 0.45, caf_label_hjust = 0.5)
 )
 
-cairo_pdf('../data_and_figures/final_figures_resubmission/S8B.pdf', width = 13, height = 11.5)
+cairo_pdf('../data_and_figures/final_figures_resubmission/S8B.pdf', width = 13, height = 11.9)
 
 print(
 	plot_grid(
@@ -3185,7 +3185,7 @@ print(
 				function(ct) {
 
 					sc_sim_deconv_comp_figures <- sapply(
-						c(sc_sim_deconv_comp[[ct]]$filtered_deconv_figures, sc_sim_deconv_comp[[ct]]$sc_heatmaps_filtered),
+						c(simulated_deconv_plots[[ct]]$plots, sc_sim_deconv_comp[[ct]]$sc_heatmaps_unfiltered$expression_level_cc_rm),
 						function(x) x + theme(legend.position = 'none', plot.title = element_blank(), axis.title.y = element_blank()),
 						simplify = FALSE,
 						USE.NAMES = TRUE
@@ -3213,22 +3213,61 @@ print(
 							blank_plot(),
 							nrow = 3,
 							ncol = 1,
-							rel_heights = c(4, 15, 10)
+							rel_heights = c(4, 15, 11)
 						),
 						plot_grid(
 							blank_plot(),
 							sc_sim_deconv_comp_figures$axis_labels,
-							blank_plot() +
-								labs(y = 'Cancer\ncells') +
-								scale_y_continuous(position = 'right') +
-								theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
-							blank_plot() +
-								labs(y = 'CAFs') +
-								scale_y_continuous(position = 'right') +
-								theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
-							nrow = 4,
+							ggplot(data.frame(x = 0:1, y = 0:1), aes(x = x, y = y)) +
+								geom_point(size = 0, colour = 'white') +
+								geom_segment(
+									aes(x = 0.65, xend = 0.65, y = 0.05, yend = 0.95),
+									arrow = arrow(ends = 'both', length = unit(5, 'pt'))
+								) +
+								scale_x_continuous(expand = c(0, 0)) +
+								scale_y_continuous(expand = c(0, 0)) +
+								theme(
+									axis.text = element_blank(),
+									axis.title.x = element_blank(),
+									axis.title.y = element_text(vjust = -3),
+									axis.ticks = element_blank(),
+									axis.ticks.length = unit(0, 'pt'),
+									plot.background = element_blank(),
+									panel.background = element_blank(),
+									plot.margin = unit(c(5.5, 0, 1.25, 5.5), 'pt')
+								) +
+								labs(y = paste0('Cancer\ncells\n(n = ', length(sc_sim_deconv_comp[[ct]]$ordered_cell_ids$cancer), ')')),
+							ggplot(data.frame(x = 0:1, y = 0:1), aes(x = x, y = y)) +
+								geom_point(size = 0, colour = 'white') +
+								geom_segment(
+									aes(x = 0.65, xend = 0.65, y = 0.05, yend = 0.95),
+									arrow = arrow(ends = 'both', length = unit(5, 'pt'))
+								) +
+								scale_x_continuous(expand = c(0, 0)) +
+								scale_y_continuous(expand = c(0, 0)) +
+								theme(
+									axis.text = element_blank(),
+									axis.title.x = element_blank(),
+									axis.title.y = element_text(vjust = -3),
+									axis.ticks = element_blank(),
+									axis.ticks.length = unit(0, 'pt'),
+									plot.background = element_blank(),
+									panel.background = element_blank(),
+									plot.margin = unit(c(5.5, 0, 1.25, 5.5), 'pt')
+								) +
+								labs(y = paste0('\nCAFs\n(n = ', length(sc_sim_deconv_comp[[ct]]$ordered_cell_ids$caf), ')')),
+							# blank_plot() +
+							# 	labs(y = 'Cancer\ncells') +
+							# 	scale_y_continuous(position = 'right') +
+							# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
+							# blank_plot() +
+							# 	labs(y = 'CAFs') +
+							# 	scale_y_continuous(position = 'right') +
+							# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
+							blank_plot(),
+							nrow = 5,
 							ncol = 1,
-							rel_heights = c(4, 15, 5, 5)
+							rel_heights = c(4, 15, 5, 5, 1)
 						),
 						plot_grid(
 							plotlist = c(
@@ -3237,12 +3276,18 @@ print(
 									theme(plot.margin = unit(c(11, 5.5, 5.5, 0), 'pt')) +
 									labs(title = deconv_plot_args_per_ct[[ct]]$plot_title)
 								),
-								sc_sim_deconv_comp_figures[c('purity_bar', 'ccle_bar', 'heatmap', 'cancer', 'caf')]
+								sc_sim_deconv_comp_figures[c('purity_bar', 'ccle_bar', 'heatmap', 'cancer', 'caf')],
+								list(
+									blank_plot() +
+										scale_x_continuous(position = 'top') +
+										theme(axis.title.x = element_text(), plot.margin = unit(c(4.5, 0, 0, 0), 'pt')) +
+										labs(x = 'Genes')
+								)
 							),
-							nrow = 6,
+							nrow = 7,
 							ncol = 1,
 							align = 'v',
-							rel_heights = c(2, 1, 1, 15, 5, 5)
+							rel_heights = c(2, 1, 1, 15, 5, 5, 1)
 						),
 						nrow = 1,
 						ncol = 3,
@@ -3262,7 +3307,7 @@ print(
 					function(ct) {
 
 						sc_sim_deconv_comp_figures <- sapply(
-							c(sc_sim_deconv_comp[[ct]]$filtered_deconv_figures, sc_sim_deconv_comp[[ct]]$sc_heatmaps_filtered),
+							c(simulated_deconv_plots[[ct]]$plots, sc_sim_deconv_comp[[ct]]$sc_heatmaps_unfiltered$expression_level_cc_rm),
 							function(x) x + theme(legend.position = 'none', plot.title = element_blank(), axis.title.y = element_blank()),
 							simplify = FALSE,
 							USE.NAMES = TRUE
@@ -3290,22 +3335,61 @@ print(
 								blank_plot(),
 								nrow = 3,
 								ncol = 1,
-								rel_heights = c(4, 15, 10)
+								rel_heights = c(4, 15, 11)
 							),
 							plot_grid(
 								blank_plot(),
 								sc_sim_deconv_comp_figures$axis_labels,
-								blank_plot() +
-									labs(y = 'Cancer\ncells') +
-									scale_y_continuous(position = 'right') +
-									theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
-								blank_plot() +
-									labs(y = 'CAFs') +
-									scale_y_continuous(position = 'right') +
-									theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
-								nrow = 4,
+								ggplot(data.frame(x = 0:1, y = 0:1), aes(x = x, y = y)) +
+	                                geom_point(size = 0, colour = 'white') +
+	                                geom_segment(
+	                                    aes(x = 0.65, xend = 0.65, y = 0.05, yend = 0.95),
+	                                    arrow = arrow(ends = 'both', length = unit(5, 'pt'))
+	                                ) +
+	                                scale_x_continuous(expand = c(0, 0)) +
+	                                scale_y_continuous(expand = c(0, 0)) +
+	                                theme(
+	                                    axis.text = element_blank(),
+	                                    axis.title.x = element_blank(),
+	                                    axis.title.y = element_text(vjust = -3),
+	                                    axis.ticks = element_blank(),
+	                                    axis.ticks.length = unit(0, 'pt'),
+	                                    plot.background = element_blank(),
+	                                    panel.background = element_blank(),
+	                                    plot.margin = unit(c(5.5, 0, 1.25, 5.5), 'pt')
+	                                ) +
+	                                labs(y = paste0('Cancer\ncells\n(n = ', length(sc_sim_deconv_comp[[ct]]$ordered_cell_ids$cancer), ')')),
+	                            ggplot(data.frame(x = 0:1, y = 0:1), aes(x = x, y = y)) +
+	                                geom_point(size = 0, colour = 'white') +
+	                                geom_segment(
+	                                    aes(x = 0.65, xend = 0.65, y = 0.05, yend = 0.95),
+	                                    arrow = arrow(ends = 'both', length = unit(5, 'pt'))
+	                                ) +
+	                                scale_x_continuous(expand = c(0, 0)) +
+	                                scale_y_continuous(expand = c(0, 0)) +
+	                                theme(
+	                                    axis.text = element_blank(),
+	                                    axis.title.x = element_blank(),
+	                                    axis.title.y = element_text(vjust = -3),
+	                                    axis.ticks = element_blank(),
+	                                    axis.ticks.length = unit(0, 'pt'),
+	                                    plot.background = element_blank(),
+	                                    panel.background = element_blank(),
+	                                    plot.margin = unit(c(5.5, 0, 1.25, 5.5), 'pt')
+	                                ) +
+	                                labs(y = paste0('\nCAFs\n(n = ', length(sc_sim_deconv_comp[[ct]]$ordered_cell_ids$caf), ')')),
+								# blank_plot() +
+								# 	labs(y = 'Cancer\ncells') +
+								# 	scale_y_continuous(position = 'right') +
+								# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
+								# blank_plot() +
+								# 	labs(y = 'CAFs') +
+								# 	scale_y_continuous(position = 'right') +
+								# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
+								blank_plot(),
+								nrow = 5,
 								ncol = 1,
-								rel_heights = c(4, 15, 5, 5)
+								rel_heights = c(4, 15, 5, 5, 1)
 							),
 							plot_grid(
 								plotlist = c(
@@ -3314,12 +3398,18 @@ print(
 										theme(plot.margin = unit(c(11, 5.5, 5.5, 0), 'pt')) +
 										labs(title = deconv_plot_args_per_ct[[ct]]$plot_title)
 									),
-									sc_sim_deconv_comp_figures[c('purity_bar', 'ccle_bar', 'heatmap', 'cancer', 'caf')]
+									sc_sim_deconv_comp_figures[c('purity_bar', 'ccle_bar', 'heatmap', 'cancer', 'caf')],
+	                                list(
+	                                    blank_plot() +
+	                                        scale_x_continuous(position = 'top') +
+	                                        theme(axis.title.x = element_text(), plot.margin = unit(c(4.5, 0, 0, 0), 'pt')) +
+	                                        labs(x = 'Genes')
+	                                )
 								),
-								nrow = 6,
+								nrow = 7,
 								ncol = 1,
 								align = 'v',
-								rel_heights = c(2, 1, 1, 15, 5, 5)
+								rel_heights = c(2, 1, 1, 15, 5, 5, 1)
 							),
 							nrow = 1,
 							ncol = 3,
@@ -3332,7 +3422,7 @@ print(
 					plot_grid(
 						blank_plot(),
 						get_legend(
-							sc_sim_deconv_comp$brca$filtered_deconv_figures$purity_bar +
+							simulated_deconv_plots$brca$plots$purity_bar +
 								guides(fill = guide_colourbar(title.position = 'right')) +
 								theme(
 									legend.justification = c(0, 1),
@@ -3343,7 +3433,7 @@ print(
 								labs(fill = 'Correlation with purity\n')
 						),
 						get_legend(
-							sc_sim_deconv_comp$brca$filtered_deconv_figures$ccle_bar +
+							simulated_deconv_plots$brca$plots$ccle_bar +
 								guides(fill = guide_colourbar(title.position = 'right')) +
 								theme(
 									legend.justification = c(0, 1),
@@ -3354,7 +3444,7 @@ print(
 								labs(fill = 'Tumours vs. cell lines\n')
 						),
 						get_legend(
-							sc_sim_deconv_comp$brca$filtered_deconv_figures$heatmap +
+							simulated_deconv_plots$brca$plots$heatmap +
 								guides(fill = guide_colourbar(title.position = 'right')) +
 								theme(
 									legend.justification = c(0, 1),
@@ -3366,7 +3456,7 @@ print(
 								labs(fill = 'Correlation\n')
 						),
 						get_legend(
-							sc_sim_deconv_comp$brca$sc_heatmaps_filtered[[1]] +
+							sc_sim_deconv_comp$brca$sc_heatmaps_unfiltered$expression_level_cc_rm[[1]] +
 								guides(fill = guide_colourbar(title.position = 'right')) +
 								theme(
 									legend.justification = c(0, 1),
@@ -3401,8 +3491,7 @@ dev.off()
 
 
 
-# Figure to show single cell analysis using lenient CAF definitions, for 3 cancer types, in the same format as for analysis of
-# scran-normalised data:
+# Figure to show single cell analysis using lenient CAF definitions, for 3 cancer types, in the same format as for analysis of scran-normalised data:
 
 sc_cancer_caf_heatmap_lenient_final <- sapply(
     names(sc_cancer_caf)[grepl('_lenient', names(sc_cancer_caf))],
@@ -3442,11 +3531,7 @@ sc_cancer_caf_heatmap_lenient_final <- sapply(
     USE.NAMES = TRUE
 )
 
-cairo_pdf(
-    '../data_and_figures/final_figures_resubmission/S6.pdf',
-    width = 12,
-    height = 15.5
-)
+cairo_pdf('../data_and_figures/final_figures_resubmission/S6.pdf', width = 12, height = 15.7)
 
 print(
 	plot_grid(
@@ -3544,7 +3629,7 @@ print(
 					function(ct) {
 
 						sc_sim_deconv_comp_figures <- sapply(
-							c(sc_sim_deconv_comp[[ct]]$filtered_deconv_figures, sc_sim_deconv_comp[[ct]]$sc_heatmaps_filtered),
+							c(simulated_deconv_plots[[ct]]$plots, sc_sim_deconv_comp[[ct]]$sc_heatmaps_unfiltered$expression_level_cc_rm),
 							function(x) x + theme(legend.position = 'none', plot.title = element_blank(), axis.title.y = element_blank()),
 							simplify = FALSE,
 							USE.NAMES = TRUE
@@ -3558,17 +3643,56 @@ print(
 							plot_grid(
 								blank_plot(),
 								sc_sim_deconv_comp_figures$axis_labels,
-								blank_plot() +
-									labs(y = 'Cancer\ncells') +
-									scale_y_continuous(position = 'right') +
-									theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
-								blank_plot() +
-									labs(y = 'CAFs') +
-									scale_y_continuous(position = 'right') +
-									theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
-								nrow = 4,
+								ggplot(data.frame(x = 0:1, y = 0:1), aes(x = x, y = y)) +
+	                                geom_point(size = 0, colour = 'white') +
+	                                geom_segment(
+	                                    aes(x = 0.65, xend = 0.65, y = 0.05, yend = 0.95),
+	                                    arrow = arrow(ends = 'both', length = unit(5, 'pt'))
+	                                ) +
+	                                scale_x_continuous(expand = c(0, 0)) +
+	                                scale_y_continuous(expand = c(0, 0)) +
+	                                theme(
+	                                    axis.text = element_blank(),
+	                                    axis.title.x = element_blank(),
+	                                    axis.title.y = element_text(vjust = -5),
+	                                    axis.ticks = element_blank(),
+	                                    axis.ticks.length = unit(0, 'pt'),
+	                                    plot.background = element_blank(),
+	                                    panel.background = element_blank(),
+	                                    plot.margin = unit(c(5.5, 0, 1.25, 5.5), 'pt')
+	                                ) +
+	                                labs(y = paste0('Cancer\ncells\n(n = ', length(sc_sim_deconv_comp[[ct]]$ordered_cell_ids$cancer), ')')),
+	                            ggplot(data.frame(x = 0:1, y = 0:1), aes(x = x, y = y)) +
+	                                geom_point(size = 0, colour = 'white') +
+	                                geom_segment(
+	                                    aes(x = 0.65, xend = 0.65, y = 0.05, yend = 0.95),
+	                                    arrow = arrow(ends = 'both', length = unit(5, 'pt'))
+	                                ) +
+	                                scale_x_continuous(expand = c(0, 0)) +
+	                                scale_y_continuous(expand = c(0, 0)) +
+	                                theme(
+	                                    axis.text = element_blank(),
+	                                    axis.title.x = element_blank(),
+	                                    axis.title.y = element_text(vjust = -5),
+	                                    axis.ticks = element_blank(),
+	                                    axis.ticks.length = unit(0, 'pt'),
+	                                    plot.background = element_blank(),
+	                                    panel.background = element_blank(),
+	                                    plot.margin = unit(c(5.5, 0, 1.25, 5.5), 'pt')
+	                                ) +
+	                                labs(y = paste0('\nCAFs\n(n = ', length(sc_sim_deconv_comp[[ct]]$ordered_cell_ids$caf), ')')),
+								# blank_plot() +
+								# 	labs(y = 'Cancer\ncells') +
+								# 	scale_y_continuous(position = 'right') +
+								# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
+								# blank_plot() +
+								# 	labs(y = 'CAFs') +
+								# 	scale_y_continuous(position = 'right') +
+								# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
+								blank_plot(),
+								nrow = 5,
 								ncol = 1,
-								rel_heights = c(4, 15, 5, 5)
+								rel_heights = c(4, 15, 5, 5, 1)
 							),
 							plot_grid(
 								plotlist = c(
@@ -3577,12 +3701,18 @@ print(
 										theme(plot.margin = unit(c(11, 5.5, 5.5, 0), 'pt')) +
 										labs(title = sc_cancer_caf_heatmaps_args[[ct]]$annotations_title)
 									),
-									sc_sim_deconv_comp_figures[c('purity_bar', 'ccle_bar', 'heatmap', 'cancer', 'caf')]
+									sc_sim_deconv_comp_figures[c('purity_bar', 'ccle_bar', 'heatmap', 'cancer', 'caf')],
+	                                list(
+	                                    blank_plot() +
+	                                        scale_x_continuous(position = 'top') +
+	                                        theme(axis.title.x = element_text(), plot.margin = unit(c(4.5, 0, 0, 0), 'pt')) +
+	                                        labs(x = 'Genes')
+	                                )
 								),
-								nrow = 6,
+								nrow = 7,
 								ncol = 1,
 								align = 'v',
-								rel_heights = c(2, 1, 1, 15, 5, 5)
+								rel_heights = c(2, 1, 1, 15, 5, 5, 1)
 							),
 							nrow = 1,
 							ncol = 2,
@@ -3597,13 +3727,13 @@ print(
 			blank_plot(),
 			plot_grid(
 				get_legend(
-					sc_sim_deconv_comp$brca_lenient$filtered_deconv_figures$purity_bar +
+					simulated_deconv_plots$brca_lenient$plots$purity_bar +
 						theme(legend.justification = c(1, 1), legend.direction = 'horizontal', legend.key.width = NULL) +
 						labs(fill = 'Correlation with purity\n')
 				),
 				blank_plot(),
 				get_legend(
-					sc_sim_deconv_comp$brca_lenient$filtered_deconv_figures$heatmap +
+					simulated_deconv_plots$brca_lenient$plots$heatmap +
 						guides(fill = guide_colourbar(title.position = 'right')) +
 						# scale_fill_gradientn(
 							# colours = rev(colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(50)),
@@ -3619,13 +3749,13 @@ print(
 						labs(fill = 'Correlation\n')
 				),
 				get_legend(
-					sc_sim_deconv_comp$brca_lenient$filtered_deconv_figures$ccle_bar +
+					simulated_deconv_plots$brca_lenient$plots$ccle_bar +
 						theme(legend.justification = c(1, 1), legend.direction = 'horizontal', legend.key.width = NULL) +
 						labs(fill = 'Tumours vs. cell lines\n')
 				),
 				blank_plot(),
 				get_legend(
-					sc_sim_deconv_comp$brca_lenient$sc_heatmaps_filtered[[1]] +
+					sc_sim_deconv_comp$brca_lenient$sc_heatmaps_unfiltered$expression_level_cc_rm[[1]] +
 						theme(
 							legend.justification = c(0, 1),
 							legend.direction = 'horizontal',
@@ -3645,500 +3775,11 @@ print(
 		),
 		nrow = 6,
 		ncol = 1,
-		rel_heights =c(0.15, 1.2, 0.125, 0.95, 0.125, 1.8)
+		rel_heights = c(0.15, 1.2, 0.125, 0.95, 0.125, 1.85)
 	) +
 		draw_label('A', x = 0, y = 0.99, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2) +
-		draw_label('B', x = 0, y = 0.68, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2) +
-		draw_label('C', x = 0, y = 0.43, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2)
+		draw_label('B', x = 0, y = 0.685, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2) +
+		draw_label('C', x = 0, y = 0.435, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2)
 )
 
-dev.off()
-
-
-
-
-
-# Figures to show correlation of TCGA deconv results with patterns in single cell data:
-
-scores_data <- deconv_scores(
-    expression_data,
-    deconv_data,
-    scale_fun = function(x) x/(3*sd(x)),
-    transform_data = TRUE
-)
-
-# These are depressingly bad:
-sapply(names(deconv_data), function(ct) cor(scores_data[deconv_data[[ct]]$genes_filtered, ..ct], deconv_data[[ct]]$extra_data_score))
-sapply(names(deconv_data), function(ct) cor(deconv_data[[ct]]$new_scores, deconv_data[[ct]]$extra_data_score))
-# It's also a bit confusing, because HNSC mesenchymal-basal gets really low correlation, but the single cell pattern looks good for this one.
-
-
-
-
-
-# Make plots to compare EMT and CAF genes in single cell analysis vs simulated bulk deconvolution and vs TCGA bulk deconvolution:
-
-simulated_deconvs <- readRDS('../data_and_figures/simulated_deconvs.rds')
-simulated_bulk_data <- fread('../data_and_figures/simulated_bulk_data.csv', key = 'id')
-deconv_data <- readRDS('../data_and_figures/deconv_data.rds')
-
-ct_to_keep <- c('blca_luminal_papillary', 'blca_basal_squamous', 'brca_luminal_a', 'brca_luminal_b', 'brca_basal_like', 'brca_her2_enriched',
-    'coad', 'esca_ac', 'hnsc_mesenchymal_basal', 'hnsc_classical', 'luad_proximal_inflammatory', 'luad_proximal_proliferative',
-    'luad_terminal_respiratory_unit', 'lusc_classical', 'lusc_secretory', 'ov_differentiated', 'ov_immunoreactive', 'ov_proliferative', 'paad',
-    'read', 'stad_cin', 'stad_msi', 'ucec')
-nice_names_for_figure <- c('BLCA - Luminal-Papillary', 'BLCA - Basal-Squamous', 'BRCA - Luminal A', 'BRCA - Luminal B', 'BRCA - Basal-like',
-    'BRCA - HER2-enriched', 'COAD', 'ESCA - Adenocarcinoma', 'HNSC - Malignant-Basal', 'HNSC - Classical', 'LUAD - Squamoid', 'LUAD - Magnoid',
-    'LUAD - Bronchioid', 'LUSC - Classical', 'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive', 'OV - Proliferative', 'PAAD', 'READ',
-    'STAD - CIN', 'STAD - MSI', 'UCEC')
-
-# The following doesn't make sense any more...
-sc_to_bulk_names <- list(
-	brca = c('BRCA - Luminal A', 'BRCA - Luminal B', 'BRCA - Basal-like', 'BRCA - HER2-enriched'),
-    coadread = c('COADREAD - Colon', 'COADREAD - Rectum'),
-    hnsc = c('HNSC - Malignant-Basal', 'HNSC - Classical', 'HNSC - Atypical'),
-    lihc = 'LIHC',
-    lung = c('LUAD - Squamoid', 'LUAD - Magnoid', 'LUSC - Basal', 'LUSC - Classical', 'LUSC - Primitive', 'LUSC - Secretory'),
-    paad = 'PAAD'
-)
-
-# Get genes from single cell data and TCGA deconv data:
-genes_sc <- unique(unlist(lapply(sc_cancer_caf, `[[`, 'genes_filtered')))
-genes_tcga <- unique(unlist(lapply(deconv_data[unlist(sc_to_bulk_names)], `[[`, 'genes_filtered')))
-genes_simulated <- unique(unlist(lapply(simulated_deconvs, `[[`, 'genes_filtered')))
-
-# Calculate scores from transformed bulk (TCGA and simulated) expression data:
-scores_data_tcga <- deconv_scores(
-    expression_data,
-    deconv_data[unlist(sc_to_bulk_names)],
-    scale_fun = function(x) x/(3*sd(x[!is.na(x)])),
-    transform_data = TRUE,
-    additional_genes = unique(c(genes_sc[genes_sc %in% names(expression_data)], genes_simulated[genes_simulated %in% names(expression_data)]))
-)
-
-# There are some NAs in the following, which we allowed thanks to the altered scale_fun which ignores the NAs during the scaling.  Perhaps we should
-# remove these genes altogether.
-
-# Note that since the simulated bulk data was defined from the single cell data, all the genes in genes_sc will be in names(simulated_bulk_data).
-
-scores_data_simulated <- deconv_scores(
-    simulated_bulk_data,
-    simulated_deconvs,
-    scale_fun = function(x) x/(3*sd(x[!is.na(x)])),
-    transform_data = TRUE,
-    additional_genes = unique(c(genes_sc, genes_tcga[genes_tcga %in% names(simulated_bulk_data)]))
-)
-
-scores <- sapply(
-    names(sc_metadata),
-    function(ct) {
-
-        sc_data <- eval(sc_metadata[[ct]]$read_quote)
-
-        all_genes <- unique(
-            c(
-                sc_cancer_caf[[ct]]$genes_filtered,
-                simulated_deconvs[[ct]]$genes_filtered,
-                unlist(lapply(deconv_data[sc_to_bulk_names[[ct]]], `[[`, 'genes_filtered'))
-            )
-        )
-
-        scores_tcga <- scores_data_tcga[all_genes, setNames(rowMeans(.SD), gene), .SDcols = sc_to_bulk_names[[ct]]]
-
-        scores_simulated <- scores_data_simulated[all_genes, setNames(get(ct), gene)]
-
-        # In the following, would it be sensible to reverse the log before taking means?
-
-        # I was going to take the top and bottom 20 from the sorted vector of the following gene scores, then score genes by correlation with these
-		# head and tail genes.  But it's probably enough to use these scores as they are (or after log, to make them normally distributed).
-
-        scores_sc <- sc_data[cell_type == 'cancer', colMeans(.SD), .SDcols = all_genes[all_genes %in% names(sc_data)]]/
-			sc_data[cell_type == 'fibroblast', colMeans(.SD), .SDcols = all_genes[all_genes %in% names(sc_data)]]
-
-        out <- data.table(gene = all_genes, sc_score = scores_sc[all_genes], tcga_score = scores_tcga, simulated_score = scores_simulated)
-
-        out[, sc_score := log10(sc_score)][
-            ,
-            c('sc_score', 'tcga_score', 'simulated_score') := lapply(
-                .SD,
-                function(x) {
-                    sapply(
-                        x,
-                        function(y) switch(
-                            (!is.na(y) & !is.infinite(y)) + 1,
-                            NA,
-                            (y - mean(x[!is.na(x) & !is.infinite(x)]))/sd(x[!is.na(x) & !is.infinite(x)])
-                        )
-                    )
-                }
-            ),
-            .SDcols = -'gene'
-        ]
-
-        out
-
-    },
-    simplify = FALSE,
-    USE.NAMES = TRUE
-)
-
-
-
-
-
-# Function to make combined plot for given pair of variable names:
-
-plot_var_pair <- function(
-
-    var_pair,
-    scores_list,
-    n_row,
-    n_col,
-    sc_genes = NULL,
-    simulated_genes = NULL,
-    tcga_genes = NULL,
-    collate_genes_fun = intersect, # Could also use union
-    annotate_coords = c(3/4, 20/21),
-    plot_titles = names(scores_list),
-    cor_method = 'spearman',
-    var_axis_titles = var_pair,
-    rel_widths = rep(1, n_col),
-    rel_heights = rep(1, n_row)
-
-) {
-
-    collate_genes_fun <- match.fun(collate_genes_fun)
-
-    n <- length(scores_list)
-
-    if(
-        !is.null(get(paste0(strsplit(var_pair[1], '_')[[1]][1], '_genes'))) &
-        !is.null(get(paste0(strsplit(var_pair[2], '_')[[1]][1], '_genes')))
-    ) {
-        plot_data <- sapply(
-            names(scores_list),
-            function(ct) {
-                scores_list[[ct]][
-                    gene %in% collate_genes_fun(
-                        get(paste0(strsplit(var_pair[1], '_')[[1]][1], '_genes'))[[ct]],
-                        get(paste0(strsplit(var_pair[2], '_')[[1]][1], '_genes'))[[ct]]
-                    ),
-                    ..var_pair
-                ][!is.na(get(var_pair[1])) & !is.na(get(var_pair[2]))]
-            },
-            simplify = FALSE,
-            USE.NAMES = TRUE
-        )
-    } else {
-        plot_data <- sapply(
-            scores_list,
-            function(dt) dt[, ..var_pair][!is.na(get(var_pair[1])) & !is.na(get(var_pair[2]))],
-            simplify = FALSE,
-            USE.NAMES = TRUE
-        )
-    }
-
-    lims_data <- sapply(
-        sapply(
-            var_pair,
-            function(v) sapply(plot_data, function(dt) c(floor(10*min(dt[[v]]))/10, ceiling(10*max(dt[[v]]))/10)),
-            simplify = FALSE,
-            USE.NAMES = TRUE
-        ),
-        function(m) c(min(m[1, ]), max(m[2, ]))
-    )
-
-    if(n == n_row*n_col) {
-
-        plot_grid(
-            plotlist = lapply(
-                1:n,
-                function(i) {
-                    ggplot(plot_data[[i]], aes(get(var_pair[1]), get(var_pair[2]))) +
-                        geom_vline(xintercept = 0, linetype = 'dashed', colour = 'grey', size = 0.25) +
-                        geom_hline(yintercept = 0, linetype = 'dashed', colour = 'grey', size = 0.25) +
-                        geom_point() +
-                        geom_smooth(method = 'lm', se = FALSE) +
-                        theme_test() +
-                        lims(x = lims_data[, var_pair[1]], y = lims_data[, var_pair[2]]) +
-                        annotate(
-                            'text',
-                            x = annotate_coords[1]*lims_data[, var_pair[1]][2],
-                            y = annotate_coords[2]*lims_data[, var_pair[2]][1],
-                            label = TeX(sprintf('$\\rho = %.2f$', plot_data[[i]][, cor(get(var_pair[1]), get(var_pair[2]), method = cor_method)]))
-                        ) +
-                        labs(title = plot_titles[i]) +
-                        theme(
-                            axis.text.x = switch((i %in% (n - n_col + 1):n) + 1, element_blank(), NULL),
-                            axis.text.y = switch((i %in% ((0:((n / n_col) - 1))*n_col + 1)) + 1, element_blank(), NULL),
-                            axis.title = element_blank(),
-                            plot.margin = unit(
-                                c(
-									5.5,
-									5.5,
-									switch((i %in% (n - n_col + 1):n) + 1, 5.5, 20),
-									switch((i %in% ((0:((n / n_col) - 1))*n_col + 1)) + 1, 5.5, 20)
-								),
-                                'pt'
-                            )
-                        )
-                }
-            ),
-            nrow = n_row,
-            ncol = n_col,
-            # Don't need align = 'h' any more because no plots that aren't on the bottom row will have x axis text, and aligning introduces space
-			# where the x axis text would go if it was there...
-            rel_widths = rel_widths,
-            rel_heights = rel_heights
-        ) +
-            draw_label(var_axis_titles[1], x = 0.5, y = 0, vjust = -0.5, size = 12) +
-            draw_label(var_axis_titles[2], x = 0, y = 0.5, vjust = 1.3, angle = 90, size = 12)
-
-    } else {
-
-        plot_grid(
-            plot_grid(
-                plotlist = lapply(
-                    1:(n_col*(n %/% n_col)),
-                    function(i) {
-                        ggplot(plot_data[[i]], aes(get(var_pair[1]), get(var_pair[2]))) +
-                            geom_vline(xintercept = 0, linetype = 'dashed', colour = 'grey', size = 0.25) +
-                            geom_hline(yintercept = 0, linetype = 'dashed', colour = 'grey', size = 0.25) +
-                            geom_point() +
-                            geom_smooth(method = 'lm', se = FALSE) +
-                            theme_test() +
-                            lims(x = lims_data[, var_pair[1]], y = lims_data[, var_pair[2]]) +
-                            annotate(
-                                'text',
-                                x = annotate_coords[1]*lims_data[, var_pair[1]][2],
-                                y = annotate_coords[2]*lims_data[, var_pair[2]][1],
-                                label = TeX(sprintf('$\\rho = %.2f$', plot_data[[i]][, cor(get(var_pair[1]), get(var_pair[2]), method = cor_method)]))
-                            ) +
-                            labs(title = plot_titles[i]) +
-                            theme(
-                                axis.text.x = switch(
-									(i %in% (n_col*(n %/% n_col) - (n_col - (n %% n_col)) + 1):(n_col*(n %/% n_col))) + 1,
-									element_blank(),
-									NULL
-								),
-                                axis.text.y = switch((i %in% ((0:((n %/% n_col) - 1))*n_col + 1)) + 1, element_blank(), NULL),
-                                axis.title = element_blank(),
-                                plot.margin = unit(c(5.5, 5.5, 5.5, switch((i %in% ((0:((n %/% n_col) - 1))*n_col + 1)) + 1, 5.5, 20)), 'pt')
-                            )
-                    }
-                ),
-                nrow = n %/% n_col,
-                ncol = n_col,
-                align = 'h',
-                rel_widths = rel_widths,
-                rel_heights = rel_heights[-length(rel_heights)]
-            ),
-            plot_grid(
-                plotlist = lapply(
-                    (n - (n %% n_col) + 1):n,
-                    function(i) {
-                        ggplot(plot_data[[i]], aes(get(var_pair[1]), get(var_pair[2]))) +
-                            geom_vline(xintercept = 0, linetype = 'dashed', colour = 'grey', size = 0.25) +
-                            geom_hline(yintercept = 0, linetype = 'dashed', colour = 'grey', size = 0.25) +
-                            geom_point() +
-                            geom_smooth(method = 'lm', se = FALSE) +
-                            theme_test() +
-                            lims(x = lims_data[, var_pair[1]], y = lims_data[, var_pair[2]]) +
-                            annotate(
-                                'text',
-                                x = annotate_coords[1]*lims_data[, var_pair[1]][2],
-                                y = annotate_coords[2]*lims_data[, var_pair[2]][1],
-                                label = TeX(sprintf('$\\rho = %.2f$', plot_data[[i]][, cor(get(var_pair[1]), get(var_pair[2]), method = cor_method)]))
-                            ) +
-                            labs(title = plot_titles[i]) +
-                            theme(
-                                axis.text.y = switch((i == n - (n %% n_col) + 1) + 1, element_blank(), NULL),
-                                axis.title = element_blank(),
-                                plot.margin = unit(c(5.5, 5.5, 20, switch((i == n - (n %% n_col) + 1) + 1, 5.5, 20)), 'pt')
-                            )
-                    }
-                ),
-                nrow = 1,
-                ncol = n_col,
-                align = 'h',
-                rel_widths = rel_widths
-            ),
-            nrow = 2,
-            ncol = 1,
-            rel_heights = c(sum(rel_heights[-length(rel_heights)]), rel_heights[length(rel_heights)])
-        ) +
-            draw_label(var_axis_titles[1], x = 0.5, y = 0, vjust = -0.5, size = 12) +
-            draw_label(var_axis_titles[2], x = 0, y = 0.5, vjust = 1.3, angle = 90, size = 12)
-
-    }
-
-}
-
-
-
-
-
-# Write plots to PDF:
-
-pdf('../data_and_figures/signature_concordance.pdf', width = 12, height = 6)
-
-plot_var_pair(
-    c('sc_score', 'simulated_score'),
-    scores,
-    n_row = 2,
-    n_col = 4,
-    plot_titles = sapply(sc_cancer_caf_heatmaps_args, `[[`, 'annotations_title'),
-    var_axis_titles = c('scRNA-seq score', 'Simulated deconvolution score'),
-    rel_widths = c(1.115, 1, 1, 1),
-    rel_heights = c(1, 1.075)
-)
-
-plot_var_pair(
-    c('sc_score', 'tcga_score'),
-    scores,
-    n_row = 2,
-    n_col = 4,
-    plot_titles = sapply(sc_cancer_caf_heatmaps_args, `[[`, 'annotations_title'),
-    var_axis_titles = c('scRNA-seq score', 'TCGA deconvolution score'),
-    rel_widths = c(1.115, 1, 1, 1),
-    rel_heights = c(1, 1.075)
-)
-
-plot_var_pair(
-    c('simulated_score', 'tcga_score'),
-    scores,
-    n_row = 2,
-    n_col = 4,
-    plot_titles = sapply(sc_cancer_caf_heatmaps_args, `[[`, 'annotations_title'),
-    var_axis_titles = c('Simulated deconvolution score', 'TCGA deconvolution score'),
-    rel_widths = c(1.115, 1, 1, 1),
-    rel_heights = c(1, 1.075)
-)
-
-# Alternative, using pairwise intersections of gene sets:
-
-sc_genes <- sapply(sc_cancer_caf, `[[`, 'genes_filtered', simplify = FALSE, USE.NAMES = TRUE)
-simulated_genes <- sapply(simulated_deconvs, `[[`, 'genes_filtered', simplify = FALSE, USE.NAMES = TRUE)
-tcga_genes <- sapply(
-    names(sc_to_bulk_names),
-    function(ct) unique(unlist(lapply(deconv_data[sc_to_bulk_names[[ct]]], `[[`, 'genes_filtered'))),
-    simplify = FALSE,
-    USE.NAMES = TRUE
-)
-
-plot_var_pair(
-    c('sc_score', 'simulated_score'),
-    scores,
-    n_row = 2,
-    n_col = 4,
-    sc_genes = sc_genes,
-    simulated_genes = simulated_genes,
-    plot_titles = sapply(sc_cancer_caf_heatmaps_args, `[[`, 'annotations_title'),
-    var_axis_titles = c('scRNA-seq score', 'Simulated deconvolution score'),
-    rel_widths = c(1.115, 1, 1, 1),
-    rel_heights = c(1, 1.075)
-)
-
-plot_var_pair(
-    c('sc_score', 'tcga_score'),
-    scores,
-    n_row = 2,
-    n_col = 4,
-    sc_genes = sc_genes,
-    tcga_genes = tcga_genes,
-    plot_titles = sapply(sc_cancer_caf_heatmaps_args, `[[`, 'annotations_title'),
-    var_axis_titles = c('scRNA-seq score', 'TCGA deconvolution score'),
-    rel_widths = c(1.115, 1, 1, 1),
-    rel_heights = c(1, 1.075)
-)
-
-plot_var_pair(
-    c('simulated_score', 'tcga_score'),
-    scores,
-    n_row = 2,
-    n_col = 4,
-    simulated_genes = simulated_genes,
-    tcga_genes = tcga_genes,
-    plot_titles = sapply(sc_cancer_caf_heatmaps_args, `[[`, 'annotations_title'),
-    var_axis_titles = c('Simulated deconvolution score', 'TCGA deconvolution score'),
-    rel_widths = c(1.115, 1, 1, 1),
-    rel_heights = c(1, 1.075)
-)
-
-# Pairwise unions:
-
-plot_var_pair(
-    c('sc_score', 'simulated_score'),
-    scores,
-    n_row = 2,
-    n_col = 4,
-    sc_genes = sc_genes,
-    simulated_genes = simulated_genes,
-    collate_genes_fun = union,
-    plot_titles = sapply(sc_cancer_caf_heatmaps_args, `[[`, 'annotations_title'),
-    var_axis_titles = c('scRNA-seq score', 'Simulated deconvolution score'),
-    rel_widths = c(1.115, 1, 1, 1),
-    rel_heights = c(1, 1.075)
-)
-
-plot_var_pair(
-    c('sc_score', 'tcga_score'),
-    scores,
-    n_row = 2,
-    n_col = 4,
-    sc_genes = sc_genes,
-    tcga_genes = tcga_genes,
-    collate_genes_fun = union,
-    plot_titles = sapply(sc_cancer_caf_heatmaps_args, `[[`, 'annotations_title'),
-    var_axis_titles = c('scRNA-seq score', 'TCGA deconvolution score'),
-    rel_widths = c(1.115, 1, 1, 1),
-    rel_heights = c(1, 1.075)
-)
-
-plot_var_pair(
-    c('simulated_score', 'tcga_score'),
-    scores,
-    n_row = 2,
-    n_col = 4,
-    simulated_genes = simulated_genes,
-    tcga_genes = tcga_genes,
-    collate_genes_fun = union,
-    plot_titles = sapply(sc_cancer_caf_heatmaps_args, `[[`, 'annotations_title'),
-    var_axis_titles = c('Simulated deconvolution score', 'TCGA deconvolution score'),
-    rel_widths = c(1.115, 1, 1, 1),
-    rel_heights = c(1, 1.075)
-)
-
-dev.off()
-
-# Single one (just TCGA deconv vs. scRNAseq) for paper supplementary:
-
-pdf('../data_and_figures/signature_concordance_sc_tcga.pdf', width = 6, height = 9)
-plot_var_pair(
-    c('sc_score', 'tcga_score'),
-    scores[c('hnsc', 'lung', 'paad', 'lihc', 'tnbc')],
-    n_row = 3,
-    n_col = 2,
-    sc_genes = sc_genes,
-    tcga_genes = tcga_genes,
-    collate_genes_fun = union,
-    plot_titles = sapply(sc_cancer_caf_heatmaps_args[c('hnsc', 'lung', 'paad', 'lihc', 'tnbc')], `[[`, 'annotations_title'),
-    var_axis_titles = c('scRNA-seq score', 'TCGA deconvolution score'),
-    rel_widths = c(1.115, 1),
-    rel_heights = c(1, 1, 1.075)
-)
-dev.off()
-
-pdf('../data_and_figures/signature_concordance_sc_tcga_supp.pdf', width = 6, height = 3.2)
-plot_var_pair(
-    c('sc_score', 'tcga_score'),
-    scores[c('brca', 'coadread')],
-    n_row = 1,
-    n_col = 2,
-    sc_genes = sc_genes,
-    tcga_genes = tcga_genes,
-    collate_genes_fun = union,
-    plot_titles = sapply(sc_cancer_caf_heatmaps_args[c('brca', 'coadread')], `[[`, 'annotations_title'),
-    var_axis_titles = c('scRNA-seq score', 'TCGA deconvolution score'),
-    rel_widths = c(1.115, 1)
-)
 dev.off()
