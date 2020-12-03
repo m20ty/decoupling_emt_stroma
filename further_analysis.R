@@ -109,8 +109,8 @@ barplot_annotations_data[
     cancer_type := factor(cancer_type, levels = .SD[, .(mean_score = mean(score)), by = cancer_type][order(-mean_score), cancer_type])
 ]
 
-# The following should work with axis.text.x = element_markdown(angle = 55, hjust = 1) in the ggplot() call, but sadly I can't install ggtext
-# (the package from where the element_markdown() function comes):
+# The following should work with axis.text.x = element_markdown(angle = 55, hjust = 1) in the ggplot() call, but sadly I can't install ggtext (the
+# package from where the element_markdown() function comes):
 # barplot_annotations_data[
 #     ,
 #     cancer_type := paste0(
@@ -1385,8 +1385,8 @@ clin_cor_genes <- setNames(
     c('deconv_emt', 'deconv_caf')
 )
 
-# If I use the binning procedure from scrabble::score() in the following, it seems as though the significance values all become negative - their strengths
-# and their distributions in the heatmaps are basically the same, just negative.
+# If I use the binning procedure from scrabble::score() in the following, it seems as though the significance values all become negative - their
+# strengths and their distributions in the heatmaps are basically the same, just negative.
 
 clin_cor <- sapply(
     names(emt_types),
@@ -1482,7 +1482,8 @@ clin_cor$deconv_caf[, nice_test_name := mapvalues(test_name, ct_to_keep, nice_na
 sig_lab <- expression(
     atop(
         `\textbf{Significance of association}` = paste("", bold(paste("Significance of association"))),
-        `-log_{10}(p) $\times$ sign(fold change)` = paste("-log", phantom()[{paste("10")}], "(", "", "p", ")", " ", "", phantom() %*% phantom(), "sign",
+        `-log_{10}(p) $\times$ sign(fold change)` = paste("-log", phantom()[{paste("10")}], "(", "", "p", ")", " ", "", phantom() %*% phantom(),
+            "sign",
             # " sign",
             "(", "fold change", ")", "")
     )
@@ -1498,10 +1499,14 @@ clin_cor_heatmaps <- sapply(
             y_var = 'nice_variable_name',
             fill_var = 'sigval',
             hclust_method = NULL,
-            x_factor_levels = with(ct_hclust, mapvalues(labels[order][labels[order] %in% clin_cor[[emt_type]]$test_name], ct_to_keep, nice_names_for_figure)),
-            y_factor_levels = c('Lymph node metastasis', 'N stage', 'Lymphovascular invasion', 'Grade', 'T stage', 'Reduced survival', 'Therapy resistance'),
-            colours = c('#276419', '#4D9221', '#7FBC41', '#B8E186', '#E6F5D0', '#F7F7F7', '#F7F7F7', '#F7F7F7', '#F7F7F7', '#F7F7F7',
-						'#FDE0EF', '#F1B6DA', '#DE77AE', '#C51B7D', '#8E0152'), # PiYG palette with fatter waist...
+            x_factor_levels = with(
+                ct_hclust,
+                mapvalues(labels[order][labels[order] %in% clin_cor[[emt_type]]$test_name], ct_to_keep, nice_names_for_figure)
+            ),
+            y_factor_levels = c('Lymph node metastasis', 'N stage', 'Lymphovascular invasion', 'Grade', 'T stage', 'Reduced survival',
+                'Therapy resistance'),
+            colours = c('#276419', '#4D9221', '#7FBC41', '#B8E186', '#E6F5D0', '#F7F7F7', '#F7F7F7', '#F7F7F7', '#F7F7F7', '#F7F7F7', '#FDE0EF',
+                '#F1B6DA', '#DE77AE', '#C51B7D', '#8E0152'), # PiYG palette with fatter waist...
             limits = c(-3, 3),
             breaks = c(-3, -2, -1, 0, 1, 2, 3),
             labels = c('-3' = '\u2264 -3', '-2' = '-2', '-1' = '-1', '0' = '0', '1' = '1', '2' = '2', '3' = '\u2265 3'),
@@ -1571,8 +1576,8 @@ dev.off()
 sig_lab_caf <- expression(
     atop(
         `\textbf{Significance of association for CAFs}` = paste("", bold(paste("Significance of association for CAFs"))),
-        `-log_{10}(p_{CAF}) $\times$ sign(fold change)` = paste("-log", phantom()[{paste("10")}], "(", "", "p", phantom()[{paste("CAF")}], ")", "", " ", "",
-            phantom() %*% phantom(), " sign", "(", "fold change", ")", "")
+        `-log_{10}(p_{CAF}) $\times$ sign(fold change)` = paste("-log", phantom()[{paste("10")}], "(", "", "p", phantom()[{paste("CAF")}], ")", "",
+            " ", "", phantom() %*% phantom(), " sign", "(", "fold change", ")", "")
     )
 )
 
@@ -1580,13 +1585,12 @@ sig_lab_caf <- expression(
 sig_lab_emt <- expression(
     atop(
         `\textbf{Significance of association for pEMT}` = paste("", bold(paste("Significance of association for pEMT"))),
-        `-log_{10}(p_{pEMT}) $\times$ sign(fold change)` = paste("-log", phantom()[{paste("10")}], "(", "", "p", phantom()[{paste("pEMT")}], ")", "", " ", "",
-            phantom() %*% phantom(), " sign", "(", "fold change", ")", "")
+        `-log_{10}(p_{pEMT}) $\times$ sign(fold change)` = paste("-log", phantom()[{paste("10")}], "(", "", "p", phantom()[{paste("pEMT")}], ")", "",
+            " ", "", phantom() %*% phantom(), " sign", "(", "fold change", ")", "")
     )
 )
 
 # Scatterplot including all clinical features and cancer types:
-# THIS WILL GO IN A SUPPLEMENTARY FIGURE: DECIDE WHICH ONE!
 
 emt_caf_sig_data <- merge(clin_cor$deconv_emt, clin_cor$deconv_caf, by = c('nice_test_name', 'nice_variable_name'))[
     ,
@@ -1600,7 +1604,9 @@ emt_caf_sig_data <- merge(clin_cor$deconv_emt, clin_cor$deconv_caf, by = c('nice
     )
 ]
 
-pval_adj_threshold <- adjust_threshold_bh(c(clin_cor$deconv_emt[variable_name != 'pathologic_m', pval], clin_cor$deconv_caf[variable_name != 'pathologic_m', pval]))
+pval_adj_threshold <- adjust_threshold_bh(
+    c(clin_cor$deconv_emt[variable_name != 'pathologic_m', pval], clin_cor$deconv_caf[variable_name != 'pathologic_m', pval])
+)
 
 pdf('../data_and_figures/final_figures_resubmission/S13.pdf', width = 7, height = 4.5)
 ggplot(emt_caf_sig_data[variable_name != 'M stage'], aes(x = sig_caf, y = sig_emt)) +
@@ -1611,7 +1617,8 @@ ggplot(emt_caf_sig_data[variable_name != 'M stage'], aes(x = sig_caf, y = sig_em
         aes(label = str_extract(test_name, '^[A-Z]+')),
         data = emt_caf_sig_data[
             variable_name != 'M stage' & (
-                sig_emt > -log10(pval_adj_threshold) | sig_emt < log10(pval_adj_threshold) | sig_caf > -log10(pval_adj_threshold) | sig_caf < log10(pval_adj_threshold)
+                sig_emt > -log10(pval_adj_threshold) | sig_emt < log10(pval_adj_threshold) | sig_caf > -log10(pval_adj_threshold) |
+                    sig_caf < log10(pval_adj_threshold)
             )
         ],
         point.padding = 0.1,
@@ -1636,12 +1643,18 @@ scatterplots_data <- rbindlist(
     lapply(
         c('Grade', 'Lymph node metastasis', 'Lymphovascular invasion', 'M stage', 'N stage', 'Reduced survival', 'T stage', 'Therapy resistance'),
         function(clin_feat) {
-            pthresh <- adjust_threshold_bh(c(clin_cor$deconv_emt[nice_variable_name == clin_feat, pval], clin_cor$deconv_caf[nice_variable_name == clin_feat, pval]))
+            pthresh <- adjust_threshold_bh(
+                c(clin_cor$deconv_emt[nice_variable_name == clin_feat, pval], clin_cor$deconv_caf[nice_variable_name == clin_feat, pval])
+            )
             dt <- emt_caf_sig_data[variable_name == clin_feat]
             if(is.na(pthresh)) {
                 dt[, sig := 'not_significant']
             } else {
-                dt[, sig := switch((abs(sig_emt) > -log10(pthresh) | abs(sig_caf) > -log10(pthresh)) + 1, 'not_significant', 'significant'), by = test_name]
+                dt[
+                    ,
+                    sig := switch((abs(sig_emt) > -log10(pthresh) | abs(sig_caf) > -log10(pthresh)) + 1, 'not_significant', 'significant'),
+                    by = test_name
+                ]
             }
             return(dt)
         }

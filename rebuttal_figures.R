@@ -131,9 +131,9 @@ classification_data <- sc_data[
     by = id
 ]
 
-# The following deals with cases where all cells of one subclone get changed to 'ambiguous' at some point, presumably because their
-# I disagree with the authors as to their malignancy.  This happened in HNSCC, where all cells in malignant clone 2 became 'ambiguous'
-# leaving only 'Patient 6: clone 1' in the final heatmap, which obviously looks odd.
+# The following deals with cases where all cells of one subclone get changed to 'ambiguous' at some point, presumably because their I disagree with
+# the authors as to their malignancy.  This happened in HNSCC, where all cells in malignant clone 2 became 'ambiguous' leaving only 'Patient 6:
+# clone 1' in the final heatmap, which obviously looks odd.
 classification_data[
     startsWith(classification, 'malignant') & patient %in% classification_data[
         startsWith(classification, 'malignant'),
@@ -151,8 +151,7 @@ plot_data <- rbindlist(
 )
 
 # Downsample where a patient is overrepresented:
-# Note the final proportion won't be 2/#patients, because you're taking a sample of size 2*sum(N)/#patients, but then of course sum(N)
-# becomes smaller.
+# Note the final proportion won't be 2/#patients, because you're taking a sample of size 2*sum(N)/#patients, but then sum(N) becomes smaller.
 set.seed(cohort_data[[cohort]]$seeds)
 downsampled_ids <- plot_data[, .N, by = .(patient, classification)][
     ,
@@ -381,8 +380,8 @@ if('cells_to_exclude' %in% names(cohort_data[[cohort]])) {
     sc_data <- sc_data[!(id %in% cohort_data[[cohort]]$cells_to_exclude)]
 }
 
-# If cohort == 'pdac_peng' and we haven't removed T8_TGGTTCCTCGCATGGC and T17_CGTGTAACAGTACACT, we can see these are the T cell and
-# CAF in the wrong clusters by the following:
+# If cohort == 'pdac_peng' and we haven't removed T8_TGGTTCCTCGCATGGC and T17_CGTGTAACAGTACACT, we can see these are the T cell and CAF in the wrong
+# clusters by the following:
 # sc_data[(cell_type == 't_cell' & sc_tsne$Y[, 1] > 35) | (cell_type == 'caf' & sc_tsne$Y[, 1] < -35), id]
 
 plot_data <- setNames(
@@ -452,9 +451,9 @@ tsne_plot_cna_score <- ggplot(plot_data, aes(x = x, y = y, colour = cna_score)) 
     scale_colour_gradientn(colours = colorRamps::matlab.like(50), limits = c(0, 1), oob = scales::squish) +
     labs(title = 'CNA score', colour = NULL, x = 't-SNE 1', y = 't-SNE 2')
 
-# The following calculation of immune score is a bit complicated, but it's designed to put all the immune cells on roughly the same scale
-# so that we don't get some immune cell types having much higher scores than the others.  It works OK but not brilliantly, possibly because
-# taking the maximum makes it more noisy.
+# The following calculation of immune score is a bit complicated, but it's designed to put all the immune cells on roughly the same scale so that we
+# don't get some immune cell types having much higher scores than the others.  It works OK but not brilliantly, possibly because taking the maximum
+# makes it more noisy.
 
 immune_cell_types <- c('B', 'B_plasma', 'DC', 'macrophage', 'mast', 'T')[
     sapply(
@@ -657,7 +656,7 @@ score_tsnes <- sapply(
 
 # Combined figure:
 
-pdf('../data_and_figures/final_figures_resubmission/R2.pdf', width = 13, height = 12)
+pdf('../data_and_figures/final_figures_resubmission/R3.pdf', width = 13, height = 12)
 
 plot_grid(
     blank_plot() +
@@ -1388,7 +1387,7 @@ dummy_legend_plot <- ggplot(
 
 dummy_legend <- get_legend(dummy_legend_plot)
 
-cairo_pdf('../data_and_figures/final_figures_resubmission/R3.pdf', width = 11, height = 12.25)
+cairo_pdf('../data_and_figures/final_figures_resubmission/R4.pdf', width = 11, height = 12.25)
 
 plot_grid(
     blank_plot() +
@@ -2168,7 +2167,7 @@ dummy_legend_plot <- ggplot(
 
 dummy_legend <- get_legend(dummy_legend_plot)
 
-cairo_pdf('../data_and_figures/final_figures_resubmission/R4.pdf', width = 11, height = 12)
+cairo_pdf('../data_and_figures/final_figures_resubmission/R2.pdf', width = 11, height = 12)
 
 plot_grid(
     blank_plot() +

@@ -120,7 +120,10 @@ if(all(c('tcga_expression_data_ucs.csv', 'tcga_meta_data_ucs.csv') %in% dir('../
     )
 
     # Get purity data:
-    purity_data <- as.data.table(read_xlsx('../../TCGA_data/UCS/1-s2.0-S1535610817300533-mmc4.xlsx', skip = 1))[, .(patient_id = gsub('-', '\\.', sample), purity = purity)]
+    purity_data <- as.data.table(read_xlsx('../../TCGA_data/UCS/1-s2.0-S1535610817300533-mmc4.xlsx', skip = 1))[
+		,
+		.(patient_id = gsub('-', '\\.', sample), purity = purity)
+	]
     meta_data <- merge(meta_data, purity_data, by = 'patient_id')
 
     setkey(expression_data, id)
@@ -136,10 +139,10 @@ if(all(c('tcga_expression_data_ucs.csv', 'tcga_meta_data_ucs.csv') %in% dir('../
 
 
 
-# This is pretty robust to changes in number of genes and to the filtering.  It doesn't make much difference if I use 90th percentile or median for gene_weights_fun.
-# Putting cell_type_weights = FALSE makes a bit of a difference (especially visible in the diagnostics), but not a great deal.  Maybe try several parameters and plot
-# all the results together, so we can decide which we prefer.  It looks like CAFs may be hard to recognise, and it could indeed be different mesenchymal components
-# among the malignant cells.
+# This is pretty robust to changes in number of genes and to the filtering.  It doesn't make much difference if I use 90th percentile or median for
+# gene_weights_fun. Putting cell_type_weights = FALSE makes a bit of a difference (especially visible in the diagnostics), but not a great deal.
+# Maybe try several parameters and plot all the results together, so we can decide which we prefer.  It looks like CAFs may be hard to recognise, and
+# it could indeed be different mesenchymal components among the malignant cells.
 
 deconv_ucs <- sapply(
 	c(150, 200, 250),
@@ -285,11 +288,12 @@ dev.off()
 
 
 
-# Save one separately - not sure if it's the "best" one, but it's good and illustrates a certain point.  The point is that I can't really get rid of the correlation
-# of the "cancer" end with myocytes (according to the diagnostics), so this end might represent a sarcoma-like component.  There are a couple of TPMs at this end,
-# which would make sense, as these are muscle-related genes.  The right end looks more like the pEMT from squamous or GI cancer types, and more like what I think of
-# as pEMT.  But, interestingly, some of the genes at the left end are found in the gynae cluster of my pEMT-CAF scores heatmap, including SACS, CAP2, TGFBR3 and QKI.
-# What could this imply about the gynae cluster?  That it's more sarcoma-like?  There are a few gynae genes around the middle, though, so this isn't a strong trend.
+# Save one separately - not sure if it's the "best" one, but it's good and illustrates a certain point.  The point is that I can't really get rid of
+# the correlation of the "cancer" end with myocytes (according to the diagnostics), so this end might represent a sarcoma-like component.  There are a
+# couple of TPMs at this end, which would make sense, as these are muscle-related genes.  The right end looks more like the pEMT from squamous or GI
+# cancer types, and more like what I think of as pEMT.  But, interestingly, some of the genes at the left end are found in the gynae cluster of my
+# pEMT-CAF scores heatmap, including SACS, CAP2, TGFBR3 and QKI. What could this imply about the gynae cluster?  That it's more sarcoma-like?  There
+# are a few gynae genes around the middle, though, so this isn't a strong trend.
 
 pdf('../data_and_figures/deconv_ucs_final.pdf', width = 10, height = 12)
 print(deconv_plot(list(deconv_plot_ucs[['n = 200, 90th percentile']]), legends_space = 0.2))

@@ -1440,7 +1440,9 @@ deconv_summary_scatterplot <- ggplot(
     within_between_clust_corr,
     aes(x = btw, y = wthn, shape = scrnaseq_avail)
 ) +
-    geom_point(size = 2, alpha = 0.75, colour = 'lightblue4') +
+    # geom_point(size = 2, alpha = 0.75, colour = 'lightblue4') +
+	geom_point(size = 2, colour = 'lightblue4', fill = 'lightblue') +
+	scale_shape_manual(values = c('No' = 21, 'Yes' = 24)) +
     # geom_text_repel(aes(label = cancer_type)) +
 	geom_text_repel(
         aes(label = cancer_type_nice),
@@ -1515,50 +1517,73 @@ tcga_codes_table$vp <- viewport(x = unit(0.5, 'npc'), y = unit(1, 'npc') - 0.5*s
 
 # Summary of agreement with scRNA-seq data:
 
-sc_deconv_comp_barplot_data <- rbindlist(
-	lapply(
-		names(sc_tcga_deconv_comp),
-		function(ct) data.table(
-			cancer_type = deconv_titles[[ct]],
-			sc_diff = sc_tcga_deconv_comp[[ct]]$sc_deconv_comp_data[
-				cell_type == 'cancer',
-				.SD[gene %in% with(deconv_data[[ct]], head(genes_filtered[ordering], 20)), mean(expression_level_cc)] -
-					.SD[gene %in% with(deconv_data[[ct]], tail(genes_filtered[ordering], 20)), mean(expression_level_cc)]
-				# by = cell_type # No point doing it per cell type, because the centring means answer for one cell type is just minus the other
-			]
-		)
-	)
-)
-
-sc_deconv_comp_barplot_data[, cancer_type := factor(cancer_type, levels = .SD[order(-sc_diff), cancer_type])]
-
-sc_deconv_comp_barplot <- ggplot(sc_deconv_comp_barplot_data, aes(x = cancer_type, y = sc_diff)) +
-	geom_col(colour = 'lightblue4', fill = 'lightblue3') +
-	theme_test() +
-	theme(axis.text.x = element_text(angle = 55, hjust = 1), axis.title.x = element_blank()) +
-	labs(y = TeX('$\\Delta$(Expression level)'))
-
-# sc_deconv_comp_scatterplot_data <- rbindlist(
+# sc_deconv_comp_barplot_data <- rbindlist(
 # 	lapply(
 # 		names(sc_tcga_deconv_comp),
-# 		function(ct) cbind(
+# 		function(ct) data.table(
 # 			cancer_type = deconv_titles[[ct]],
-# 			merge(
-# 				sc_tcga_deconv_comp[[ct]]$sc_deconv_comp_data[
-# 					gene %in% with(deconv_data[[ct]], head(genes_filtered[ordering], 20)),
-# 					.(pemt_sig = mean(expression_level_cc)),
-# 					by = cell_type
-# 				],
-# 				sc_tcga_deconv_comp[[ct]]$sc_deconv_comp_data[
-# 					gene %in% with(deconv_data[[ct]], tail(genes_filtered[ordering], 20)),
-# 					.(caf_sig = mean(expression_level_cc)),
-# 					by = cell_type
-# 				]
-# 			)
+# 			sc_diff = sc_tcga_deconv_comp[[ct]]$sc_deconv_comp_data[
+# 				cell_type == 'cancer',
+# 				.SD[gene %in% with(deconv_data[[ct]], head(genes_filtered[ordering], 20)), mean(expression_level_cc)] -
+# 					.SD[gene %in% with(deconv_data[[ct]], tail(genes_filtered[ordering], 20)), mean(expression_level_cc)]
+# 				# by = cell_type # No point doing it per cell type, because the centring means answer for one cell type is just minus the other
+# 			]
 # 		)
 # 	)
 # )
 #
+# sc_deconv_comp_barplot_data[, cancer_type := factor(cancer_type, levels = .SD[order(-sc_diff), cancer_type])]
+#
+# sc_deconv_comp_barplot <- ggplot(sc_deconv_comp_barplot_data, aes(x = cancer_type, y = sc_diff)) +
+# 	geom_col(colour = 'lightblue4', fill = 'lightblue3') +
+# 	theme_test() +
+# 	theme(axis.text.x = element_text(angle = 55, hjust = 1), axis.title.x = element_blank()) +
+# 	labs(y = TeX('$\\Delta$(Expression level)'))
+
+sc_deconv_comp_scatterplot_data <- rbindlist(
+	lapply(
+		names(sc_tcga_deconv_comp),
+		function(ct) cbind(
+			cancer_type = deconv_titles[[ct]],
+			merge(
+				sc_tcga_deconv_comp[[ct]]$sc_deconv_comp_data[
+					gene %in% with(deconv_data[[ct]], head(genes_filtered[ordering], 20)),
+					.(pemt_sig = mean(expression_level_cc)),
+					by = cell_type
+				],
+				sc_tcga_deconv_comp[[ct]]$sc_deconv_comp_data[
+					gene %in% with(deconv_data[[ct]], tail(genes_filtered[ordering], 20)),
+					.(caf_sig = mean(expression_level_cc)),
+					by = cell_type
+				]
+			)
+		)
+	)
+)[
+	,
+	.(
+		pemt_diff = pemt_sig[cell_type == 'cancer'] - pemt_sig[cell_type == 'caf'],
+		caf_diff = caf_sig[cell_type == 'cancer'] - caf_sig[cell_type == 'caf']
+	),
+	by = cancer_type
+]
+
+sc_deconv_comp_scatterplot <- ggplot(sc_deconv_comp_scatterplot_data, aes(x = pemt_diff, y = caf_diff)) +
+	geom_text_repel(data = sc_deconv_comp_scatterplot_data[cancer_type %in% c('PAAD', 'COAD', 'OV - Differentiated', 'BRCA - Luminal A')],
+		aes(label = cancer_type), size = 3.5, nudge_y = 0.3, nudge_x = 0.2) +
+	geom_text_repel(data = sc_deconv_comp_scatterplot_data[cancer_type == 'LUAD - Magnoid'],
+		aes(label = cancer_type), size = 3.5, nudge_y = 0.2, nudge_x = -0.5) +
+	geom_text_repel(data = sc_deconv_comp_scatterplot_data[cancer_type %in% c('BRCA - Luminal B', 'BRCA - HER2-enriched')],
+		aes(label = cancer_type), size = 3.5, nudge_y = -0.3, nudge_x = 0.2) +
+	geom_text_repel(data = sc_deconv_comp_scatterplot_data[cancer_type %in% c('HNSC - Malignant-Basal', 'LUAD - Bronchioid')], # LUAD - Squamoid
+		aes(label = cancer_type), size = 3.5, nudge_y = -0.3, nudge_x = -0.2) +
+	geom_point(shape = 22, colour = 'lightblue4', fill = 'lightblue', size = 2) +
+	lims(x = c(0, 2), y = c(-4.5, 0)) +
+	geom_hline(yintercept = 0, colour = 'grey', size = 0.25, linetype = 'dotted') +
+	geom_vline(xintercept = 0, colour = 'grey', size = 0.25, linetype = 'dotted') +
+	theme_test() +
+	labs(x = TeX('$\\Delta$(Expression of pEMT genes)'), y = TeX('$\\Delta$(Expression of CAF genes)'))
+
 # sc_deconv_comp_scatterplot_data <- dcast(
 # 	melt(sc_deconv_comp_scatterplot_data, id.vars = c('cancer_type', 'cell_type'), variable.name = 'sig', value.name = 'expr'),
 # 	cancer_type + sig ~ cell_type,
@@ -1567,7 +1592,8 @@ sc_deconv_comp_barplot <- ggplot(sc_deconv_comp_barplot_data, aes(x = cancer_typ
 #
 # sc_deconv_comp_scatterplot <- ggplot(sc_deconv_comp_scatterplot_data, aes(x = caf, y = cancer, shape = sig)) + geom_point() + theme_test()
 
-cairo_pdf('../data_and_figures/final_figures_resubmission/3.pdf', width = 13, height = 12.7)
+# cairo_pdf('../data_and_figures/final_figures_resubmission/3.pdf', width = 13, height = 12.7)
+cairo_pdf('../data_and_figures/final_figures_resubmission/3_alt.pdf', width = 13, height = 12.2)
 
 print(
 	plot_grid(
@@ -1735,7 +1761,8 @@ print(
 		blank_plot(),
 		plot_grid(
 			tcga_codes_table,
-			sc_deconv_comp_barplot + theme(plot.margin = unit(c(0, 5.5, 5.5, 30), 'pt')),
+			sc_deconv_comp_scatterplot + theme(plot.margin = unit(c(0, 5.5, 5.5, 30), 'pt')),
+			# sc_deconv_comp_barplot + theme(plot.margin = unit(c(0, 5.5, 5.5, 30), 'pt')),
 			deconv_summary_scatterplot + theme(plot.margin = unit(c(0, 5.5, 5.5, 30), 'pt')),
 			nrow = 1,
 			ncol = 3,
@@ -1745,12 +1772,16 @@ print(
 		),
 		nrow = 6,
 		ncol = 1,
-		rel_heights = c(0.05, 1, 0.05, 0.2, 0.15, 0.95)
+		rel_heights = c(0.05, 1, 0.05, 0.2, 0.15, 0.85)
+		# rel_heights = c(0.05, 1, 0.05, 0.2, 0.15, 0.95)
 	) +
 		draw_label('A', x = 0, y = 0.99, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2) +
-		draw_label('B', x = 0, y = 0.42, hjust = -0.1, size = 20, fontface = 2) +
-		draw_label('C', x = 0.28, y = 0.42, size = 20, fontface = 2) +
-		draw_label('D', x = 0.67, y = 0.42, size = 20, fontface = 2)
+		draw_label('B', x = 0, y = 0.395, hjust = -0.1, size = 20, fontface = 2) +
+		draw_label('C', x = 0.28, y = 0.395, size = 20, fontface = 2) +
+		draw_label('D', x = 0.67, y = 0.395, size = 20, fontface = 2)
+		# draw_label('B', x = 0, y = 0.42, hjust = -0.1, size = 20, fontface = 2) +
+		# draw_label('C', x = 0.28, y = 0.42, size = 20, fontface = 2) +
+		# draw_label('D', x = 0.67, y = 0.42, size = 20, fontface = 2)
 )
 
 dev.off()

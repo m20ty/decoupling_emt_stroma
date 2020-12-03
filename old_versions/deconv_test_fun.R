@@ -1,9 +1,9 @@
 # This doesn't work. >:-( >:-( >:-( >:-( >:-( >:-(
-# I guess it's to do with some scoping issues in the deconvolve_emt_caf_data() function itself.  Otherwise, this function should work, whether using dots = list(...) or
-# dots_args <- as.list(match.call( etc.
+# I guess it's to do with some scoping issues in the deconvolve_emt_caf_data() function itself.  Otherwise, this function should work, whether using
+# dots = list(...) or dots_args <- as.list(match.call( etc.
 
-# EDIT: I got the same error when trying to add CAFs to the <cell_types> argument and using manual cell type weights - I forgot to add CAFs to the list of cell type
-# weights.  Does this mean the error is due to a missing cell type, or similar?
+# EDIT: I got the same error when trying to add CAFs to the <cell_types> argument and using manual cell type weights - I forgot to add CAFs to the
+# list of cell type weights.  Does this mean the error is due to a missing cell type, or similar?
 
 deconv_test <- function(deconv_args_per_ct, ct, n, ...) {
 

@@ -33,14 +33,12 @@ sc_data <- rbindlist(
     lapply(
         tumour_file_names,
         function(fn) {
-            
+
             # Read in data file:
             dt <- fread(fn)
-            
+
             # Transpose and add patient IDs and sample type:
-            
 			dt <- tdt(dt)
-			
             dt[
 				,
 				c('patient', 'sample_type') := .(
@@ -48,12 +46,12 @@ sc_data <- rbindlist(
 					mapvalues(str_extract(fn, 'Tumor|Normal'), c('Tumor', 'Normal'), c('tumour', 'normal'), warn_missing = FALSE)
 				)
 			]
-            
+
 			setcolorder(dt, c('id', 'patient', 'sample_type'))
-            
+
             # Output:
             dt
-            
+
         }
     ),
     fill = TRUE
@@ -62,49 +60,25 @@ sc_data <- rbindlist(
 sc_data[is.na(sc_data)] <- 0
 
 # Update gene symbols using alias2SymbolTable() and remove resulting NAs and repeated genes:
-
 sample_data <- sc_data[, .(id, patient, sample_type)]
-
 sc_data <- tdt(sc_data[, -c('patient', 'sample_type')])
+sc_data[, id := alias2SymbolTable(id)]
+sc_data <- tdt(sc_data[!is.na(id) & id %in% names(table(id))[table(id) == 1]])
 
-sc_data[
-    ,
-    id := alias2SymbolTable(id)
-]
-
-sc_data <- tdt(
-    sc_data[
-        !is.na(id) & id %in% names(table(id))[table(id) == 1]
-    ]
-)
-
-# In the following, we can't use merge() because there are repeated cell IDs.  We can use
-# cbind() because the cell IDs are in the same order in sample_data and sc_data.
-
+# In the following, we can't use merge() because there are repeated cell IDs.  We can use cbind() because the cell IDs are in the same order in
+# sample_data and sc_data.
 sc_data <- cbind(sample_data, sc_data[, -'id'])
 
 rm(sample_data)
 
 # Filter out cells of low complexity:
+sc_data <- sc_data[apply(sc_data[, -c('id', 'patient', 'sample_type')], 1, function(x) sum(x > 0)) >= 1000]
 
-sc_data <- sc_data[
-    apply(
-        sc_data[, -c('id', 'patient', 'sample_type')],
-        1,
-        function(x) sum(x > 0)
-    ) >= 1000
-]
-
-# The following shows that all the IDs end in '-1', so we can remove this suffix.  This is
-# important because the cell IDs in the annotations table do not have this suffix, so they
-# won't match unless we remove it.
-
+# The following shows that all the IDs end in '-1', so we can remove this suffix.  This is important because the cell IDs in the annotations table do
+# not have this suffix, so they won't match unless we remove it.
 # sc_data[, unique(str_split_fixed(id, '-', 2)[, 2])]
 
-sc_data[
-    ,
-    id := str_split_fixed(id, '-', 2)[, 1]
-]
+sc_data[, id := str_split_fixed(id, '-', 2)[, 1]]
 
 tumour_annotations_file_names <- paste0('../../single_cell_data/song_nsclc_2019/', dir('../../single_cell_data/song_nsclc_2019'))
 tumour_annotations_file_names <- tumour_annotations_file_names[grepl('Annotation', tumour_annotations_file_names)]
@@ -113,9 +87,7 @@ sc_meta <- rbindlist(
     lapply(
         tumour_annotations_file_names,
         function(fn) {
-            
 			dt <- fread(fn, header = TRUE)
-			
             dt[
 				,
 				c('V1', 'patient', 'sample_type') := .(
@@ -124,45 +96,22 @@ sc_meta <- rbindlist(
 					mapvalues(str_extract(fn, 'Tumor|Normal'), c('Tumor', 'Normal'), c('tumour', 'normal'), warn_missing = FALSE)
 				)
 			]
-			
             dt
-			
         }
     )
 )
 
-# Sadly, there are a few duplicate cell IDs.  We'll deal with them by adjoining the patient
-# number as a suffix.
-
-sc_data[
-    id %in% names(table(id))[table(id) > 1],
-    id := paste(id, patient, sep = '_')
-]
-
-sc_meta[
-    cells %in% names(table(cells))[table(cells) > 1],
-    cells := paste(cells, patient, sep = '_')
-]
+# Sadly, there are a few duplicate cell IDs.  We'll deal with them by adjoining the patient number as a suffix.
+sc_data[id %in% names(table(id))[table(id) > 1], id := paste(id, patient, sep = '_')]
+sc_meta[cells %in% names(table(cells))[table(cells) > 1], cells := paste(cells, patient, sep = '_')]
 
 # Include cell type column:
-
 setkey(sc_data, id)
 setkey(sc_meta, cells)
-
-sc_data[
-    ,
-    cell_type := sc_meta[id, type]
-]
+sc_data[, cell_type := sc_meta[id, type]]
 
 # Read in series matrix to get disease type:
-
-series_mat <- tdt(
-    fread(
-        '../../single_cell_data/song_nsclc_2019/GSE117570_series_matrix.txt',
-        skip = 31,
-        header = FALSE
-    )
-)[, id := NULL]
+series_mat <- tdt(fread('../../single_cell_data/song_nsclc_2019/GSE117570_series_matrix.txt', skip = 31, header = FALSE))[, id := NULL]
 
 # series_mat <- series_mat[str_split_fixed(`!Sample_title`, '_', 2)[, 2] == 'Tumor']
 
@@ -180,32 +129,15 @@ series_mat <- series_mat[
 ] %>% unique
 
 setkey(series_mat, patient_number)
-
-sc_data[
-    ,
-    disease := series_mat[patient, disease_code]
-]
-
+sc_data[, disease := series_mat[patient, disease_code]]
 setcolorder(sc_data, c('id', 'patient', 'sample_type', 'cell_type', 'disease'))
 
 # Convert to TPM (actually counts per 100,000), take logs and round to 4 decimal places:
-
 gene_cols <- names(sc_data[, -c('id', 'patient', 'sample_type', 'cell_type', 'disease')])
+sc_data[, (gene_cols) := transpose(lapply(transpose(.SD), function(x) round(log2(1e+05*x/sum(x) + 1), 4))), .SDcols = gene_cols]
 
-sc_data[
-    ,
-    (gene_cols) := transpose(
-        lapply(
-            transpose(.SD),
-            function(x) {round(log2(1e+05*x/sum(x) + 1), 4)}
-        )
-    ),
-    .SDcols = gene_cols
-]
-
-# It might actually be better to use 1e+04 in place of 1e+05, since the maximum total expression
-# in any cell is still just less than 60000, so 10000 may be a more reasonable scale.  Actually,
-# it seems this isn't the first time I've thought this: I wrote a comment on it in
+# It might actually be better to use 1e+04 in place of 1e+05, since the maximum total expression in any cell is still just less than 60000, so 10000
+# may be a more reasonable scale.  Actually, it seems this isn't the first time I've thought this: I wrote a comment on it in
 # lung_Lambrechts_sc-RNAseq_data_prep.R.
 
 fwrite(sc_data, '../data_and_figures/song_nsclc_2019.csv')
@@ -383,7 +315,7 @@ sc_data[
 # genes appear more than twice (e.g. XAGE1B appears 4 times).
 
 # repeated_genes <- sc_data[, names(table(gene_name))[table(gene_name) > 1]]
-# 
+#
 # sc_data[
 #     gene_name %in% repeated_genes,
 #     names(sc_data[, -'gene_name']) := lapply(
@@ -392,7 +324,7 @@ sc_data[
 #     ),
 #     by = gene_name
 # ]
-# 
+#
 # sc_data <- unique(sc_data)
 
 # Filter out cells with less than 1000 genes detected (there aren't many):
@@ -641,7 +573,7 @@ setcolorder(sc_data, 'symbol')
 #         )
 #     )
 # ]
-# 
+#
 # sc_data <- sc_data[!is.na(V1)]
 
 # We have some repeated genes again, and some are repeated a lot: SNORD3P1 appears 82 times!
@@ -658,7 +590,7 @@ setcolorder(sc_data, 'symbol')
 #     ),
 #     by = V1
 # ]
-# 
+#
 # sc_data <- unique(sc_data)
 
 # The following suggests that 1e+06 is an appropriate scaling factor:
@@ -999,7 +931,7 @@ sc_data <- sc_data[!is.na(id) & id %in% names(table(id))[table(id) == 1]]
 #     names(sc_data[, -'id']) := as.list(colSums(.SD)),
 #     by = id
 # ]
-# 
+#
 # sc_data <- unique(sc_data)
 
 # Re-scale to log TPM/10 (need to reverse the log):
@@ -1124,7 +1056,7 @@ genes_data <- fread(
 # Extract patient IDs from the cell IDs, according to info from Ela:
 
 # Each barcode has a hyphen and then a number (1-10). The numbers refer to the following samples:
-    
+
 # "1" = "HT97",
 # "2" = "HT99",
 # "3" = "HT103",
@@ -1397,24 +1329,24 @@ fwrite(sc_data, '../data_and_figures/peng_pdac_2019.csv')
 sc_data <- lapply(
     1:2,
     function(i) {
-        
+
         file_root <- paste0(
             '../../single_cell_data/ma_liver_2019/GSE125449_Set',
             i,
             '_'
         )
-        
+
         barcodes <- fread(paste0(file_root, 'barcodes.tsv'), header = FALSE)$V1
-        
+
         genes <- setNames(
             fread(paste0(file_root, 'genes.tsv'), header = FALSE),
             c('ensembl_id', 'symbol')
         )
-        
+
         # Get gene symbols using AnnotationDbi on the Ensembl IDs.  I could then remove all genes
         # where the symbol and ensembl_id columns disagree, but it seems like doing that will get
         # rid of some important genes, like CAVIN1.
-        
+
         genes[
             ,
             ann_dbi_symbols := AnnotationDbi::mapIds(
@@ -1424,13 +1356,13 @@ sc_data <- lapply(
                 column = 'SYMBOL'
             )
         ]
-        
+
         samples <- fread(paste0(file_root, 'samples.txt'), key = 'Cell Barcode')
-        
+
         # Get count matrix and subset genes which are not NA or repeats:
-        
+
         expression_matrix <- Matrix::readMM(paste0(file_root, 'matrix.mtx'))
-        
+
         expression_matrix <- expression_matrix[
             genes[
                 ,
@@ -1438,19 +1370,19 @@ sc_data <- lapply(
                     !(ann_dbi_symbols %in% names(table(ann_dbi_symbols))[table(ann_dbi_symbols) > 1])
             ],
         ]
-        
+
         expression_matrix <- as.matrix(t(expression_matrix))
-        
+
         rownames(expression_matrix) <- barcodes
-        
+
         colnames(expression_matrix) <- genes[
             !is.na(ann_dbi_symbols) &
                 !(ann_dbi_symbols %in% names(table(ann_dbi_symbols))[table(ann_dbi_symbols) > 1]),
             ann_dbi_symbols
         ]
-        
+
         # # Convert to log TPM/10:
-        # 
+        #
         # expression_matrix <- t( # Annoyingly, apply() transposes the matrix...
         #     apply(
         #         expression_matrix,
@@ -1458,24 +1390,24 @@ sc_data <- lapply(
         #         function(r) round(log2(1e+05*r/sum(r) + 1), 4)
         #     )
         # )
-        # 
+        #
         # # Filter out cells with fewer than 750 genes detected (being a bit more lenient than
         # # in other cancer types...):
-        # 
+        #
         # expression_matrix <- expression_matrix[
         #     apply(expression_matrix, 1, function(x) sum(x > 0)) >= 750,
         # ]
-        
+
         # Convert to data table and add metadata columns:
-        
+
         expression_matrix <- as.data.table(expression_matrix, keep.rownames = 'id')
-        
+
         expression_matrix[, c('sample', 'cell_type') := samples[id, .(Sample, Type)]]
-        
+
         setcolorder(expression_matrix, c('id', 'cell_type', 'sample'))
-        
+
         expression_matrix
-        
+
     }
 )
 

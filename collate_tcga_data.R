@@ -72,10 +72,9 @@ datasets_tpm <- sapply(
         # Make columns numeric:
         expression_data[, names(expression_data[, -'id']) := lapply(.SD, as.numeric), .SDcols = -'id']
 
-        # The following obtains gene symbols by converting the Entrez IDs.  This mostly
-        # agrees with the output of alias2SymbolTable() applied to the symbols already in
-        # the id column, but in the few places where it disagrees, it seems more accurate
-        # than alias2SymbolTable().  We remove NAs after the conversion.
+        # The following obtains gene symbols by converting the Entrez IDs.  This mostly agrees with the output of alias2SymbolTable() applied to the
+        # symbols already in the id column, but in the few places where it disagrees, it seems more accurate than alias2SymbolTable().  We remove NAs
+        # after the conversion.
         expression_data[, id := mapIds(org.Hs.eg.db, str_split_fixed(id, '\\|', 2)[, 2], keytype = 'ENTREZID', column = 'SYMBOL')]
         expression_data <- expression_data[!is.na(id)]
 
@@ -125,7 +124,6 @@ datasets_tpm <- sapply(
 
 
 # Bind expression data and metadata tables together:
-
 expression_data <- rbindlist(lapply(datasets_tpm, `[[`, 'expression_data'))
 meta_data <- rbindlist(lapply(datasets_tpm, `[[`, 'meta_data'))
 
@@ -133,35 +131,18 @@ setkey(expression_data, id)
 setkey(meta_data, id)
 
 # Remove datasets_tpm to save memory:
-
 rm(datasets_tpm)
 
-
-
-
-
 # # Convert gene IDs:
-#
-# new_ids <- symbol_to_hgnc_list(
-#     str_split_fixed(names(expression_data[, -'id']), '\\|', 2)[, 1],
-#     gene_names
-# )
+# new_ids <- symbol_to_hgnc_list(str_split_fixed(names(expression_data[, -'id']), '\\|', 2)[, 1], gene_names)
 #
 # #The following makes sure all the gene names are unique.  Otherwise we get 29 '?'s.
-# new_ids[new_ids == '?'] <- names(expression_data)[
-#     startsWith(names(expression_data), '?')
-# ]
+# new_ids[new_ids == '?'] <- names(expression_data)[startsWith(names(expression_data), '?')]
 #
 # names(expression_data)[-1] <- new_ids
 
-
-
-
-
 # Write to file:
-
 fwrite(expression_data, '../../TCGA_data/tcga_expression_data.csv')
-
 fwrite(meta_data, '../../TCGA_data/tcga_meta_data.csv')
 
 
@@ -172,55 +153,29 @@ fwrite(meta_data, '../../TCGA_data/tcga_meta_data.csv')
 
 # Purity data from tcga_annotations file:
 
-# In the following, we might need a cleverer way to assign purity values to patient IDs than
-# just automatically assigning it to the primary.  There could be some patients from whom only
-# a metastasis sample was taken, in which case any purity value should be assigned to that.
-# I don't know if this ever actually happens, though.  Maybe look at the melanoma data, since
-# there are a lot of metastasis samples in there.
+# In the following, we might need a cleverer way to assign purity values to patient IDs than just automatically assigning it to the primary.  There
+# could be some patients from whom only a metastasis sample was taken, in which case any purity value should be assigned to that. I don't know if this
+# ever actually happens, though.  Maybe look at the melanoma data, since there are a lot of metastasis samples in there.
 
 tcga_purity_annotations <- fread('../../tcga_annotations.csv', showProgress = FALSE)[
     ,
-    .(
-        individual_id = individual_id, # We'll change the name of this later - need it so as
-        # not to confuse IDs in tcga_purity_annotations with id or patient_id in meta_data
-        cancer_type = tumor_type,
-        purity = purity
-    )
-][
-    !is.na(purity)
-]
+    .(individual_id = individual_id, cancer_type = tumor_type, purity = purity)
+][!is.na(purity)]
 
-# Fix empty cancer_type entries in tcga_purity_annotations (fortunately the corresponding
-# IDs are all in meta_data):
-
+# Fix empty cancer_type entries in tcga_purity_annotations (fortunately the corresponding IDs are all in meta_data):
 setkey(meta_data, patient_id)
+tcga_purity_annotations[cancer_type == '', cancer_type := meta_data[sample_type == 'primary'][individual_id, cancer_type]]
 
-tcga_purity_annotations[
-    cancer_type == '',
-    cancer_type := meta_data[
-        sample_type == 'primary' # Choose a sample type, to avoid repeated rows
-    ][
-        individual_id,
-        cancer_type
-    ]
-]
+# In the following, we're defining sample_type depending on the IDs in meta_data.  Since the IDs given are patient IDs and it doesn't say if they're
+# metastasis, recurrent or whatever, we would assume the purity estimates are derived from primary samples.  So, if the patient ID matches that of a
+# primary sample in meta_data, we'll assign it the sample type 'primary'.  If not, we look at what matches there are.  If there's a unique one, we'll
+# take that.  If there is not a unique one - e.g. 'metastatic' and 'recurrent', then we'll bail out and just return 'cannot match sample type'.  This
+# is because I don't want to make any more assumptions about the sample type (I only think it's safe to assume it's primary if a primary sample is
+# available).  This is designed to account for e.g. melanoma cases where they only have samples from the metastases.
 
-# In the following, we're defining sample_type depending on the IDs in meta_data.  Since
-# the IDs given are patient IDs and it doesn't say if they're metastasis, recurrent or
-# whatever, we would assume the purity estimates are derived from primary samples.  So,
-# if the patient ID matches that of a primary sample in meta_data, we'll assign it the
-# sample type 'primary'.  If not, we look at what matches there are.  If there's a
-# unique one, we'll take that.  If there is not a unique one - e.g. 'metastatic' and
-# 'recurrent', then we'll bail out and just return 'cannot match sample type'.  This is
-# because I don't want to make any more assumptions about the sample type (I only think
-# it's safe to assume it's primary if a primary sample is available).  This is designed
-# to account for e.g. melanoma cases where they only have samples from the metastases.
+# Note there's no need to consider 'primary_additional', because if an ID has a 'primary_additional' entry then it also has a 'primary' entry.
 
-# Note there's no need to consider the case of 'primary_additional', because if an ID
-# has a 'primary_additional' entry then it also has a 'primary' entry.
-
-# Note also some NAs will appear here, if the patient IDs don't appear in meta_data.
-# These will disappear when we merge the purity data with meta_data.
+# Note some NAs will appear here, if the patient IDs don't appear in meta_data. These will disappear when we merge the purity data with meta_data.
 
 tcga_purity_annotations[
     ,
@@ -228,91 +183,44 @@ tcga_purity_annotations[
         individual_id,
         switch(
             ('primary' %in% sample_type) + 1,
-            switch(
-                (length(unique(sample_type)) > 1) + 1,
-                unique(sample_type),
-                'cannot match sample type'
-            ),
+            switch((length(unique(sample_type)) > 1) + 1, unique(sample_type), 'cannot match sample type'),
             'primary'
         )
     ],
     by = individual_id
 ]
 
-tcga_purity_annotations <- tcga_purity_annotations[
-    sample_type != 'cannot match sample type' # Also gets rid of NAs
-]
-
-setnames(
-    tcga_purity_annotations,
-    'individual_id',
-    'patient_id'
-)
-
-setcolorder(
-    tcga_purity_annotations,
-    c('patient_id', 'cancer_type', 'sample_type', 'purity')
-)
+tcga_purity_annotations <- tcga_purity_annotations[sample_type != 'cannot match sample type'] # Also gets rid of NAs
+setnames(tcga_purity_annotations, 'individual_id', 'patient_id')
+setcolorder(tcga_purity_annotations, c('patient_id', 'cancer_type', 'sample_type', 'purity'))
 
 # Purity data from the paper by Taylor et al:
 
-tcga_purity_taylor <- as.data.table(
-    read_xlsx(
-        '../../TCGA_data/taylor_1-s2.0-S1535610818301119-mmc2.xlsx',
-        skip = 1
-    )
-)[
+tcga_purity_taylor <- as.data.table(read_xlsx('../../TCGA_data/taylor_1-s2.0-S1535610818301119-mmc2.xlsx', skip = 1))[
     Type %in% tcga_cancer_types,
     .(
-        patient_id = apply(
-            str_split_fixed(
-                Sample,
-                '-',
-                4
-            )[, 1:3],
-            1,
-            paste,
-            collapse = '.'
-        ),
+        patient_id = apply(str_split_fixed(Sample, '-', 4)[, 1:3], 1, paste, collapse = '.'),
         cancer_type = Type,
         sample_type = mapvalues(
-            str_split_fixed(
-                Sample,
-                '-',
-                4
-            )[, 4],
+            str_split_fixed(Sample, '-', 4)[, 4],
             c('01', '02', '05', '06'),
-            c(
-                'primary',
-                'recurrent',
-                'primary_additional',
-                'metastatic'
-            ),
+            c('primary', 'recurrent', 'primary_additional', 'metastatic'),
             warn_missing = FALSE
         ),
         purity = Purity
     )
-][
-    !is.na(purity)
-]
+][!is.na(purity)]
 
 # Extra dataset for oesophageal and stomach:
 
-esca_stad_purity <- as.data.table(
-    read_xlsx(
-        '../../TCGA_data/ESCA/nature20805-s1-1.xlsx',
-        skip = 1
-    )
-)[
+esca_stad_purity <- as.data.table(read_xlsx('../../TCGA_data/ESCA/nature20805-s1-1.xlsx', skip = 1))[
     `Absolute extract purity` != 'NA', # Stops NAs being introduced by coercing 'NA' string to numeric
     .(
         individual_id = gsub('-', '\\.', as.character(barcode)),
         cancer_type = `Disease code`,
         purity = as.numeric(`Absolute extract purity`)
     )
-][
-    !is.na(purity)
-]
+][!is.na(purity)]
 
 esca_stad_purity[
     ,
@@ -320,11 +228,7 @@ esca_stad_purity[
         individual_id,
         switch(
             ('primary' %in% sample_type) + 1,
-            switch(
-                (length(unique(sample_type)) > 1) + 1,
-                unique(sample_type),
-                'cannot match sample type'
-            ),
+            switch((length(unique(sample_type)) > 1) + 1, unique(sample_type), 'cannot match sample type'),
             'primary'
         )
     ],
@@ -333,65 +237,25 @@ esca_stad_purity[
 
 # All the sample types end up being 'primary'.
 
-setnames(
-    esca_stad_purity,
-    'individual_id',
-    'patient_id'
-)
+setnames(esca_stad_purity, 'individual_id', 'patient_id')
+setcolorder(esca_stad_purity, c('patient_id', 'cancer_type', 'sample_type', 'purity'))
 
-setcolorder(
-    esca_stad_purity,
-    c('patient_id', 'cancer_type', 'sample_type', 'purity')
-)
-
-# Merge these data tables (I think this automatically removes duplicate entries, since
-# applying unique() doesn't change the dimensions):
-
-tcga_purity_data <- merge(
-    merge(
-        tcga_purity_annotations,
-        tcga_purity_taylor,
-        all = TRUE
-    ),
-    esca_stad_purity,
-    all = TRUE
-)
+# Merge these data tables (I think this automatically removes duplicate entries, since applying unique() doesn't change the dimensions):
+tcga_purity_data <- merge(merge(tcga_purity_annotations, tcga_purity_taylor, all = TRUE), esca_stad_purity, all = TRUE)
 
 rm(tcga_purity_annotations)
 rm(tcga_purity_taylor)
 rm(esca_stad_purity)
 
 # Average purity values for repeated patient_id/sample_type combinations:
-
-tcga_purity_data <- tcga_purity_data[
-    ,
-    .(purity = round(mean(purity), 2)),
-    by = .(patient_id, cancer_type, sample_type) # Include cancer_type just so it stays in the table
-]
+tcga_purity_data <- tcga_purity_data[, .(purity = round(mean(purity), 2)), by = .(patient_id, cancer_type, sample_type)]
 
 # Add purity data to meta_data table:
-
 setkey(tcga_purity_data, patient_id, sample_type)
-
-meta_data[
-    ,
-    purity := tcga_purity_data[
-        .(
-            meta_data$patient_id,
-            meta_data$sample_type
-        ),
-        purity
-    ]
-]
-
+meta_data[, purity := tcga_purity_data[.(meta_data$patient_id, meta_data$sample_type), purity]]
 setkey(meta_data, id)
 
-
-
-
-
 # Save changes:
-
 fwrite(meta_data, '../../TCGA_data/tcga_meta_data.csv')
 
 
@@ -400,18 +264,14 @@ fwrite(meta_data, '../../TCGA_data/tcga_meta_data.csv')
 
 # Subtypes data:
 
-# I decided to keep the subtypes data separate from the rest of the metadata.  This is because
-# there are some cancer types with multiple subtype assignments (COADREAD and PAAD), which
-# necessitates having multiple rows for the same TCGA sample ID, which would differ only by the
-# subtypes.  To keep meta_data tidy and having the same number of rows as expression_data (one
-# per sample ID in expression_data), I think it's easier to have the subtypes information in a
-# separate table.
+# I decided to keep the subtypes data separate from the rest of the metadata.  This is because there are some cancer types with multiple subtype
+# assignments (COADREAD and PAAD), which necessitates having multiple rows for the same TCGA sample ID, which would differ only by the subtypes.  To
+# keep meta_data tidy and having the same number of rows as expression_data (one per sample ID in expression_data), I think it's easier to have the
+# subtypes information in a separate table.
 
-# When we want to infer subtypes, we will have to do it for every subtype assignment for a given
-# cancer type.  So I can supply to the infer_subtypes() function a subtypes_dt table consisting
-# of IDs and one set of subtype assignments, and expression_data with the all IDs for that cancer
-# type.  Note I'll also want to make inferred_subtype equal subtype for those entries where
-# subtype is not NA or ''.
+# When we want to infer subtypes, we will have to do it for every subtype assignment for a given cancer type.  So I can supply to the infer_subtypes()
+# function a subtypes_dt table consisting of IDs and one set of subtype assignments, and expression_data with the all IDs for that cancer type.  Note
+# I'll also want to make inferred_subtype equal subtype for those entries where subtype is not NA or ''.
 
 tcga_subtypes_data <- rbindlist(
 
@@ -447,10 +307,8 @@ tcga_subtypes_data <- rbindlist(
             )
         ],
 
-        # I think we really shouldn't include the following COADREAD subtypes from the TCGA
-        # paper.  It ends up that there are only 3 non-normal samples common to the subtypes
-        # data and the expression data from TCGA - one is Invasive, two are MSI/CIMP and none
-        # is CIN.
+        # I think we really shouldn't include the following COADREAD subtypes from the TCGA paper.  It ends up that there are only 3 non-normal
+        # samples common to the subtypes data and the expression data from TCGA - one is Invasive, two are MSI/CIMP and none is CIN.
         # COADREAD_tcga = as.data.table(
             # as.data.table(read_xls('../../TCGA_data/COADREAD/2011-11-14592C-Sup Table 1.xls', n_max = 277))[
                 # expression_subtype != 'NA',
@@ -548,8 +406,7 @@ tcga_subtypes_data <- rbindlist(
             )
         ],
 
-        # The actual data table I got the PAAD subtypes from is taken from the TCGA paper:
-        # doi:10.1016/j.ccell.2017.07.007
+        # The actual data table I got the PAAD subtypes from is taken from the TCGA paper: doi:10.1016/j.ccell.2017.07.007
         PAAD = as.data.table(read_xlsx('../../TCGA_data/PAAD/mmc2.xlsx', skip = 1))[
             ,
             .(
@@ -610,11 +467,9 @@ tcga_subtypes_data <- rbindlist(
             )
         ],
 
-        # We're using the same data table for the STAD subtypes that we used for ESCA, but
-        # we'll be using the 'Gastric classification' column.  I changed the subtype_ref to
-        # make it distinct from the ESCA one, because we don't want to confuse the cancer
-        # types when inferring subtypes.  It's a bit ugly, though...  I hoped to use paper
-        # refs as unique identifiers of subtype classifications, but alas...
+        # We're using the same data table for the STAD subtypes that we used for ESCA, but we'll be using the 'Gastric classification' column.  I
+        # changed the subtype_ref to make it distinct from the ESCA one, because we don't want to confuse the cancer types when inferring subtypes.
+        # It's a bit ugly, though...  I hoped to use paper refs as unique identifiers of subtype classifications, but alas...
         STAD = as.data.table(read_xlsx('../../TCGA_data/ESCA/nature20805-s1-1.xlsx', skip = 1))[
             `Disease code` == 'STAD',
             .(
@@ -625,8 +480,7 @@ tcga_subtypes_data <- rbindlist(
             )
         ]
 
-        # I'm not including the UCEC subtypes data because only 8 IDs match patient IDs
-        # in the expression data, and only 2 of these are non-normal.
+        # I'm not including the UCEC subtypes data because only 8 IDs match patient IDs in the expression data, and only 2 of these are non-normal.
         # UCEC = as.data.table(read_xls('../../TCGA_data/UCEC/datafile.S1.1.KeyClinicalData.xls'))[
             # mrna_expression_cluster != 'NA',
             # .(
@@ -650,33 +504,19 @@ tcga_subtypes_data <- rbindlist(
 
 # Infer subtypes:
 
-# The following shows that I only ever have one sample for each patient which is designated
-# 'primary' - presumably any other samples from that patient's primary tumour are called
-# 'primary_additional'.  Similar code shows that each patient has only one sample designated
-# 'metastatic'.
+# The following shows that I only ever have one sample for each patient which is designated 'primary' - presumably any other samples from that
+# patient's primary tumour are called 'primary_additional'.  Similar code shows that each patient has only one sample designated 'metastatic'.
+# meta_data[, .(repeats = sum(sample_type == 'primary')), by = patient_id][, sum(repeats > 1)]
 
-# meta_data[
-#     ,
-#     .(repeats = sum(sample_type == 'primary')),
-#     by = patient_id
-# ][
-#     ,
-#     sum(repeats > 1)
-# ]
+# Since I only have patient IDs in the subtypes data, I can thus use the primary samples, or, if these don't exist, the metastatic ones, to infer
+# subtypes, without any ambiguity.  If neither primary nor metastatic subtypes exist, I can use the recurrent one (actually there's only one such
+# patient in our data).  The only really important thing is to exclude patients for which we only have normal samples.
 
-# Since I only have patient IDs in the subtypes data, I can thus use the primary samples, or,
-# if these don't exist, the metastatic ones, to infer subtypes, without any ambiguity.  If
-# neither primary nor metastatic subtypes exist, I can use the recurrent one (actually there's
-# only one such patient in our data).  The only really important thing is to exclude patients
-# for which we only have normal samples.
-
-# Maybe, just to be safe, check how many samples have just metastatic and recurrent samples.
-# Which do I want to use in this case?  Also check that the numbers add up, i.e. tumours that
-# have primary + tumours that have only metastatic + only recurrent + only normal == all.
-# EDIT: I checked the former, and there are only 2 patients which don't have primary samples
-# and which have more than one unique sample type.  These have, respectively, metastatic and
-# metastatic_additional samples and metastatic and normal samples.  So it's safe to take, in
-# order of priority, the primary, metastatic and recurrent.
+# Maybe, just to be safe, check how many samples have just metastatic and recurrent samples.  Which do I want to use in this case?  Also check that
+# the numbers add up, i.e. tumours that have primary + tumours that have only metastatic + only recurrent + only normal == all.
+# EDIT: I checked the former, and there are only 2 patients which don't have primary samples and which have more than one unique sample type.  These
+# have, respectively, metastatic and metastatic_additional samples and metastatic and normal samples.  So it's safe to take, in order of priority, the
+# primary, metastatic and recurrent.
 
 setkey(meta_data, patient_id)
 
@@ -706,10 +546,7 @@ tcga_subtypes_data_centred <- rbindlist(
                 ][, id]
             )
 
-            subtypes_dt$subtype <- tcga_subtypes_data[
-                individual_id %in% meta_data[id %in% subtypes_dt$id, patient_id] & subtype_ref == ref, # Distinguishes multiple refs for same cancer type
-                subtype
-            ]
+            subtypes_dt$subtype <- tcga_subtypes_data[individual_id %in% meta_data[id %in% subtypes_dt$id, patient_id] & subtype_ref == ref, subtype]
 
 			expression_data_centred <- copy(
 				expression_data[
@@ -770,9 +607,9 @@ tcga_subtypes_data_centred <- rbindlist(
                 subtypes_dt = subtypes_dt
             )$inferred_subtypes_dt
 
-			# I was going to use one of the following to make "shuffled" distributions from which to choose an appropriate threshold for min_diff, but it didn't help.
-			# Maybe it would make more sense to include all differences between subtype scores, not just the minimum ones.  That would require modifications to the
-			# infer_subtypes() function.
+			# I was going to use one of the following to make "shuffled" distributions from which to choose an appropriate threshold for min_diff, but
+            # it didn't help. Maybe it would make more sense to include all differences between subtype scores, not just the minimum ones.  That would
+            # require modifications to the infer_subtypes() function.
 
 			# inferred_subtypes_control <- infer_subtypes(
                 # expression_data_centred,
@@ -788,8 +625,7 @@ tcga_subtypes_data_centred <- rbindlist(
 			# Add error margin using min_diff:
 			# inferred_subtypes[min_diff < 0.1, inferred_subtype := 'unresolved']
 
-            # Make sure all the (non-normal) IDs from meta_data (for this cancer type) are in
-            # inferred_subtypes:
+            # Make sure all the (non-normal) IDs from meta_data (for this cancer type) are in inferred_subtypes:
 
             setkey(inferred_subtypes, id)
 
@@ -828,8 +664,7 @@ tcga_subtypes_data_centred <- rbindlist(
                 )
             ]
 
-            # Fill in empty entries in the inferred_subtype column with the inferred subtype
-            # already given to another sample with the same patient ID:
+            # Fill in empty entries in the inferred_subtype column with the inferred subtype already given to another sample with the same patient ID:
             inferred_subtypes[
                 ,
                 inferred_subtype := unique(inferred_subtype[!is.na(inferred_subtype)]),
@@ -842,7 +677,6 @@ tcga_subtypes_data_centred <- rbindlist(
             setcolorder(inferred_subtypes, c('id', 'patient_id', 'subtype_ref', 'subtype', 'inferred_subtype'))
 
             any_warnings <- warnings()
-
             assign('last.warning', NULL, envir = baseenv())
 
             cat('Done!\n')
@@ -881,10 +715,7 @@ tcga_subtypes_data <- rbindlist(
                 ][, id]
             )
 
-            subtypes_dt$subtype <- tcga_subtypes_data[
-                individual_id %in% meta_data[id %in% subtypes_dt$id, patient_id] & subtype_ref == ref, # Distinguishes multiple refs for same cancer type
-                subtype
-            ]
+            subtypes_dt$subtype <- tcga_subtypes_data[individual_id %in% meta_data[id %in% subtypes_dt$id, patient_id] & subtype_ref == ref, subtype]
 
             inferred_subtypes <- infer_subtypes(
                 expression_data[
@@ -911,8 +742,7 @@ tcga_subtypes_data <- rbindlist(
                 subtypes_dt = subtypes_dt
             )$inferred_subtypes_dt
 
-            # Make sure all the (non-normal) IDs from meta_data (for this cancer type) are in
-            # inferred_subtypes:
+            # Make sure all the (non-normal) IDs from meta_data (for this cancer type) are in inferred_subtypes:
 
             setkey(inferred_subtypes, id)
 
@@ -951,8 +781,7 @@ tcga_subtypes_data <- rbindlist(
                 )
             ]
 
-            # Fill in empty entries in the inferred_subtype column with the inferred subtype
-            # already given to another sample with the same patient ID:
+            # Fill in empty entries in the inferred_subtype column with the inferred subtype already given to another sample with the same patient ID:
             inferred_subtypes[
                 ,
                 inferred_subtype := unique(inferred_subtype[!is.na(inferred_subtype)]),
@@ -983,14 +812,8 @@ setkey(tcga_subtypes_data, id)
 
 
 # Restore original key for meta_data:
-
 setkey(meta_data, id)
 
-
-
-
-
 # Save tcga_subtypes_data:
-
 fwrite(tcga_subtypes_data, '../../TCGA_data/tcga_subtypes_data.csv')
 fwrite(tcga_subtypes_data_centred, '../../TCGA_data/tcga_subtypes_data_centred.csv')

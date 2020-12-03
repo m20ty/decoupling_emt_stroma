@@ -20,9 +20,9 @@ cell_type_markers <- fread('../../cell_type_markers.csv')
 emt_markers <- fread('../../emt_markers.csv')[, gene := alias2SymbolTable(gene)][source != 'GO', sort(unique(gene))]
 
 heatmap_annotations <- c('ACTA2', 'AXL', 'COL1A1', 'COL1A2', 'COL3A1', 'COL4A1', 'COL4A2', 'COL5A1', 'COL5A2', 'COL5A3', 'COL6A1', 'COL6A2',
-						 'COL6A3', 'COL7A1', 'CD44', 'CDH2', 'ECM1', 'ECM2', 'FAP', 'FN1', 'IL6', 'ITGA2', 'ITGA5', 'ITGA6', 'ITGB1', 'ITGB3',
-						 'ITGB5', 'ITGB6', 'LAMA1', 'LAMA2', 'LAMA3', 'LAMA5', 'LAMB3', 'LAMC1', 'LAMC2', 'MMP1', 'MMP2', 'MMP3', 'MMP10',
-						 'MMP14', 'PDPN', 'SNAI1', 'SNAI2', 'SPARC', 'TGFB1', 'TGFBI', 'THY1', 'TNC', 'TWIST1', 'VCAN', 'VIM', 'ZEB1', 'ZEB2')
+	'COL6A3', 'COL7A1', 'CD44', 'CDH2', 'ECM1', 'ECM2', 'FAP', 'FN1', 'IL6', 'ITGA2', 'ITGA5', 'ITGA6', 'ITGB1', 'ITGB3', 'ITGB5', 'ITGB6', 'LAMA1',
+	'LAMA2', 'LAMA3', 'LAMA5', 'LAMB3', 'LAMC1', 'LAMC2', 'MMP1', 'MMP2', 'MMP3', 'MMP10', 'MMP14', 'PDPN', 'SNAI1', 'SNAI2', 'SPARC', 'TGFB1',
+	'TGFBI', 'THY1', 'TNC', 'TWIST1', 'VCAN', 'VIM', 'ZEB1', 'ZEB2')
 
 initial_genes <- c('SNAI1', 'SNAI2', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2')
 
@@ -467,7 +467,11 @@ deconv_data <- sapply(
 										subtypes_data = subtypes_data,
 										subtypes_var = 'subtype',
 										extra_data = extra_data,
-										genes_from_tcga_fun = function(x) top_cols_by_fun_cor(x, initial = initial_genes, threshold_fun = function(x) quantile(x, 0.99))$id,
+										genes_from_tcga_fun = function(x) top_cols_by_fun_cor(
+											x,
+											initial = initial_genes,
+											threshold_fun = function(x) quantile(x, 0.99)
+										)$id,
 										initial_gene_weights = FALSE,
 										genes_filter_fun = function(x) 1:n
 									),
@@ -475,7 +479,11 @@ deconv_data <- sapply(
 									mapvalues(
 										weights_arg,
 										c('90th percentile', 'median', 'none'),
-										list(list(gene_weights_fun = function(x) quantile(x, 0.9)), list(gene_weights_fun = median), list(cell_type_weights = FALSE)),
+										list(
+											list(gene_weights_fun = function(x) quantile(x, 0.9)),
+											list(gene_weights_fun = median),
+											list(cell_type_weights = FALSE)
+										),
 										warn_missing = FALSE
 									) %>% unlist(recursive = FALSE)
 								)
