@@ -1416,9 +1416,22 @@ nice_names_summary <- c('BLCA - Luminal-Papillary', 'BLCA - Basal-Squamous', 'BR
 within_between_clust_corr <- lapply(
 	ct_to_keep_summary,
     function(ct) {
-        within_clust_corr <- with(deconv_data[[ct]], c(cor_mat[ordering, ordering][1:30, 1:30], cor_mat[rev(ordering), rev(ordering)][1:30, 1:30]))
+        # within_clust_corr <- with(deconv_data[[ct]], c(cor_mat[ordering, ordering][1:30, 1:30], cor_mat[rev(ordering), rev(ordering)][1:30, 1:30]))
+		within_clust_corr <- with(deconv_data[[ct]], c(cor_mat[ordering, ordering][1:20, 1:20], cor_mat[rev(ordering), rev(ordering)][1:20, 1:20]))
+		# within_clust_corr <- with(
+		# 	deconv_data[[ct]],
+		# 	c(
+		# 		cor_mat[ordering, ordering][1:(length(genes_filtered)/3), 1:(length(genes_filtered)/3)],
+		# 		cor_mat[rev(ordering), rev(ordering)][1:(length(genes_filtered)/3), 1:(length(genes_filtered)/3)]
+		# 	)
+		# )
         within_clust_corr <- mean(within_clust_corr[within_clust_corr != 1])
-        between_clust_corr <- with(deconv_data[[ct]], mean(cor_mat[ordering, rev(ordering)][1:30, 1:30]))
+        # between_clust_corr <- with(deconv_data[[ct]], mean(cor_mat[ordering, rev(ordering)][1:30, 1:30]))
+		between_clust_corr <- with(deconv_data[[ct]], mean(cor_mat[ordering, rev(ordering)][1:20, 1:20]))
+		# between_clust_corr <- with(
+		# 	deconv_data[[ct]],
+		# 	mean(cor_mat[ordering, rev(ordering)][1:(length(genes_filtered)/3), 1:(length(genes_filtered)/3)])
+		# )
         list(cancer_type = ct, wthn = within_clust_corr, btw = between_clust_corr)
     }
 ) %>% rbindlist
@@ -1441,8 +1454,8 @@ deconv_summary_scatterplot <- ggplot(
     aes(x = btw, y = wthn, shape = scrnaseq_avail)
 ) +
     # geom_point(size = 2, alpha = 0.75, colour = 'lightblue4') +
-	geom_point(size = 2, colour = 'lightblue4', fill = 'lightblue') +
-	scale_shape_manual(values = c('No' = 21, 'Yes' = 24)) +
+	# geom_point(size = 2, colour = 'lightblue4', fill = 'lightblue') +
+	# scale_shape_manual(values = c('No' = 21, 'Yes' = 24)) +
     # geom_text_repel(aes(label = cancer_type)) +
 	geom_text_repel(
         aes(label = cancer_type_nice),
@@ -1451,24 +1464,42 @@ deconv_summary_scatterplot <- ggplot(
     ) +
 	geom_text_repel(
         aes(label = cancer_type_nice),
-        data = within_between_clust_corr[cancer_type_nice %in% c('HNSC - Classical', 'LUAD - Magnoid')],
+        data = within_between_clust_corr[cancer_type_nice == 'HNSC - Classical'],
         nudge_x = 0.03, nudge_y = 0.01, size = 3.5
     ) +
 	geom_text_repel(
         aes(label = cancer_type_nice),
+        data = within_between_clust_corr[cancer_type_nice == 'LUAD - Magnoid'],
+        nudge_x = 0.03, nudge_y = 0.02, size = 3.5
+    ) +
+	# geom_text_repel(
+    #     aes(label = cancer_type_nice),
+    #     data = within_between_clust_corr[cancer_type_nice %in% c('HNSC - Classical', 'LUAD - Magnoid')],
+    #     nudge_x = 0.03, nudge_y = 0.01, size = 3.5
+    # ) +
+	geom_text_repel(
+        aes(label = cancer_type_nice),
         data = within_between_clust_corr[cancer_type_nice == 'UCEC'],
+        nudge_x = -0.025, nudge_y = -0.05, size = 3.5
+    ) +
+	geom_text_repel(
+        aes(label = cancer_type_nice),
+        data = within_between_clust_corr[cancer_type_nice == 'COAD'],
         nudge_x = -0.025, size = 3.5
     ) +
     geom_text_repel(
         aes(label = cancer_type_nice),
-        data = within_between_clust_corr[cancer_type_nice %in% c('READ', 'PAAD', 'COAD')],
+        data = within_between_clust_corr[cancer_type_nice %in% c('READ', 'PAAD')], # 'COAD')],
         nudge_x = -0.02, nudge_y = -0.01, size = 3.5
     ) +
 	geom_text_repel(
         aes(label = cancer_type_nice),
         data = within_between_clust_corr[cancer_type_nice == 'BRCA - Luminal A'],
-        nudge_x = -0.05, nudge_y = -0.01, size = 3.5
+        # nudge_x = -0.05, nudge_y = -0.01, size = 3.5
+		nudge_x = 0.01, nudge_y = -0.025, size = 3.5
     ) +
+	geom_point(size = 2, colour = 'lightblue4', fill = 'lightblue') +
+	scale_shape_manual(values = c('No' = 21, 'Yes' = 24)) +
     theme_test() +
 	theme(
 		legend.position = 'bottom',
@@ -1548,11 +1579,13 @@ sc_deconv_comp_scatterplot_data <- rbindlist(
 			merge(
 				sc_tcga_deconv_comp[[ct]]$sc_deconv_comp_data[
 					gene %in% with(deconv_data[[ct]], head(genes_filtered[ordering], 20)),
+					# gene %in% with(deconv_data[[ct]], head(genes_filtered[ordering], 30)),
 					.(pemt_sig = mean(expression_level_cc)),
 					by = cell_type
 				],
 				sc_tcga_deconv_comp[[ct]]$sc_deconv_comp_data[
 					gene %in% with(deconv_data[[ct]], tail(genes_filtered[ordering], 20)),
+					# gene %in% with(deconv_data[[ct]], tail(genes_filtered[ordering], 30)),
 					.(caf_sig = mean(expression_level_cc)),
 					by = cell_type
 				]

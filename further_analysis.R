@@ -52,6 +52,93 @@ nice_names_for_figure <- c('BLCA - Luminal-Infiltrated', 'BLCA - Luminal-Papilla
     'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive', 'OV - Mesenchymal', 'OV - Proliferative', 'PAAD', 'PRAD', 'READ', 'STAD - CIN',
     'STAD - GS', 'STAD - MSI', 'UCEC')
 
+sc_metadata <- list(
+	brca = quote(
+		fread('../data_and_figures/qian_breast_2020_reclassified.csv')[
+			cell_type != 'ambiguous' & id != 'sc5rJUQ064_CCATGTCCATCCCATC',
+			-c('cell_type_author', 'cell_type_lenient')
+		]
+	),
+	coadread = quote(
+		fread('../data_and_figures/lee_crc_2020_smc_reclassified.csv')[cell_type != 'ambiguous', -c('cell_type_author', 'cell_type_lenient')]
+	),
+    hnsc = quote(fread('../data_and_figures/puram_hnscc_2017_reclassified.csv')[cell_type != 'ambiguous', -'cell_type_author']),
+	lihc = quote(
+		fread('../data_and_figures/ma_liver_2019_reclassified.csv')[cell_type != 'ambiguous', -c('cell_type_author', 'cell_type_lenient')]
+	),
+	luad = quote(fread('../data_and_figures/kim_luad_2020_reclassified.csv')[cell_type != 'ambiguous', -'cell_type_author']),
+    lusc = quote(
+		fread('../data_and_figures/qian_lung_2020_reclassified.csv')[
+			disease == 'LUSC' & cell_type != 'ambiguous',
+			-c('disease', 'cell_type_author', 'cell_type_lenient')
+		]
+	),
+	ov = quote(
+		fread('../data_and_figures/qian_ovarian_2020_reclassified.csv')[
+			cell_type != 'ambiguous' & !(id %in% c('scrSOL001_TCATTTGTCTGTCAAG', 'scrSOL004_TTGCCGTTCTCCTATA')),
+			-c('cell_type_author', 'cell_type_lenient')
+		]
+	),
+    paad = quote(
+		fread('../data_and_figures/peng_pdac_2019_reclassified.csv')[
+			cell_type != 'ambiguous' & !(id %in% c('T8_TGGTTCCTCGCATGGC', 'T17_CGTGTAACAGTACACT')),
+			-'cell_type_author'
+		]
+	)
+)
+
+tcga_sc_map <- c(
+	brca_luminal_a = 'brca',
+	brca_luminal_b = 'brca',
+	brca_basal_like = 'brca',
+	brca_her2_enriched = 'brca',
+	coad = 'coadread',
+	hnsc_atypical = 'hnsc',
+	hnsc_classical = 'hnsc',
+	hnsc_mesenchymal_basal = 'hnsc',
+	lihc = 'lihc',
+	luad_proximal_inflammatory = 'luad',
+	luad_proximal_proliferative = 'luad',
+	luad_terminal_respiratory_unit = 'luad',
+	lusc_basal = 'lusc',
+	lusc_classical = 'lusc',
+	lusc_secretory = 'lusc',
+	ov_differentiated = 'ov',
+	ov_immunoreactive = 'ov',
+    ov_mesenchymal = 'ov',
+	ov_proliferative = 'ov',
+	paad = 'paad',
+	read = 'coadread'
+)
+
+sc_comp_diff <- sapply(
+	names(tcga_sc_map),
+	function(ct) {
+
+		cat(paste0(ct, '\n'))
+
+		sc_data <- eval(sc_metadata[[tcga_sc_map[ct]]])
+        sc_data <- sc_data[, c('id', 'cell_type', with(deconv_data[[ct]], genes_filtered[genes_filtered %in% names(sc_data)])), with = FALSE]
+		sc_data <- melt(sc_data, id.vars = c('id', 'cell_type'), variable.name = 'gene', value.name = 'expression_level')
+
+		# Centre genes:
+		gene_averages <- sc_data[
+			,
+			.(ave_exp = mean(c(mean(expression_level[cell_type == 'cancer']), mean(expression_level[cell_type == 'caf'])))),
+			by = .(symbol = gene)
+		]
+		sc_data[, expression_level := expression_level - gene_averages[symbol == unique(gene), ave_exp], by = gene]
+
+		# Centre cells:
+		sc_data[, expression_level := expression_level - mean(expression_level), by = id]
+
+		sc_data[, .(d = mean(expression_level[cell_type == 'cancer']) - mean(expression_level[cell_type == 'caf'])), by = gene][, setNames(d, gene)]
+
+	},
+	simplify = FALSE,
+	USE.NAMES = TRUE
+)
+
 annotation_agreement <- lapply(
     ct_to_keep,
     function(ct) {
@@ -86,6 +173,18 @@ annotation_agreement <- lapply(
 )
 annotation_agreement <- rbindlist(annotation_agreement, fill = TRUE)[, n_annot := sum(!is.na(as.numeric(.SD))), by = cancer_type]
 
+annotation_agreement[
+    !is.na(extra),
+    sc_comp_diff := do.call(
+        function(x) {
+            rmx <- runmean(x, 30)/max(abs(runmean(x, 30)))
+            mean(head(rmx, length(x)/3)) - mean(tail(rmx, length(x)/3))
+        },
+        list(x = sc_comp_diff[[cancer_type]][with(deconv_data[[cancer_type]], genes_filtered[ordering])])
+    ),
+    by = cancer_type
+]
+
 barplot_annotations_data <- copy(annotation_agreement)[
     ,
     c('pur', 'ccle', 'extra') := lapply(
@@ -96,8 +195,9 @@ barplot_annotations_data <- copy(annotation_agreement)[
             x
         }
     ),
-    .SDcols = c('pur', 'ccle', 'extra')
+    .SDcols = c('pur', 'ccle', 'sc_comp_diff') # 'extra')
 ]
+barplot_annotations_data[, sc_comp_diff := NULL] # We essentially replaced extra with sc_comp_diff, so can delete the latter
 barplot_annotations_data <- melt(barplot_annotations_data, id.vars = c('cancer_type', 'n_annot'), variable.name = 'annot', value.name = 'score')[
     ,
     n_annot := factor(n_annot, levels = c(3, 2, 1))
@@ -315,7 +415,7 @@ ct_hclust_heatmap <- ggplot(ct_hclust_heatmap_data, aes(x = ct1, y = ct2, fill =
     scale_fill_gradientn(
         colours = c('#798234', '#a3ad62', '#d0d3a2', '#fdfbe4', '#f0c6c3', '#df91a3', '#d46780'),
         limits = c(-0.6, 0.6),
-        breaks = c(-0.6, -0.3, 0, 0.3, 0.6),
+        breaks = c(-0.6, 0, 0.6),
         oob = squish
     ) +
     scale_y_discrete(expand = c(0, 0)) +
@@ -334,7 +434,7 @@ ct_gw_heatmap <- ggplot(ct_gw_heatmap_data, aes(x = ct1, y = ct2, fill = corr)) 
     scale_fill_gradientn(
         colours = c('#798234', '#a3ad62', '#d0d3a2', '#fdfbe4', '#f0c6c3', '#df91a3', '#d46780'),
         limits = c(-0.6, 0.6),
-        breaks = c(-0.6, -0.3, 0, 0.3, 0.6),
+        breaks = c(-0.6, 0, 0.6),
         oob = squish
     ) +
     scale_y_discrete(expand = c(0, 0)) +
@@ -427,6 +527,49 @@ ct_clust <- data.table(cancer_type = names(ct_hclust_cut), cluster = ct_hclust_c
 setkey(ct_clust, cancer_type)
 ct_clust_map <- mapvalues(1:3, 1:3, ct_clust[c('brca_luminal_a', 'hnsc_mesenchymal_basal', 'stad_cin'), cluster])
 ct_clust[, cluster_manual := mapvalues(cluster, 1:3, ct_clust_map)]
+
+# Define cluster labels (including intermediates):
+ct_clust[
+    ,
+    cluster_final := switch(
+        (memb_strength > 0.05) + 1,
+        'Intermediate',
+        mapvalues(
+            cluster_manual,
+            1:3,
+            c('Cluster 1 - Gynaecological', 'Cluster 2 - Squamous-like', 'Cluster 3 - Gastro-intestinal'),
+            warn_missing = FALSE
+        )
+    ),
+    by = cancer_type
+]
+
+clust_memb_data <- ct_clust[
+    ,
+    .(
+        cancer_type = factor(cancer_type, levels = ct_hclust$labels[ct_hclust$order]),
+        cluster = factor(
+            cluster_final,
+            levels = c('Cluster 1 - Gynaecological', 'Cluster 2 - Squamous-like', 'Cluster 3 - Gastro-intestinal', 'Intermediate')
+        )
+    )
+]
+
+clust_memb <- ggplot(clust_memb_data, aes(x = cancer_type, y = 0, fill = cluster)) +
+    geom_raster() +
+    scale_y_continuous(expand = c(0, 0)) +
+    scale_x_discrete(expand = c(0, 0)) +
+    scale_fill_manual(values = c(brewer.pal(3, 'Dark2'), 'lightgrey')) +
+    theme(
+        axis.ticks = element_blank(),
+        axis.ticks.length = unit(0, 'pt'),
+        axis.text = element_blank(),
+        axis.title = element_blank(),
+        legend.key = element_rect(size = 1, colour = 'white'),
+        legend.key.size = unit(15, 'pt')
+    ) +
+    guides(fill = guide_legend(label.position = 'left')) +
+    labs(fill = NULL)
 
 score_diff_table <- data.table(symbol = names(head(sort(apply(rank_mat, 1, quantile, 0.25)), 100)))[
     ,
@@ -891,13 +1034,34 @@ corr_heatmap <- ct_hclust_heatmap +
         axis.text.y = element_blank(),
         axis.title = element_text(),
         legend.position = 'none',
-        plot.margin = unit(c(0, 0, 5.5, 5.5), 'pt')
+        plot.margin = unit(c(0, 0, 0, 5.5), 'pt')
     ) +
     labs(x = 'Cancer types', y = 'Cancer types')
 
-aligned_volcano_heatmap <- align_plots(scores_volcano_plot, corr_heatmap + theme(legend.position = 'none'), align = 'v', axis = 'l')
-aligned_top_dendro_heatmap <- align_plots(top_dendro, aligned_volcano_heatmap[[2]], align = 'v')
-aligned_right_dendro_heatmap <- align_plots(aligned_top_dendro_heatmap[[2]], right_dendro, align = 'h')
+aligned_volcano_heatmap <- align_plots(
+    scores_volcano_plot,
+    # clust_memb + theme(legend.position = 'none', plot.margin = unit(c(0, 0, 3, 0), 'pt')),
+    corr_heatmap + theme(legend.position = 'none'),
+    align = 'v',
+    axis = 'l'
+)
+aligned_top_dendro_heatmap <- align_plots(
+    top_dendro,
+    clust_memb + theme(legend.position = 'none', plot.margin = unit(c(0, 0, 3, 0), 'pt')),
+    aligned_volcano_heatmap[[2]],
+    # aligned_volcano_heatmap[[3]],
+    align = 'v'
+)
+aligned_right_dendro_heatmap <- align_plots(
+    aligned_top_dendro_heatmap[[3]],
+    clust_memb + coord_flip() + theme(legend.position = 'none', plot.margin = unit(c(0, 0, 0, 3), 'pt')),
+    right_dendro,
+    align = 'h'
+)
+
+# aligned_volcano_heatmap <- align_plots(scores_volcano_plot, corr_heatmap + theme(legend.position = 'none'), align = 'v', axis = 'l')
+# aligned_top_dendro_heatmap <- align_plots(top_dendro, aligned_volcano_heatmap[[2]], align = 'v')
+# aligned_right_dendro_heatmap <- align_plots(aligned_top_dendro_heatmap[[2]], right_dendro, align = 'h')
 
 # aligned_top_dendro_heatmap[[1]]$heights
 # aligned_right_dendro_heatmap[[1]]$heights
@@ -905,9 +1069,10 @@ aligned_right_dendro_heatmap <- align_plots(aligned_top_dendro_heatmap[[2]], rig
 # aligned_right_dendro_heatmap[[2]]$widths
 
 # Remove extra spacing added between heatmap and dendrograms by align_plots():
-aligned_right_dendro_heatmap[[1]]$widths[9] <- unit(0, 'pt')
+# aligned_right_dendro_heatmap[[1]]$widths[9] <- unit(0, 'pt')
 
-pdf('../data_and_figures/final_figures_resubmission/4.pdf', width = 11.5, height = 11)
+# pdf('../data_and_figures/final_figures_resubmission/4.pdf', width = 11.5, height = 11)
+pdf('../data_and_figures/final_figures_resubmission/4_alt.pdf', width = 11.5, height = 11)
 
 plot_grid(
     blank_plot(),
@@ -919,32 +1084,67 @@ plot_grid(
             plot_grid(
                 aligned_top_dendro_heatmap[[1]],
                 blank_plot(),
+                blank_plot(),
+                aligned_top_dendro_heatmap[[2]],
+                blank_plot(),
+                blank_plot(),
                 aligned_right_dendro_heatmap[[1]],
                 aligned_right_dendro_heatmap[[2]],
-                nrow = 2,
-                ncol = 2,
-                rel_heights = c(1, 5),
-                rel_widths = c(5.1, 0.9)
+                aligned_right_dendro_heatmap[[3]],
+                nrow = 3,
+                ncol = 3,
+                rel_heights = c(1, 0.2, 5),
+                rel_widths = c(5.1, 0.2, 0.9)
             ),
+            # plot_grid(
+            #     aligned_top_dendro_heatmap[[1]],
+            #     blank_plot(),
+            #     aligned_right_dendro_heatmap[[1]],
+            #     aligned_right_dendro_heatmap[[2]],
+            #     nrow = 2,
+            #     ncol = 2,
+            #     rel_heights = c(1, 5),
+            #     rel_widths = c(5.1, 0.9)
+            # ),
             nrow = 2,
-            ncol = 1
+            ncol = 1,
+            rel_heights = c(9.5, 8.5)
         ),
-        get_legend(
-            ct_hclust_heatmap +
-                theme(legend.justification = c(0.15, 0.5)) +
-                guides(
-                    fill = guide_colourbar(
-                        direction = 'horizontal',
-                        title = 'Correlation\n',
-                        title.position = 'right',
-                        barwidth = unit(100, 'pt'),
-                        barheight = unit(10, 'pt')
+        plot_grid(
+            get_legend(
+                ct_hclust_heatmap +
+                    theme(legend.justification = c(0.3, 0.8)) +
+                    guides(
+                        fill = guide_colourbar(
+                            direction = 'horizontal',
+                            title = 'Correlation',
+                            title.position = 'top',
+                            barwidth = unit(70, 'pt'),
+                            barheight = unit(8, 'pt')
+                        )
                     )
-                )
+            ),
+            get_legend(clust_memb + theme(legend.justification = c(0.5, 1))),
+            nrow = 1,
+            ncol = 2
         ),
+        # get_legend(
+        #     ct_hclust_heatmap +
+        #         theme(legend.justification = c(0.15, 0.5)) +
+        #         guides(
+        #             fill = guide_colourbar(
+        #                 direction = 'horizontal',
+        #                 title = 'Correlation\n',
+        #                 title.position = 'right',
+        #                 barwidth = unit(100, 'pt'),
+        #                 barheight = unit(10, 'pt')
+        #             )
+        #         )
+        # ),
         nrow = 2,
         ncol = 1,
-        rel_heights = c(19, 1)
+        rel_heights = c(18, 2)
+        # rel_heights = c(19, 1)
     ),
     blank_plot(),
     deconv_heatmap_dendro_plot(
