@@ -867,7 +867,7 @@ for(cohort in names(cohort_data)) {
 						classification[grep('^malignant', classification)]
 					)
 				),
-				switch( # In this case there's only one clone, and we just need to change classification to "refernece" where appropriate.
+				switch( # In this case there's only one clone, and we just need to change classification to "reference" where appropriate.
 					(!(cell_id %in% cell_clust[[p]]$labels) && classification == 'nonmalignant') + 1,
 					classification,
 					'reference'
