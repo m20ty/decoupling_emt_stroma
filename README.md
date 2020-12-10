@@ -5,12 +5,14 @@ This repository contains R scripts for the analysis described in the article "De
 | -------------------- | ------- |
 | AnnotationDbi        | 1.48.0  |
 | caTools              | 1.18.0  |
+| cluster              | 2.1.0   |
 | colorspace           | 1.4.1   |
 | cowplot              | 1.0.0   |
 | data.table           | 1.12.8  |
 | dbscan               | 1.1.5   |
 | egg                  | 0.4.5   |
 | fpc                  | 2.2.5   |
+| ggdendro             | 0.1.20  |
 | ggplot2              | 3.3.0   |
 | ggrepel              | 0.8.2   |
 | grDevices            | 3.6.3   |
@@ -33,5 +35,6 @@ This repository contains R scripts for the analysis described in the article "De
 | scran                | 1.14.6  |
 | seriation            | 1.2.8   |
 | SingleCellExperiment | 1.8.0   |
+| stringdist           | 0.9.6.3 |
 | stringi              | 1.5.3   |
 | stringr              | 1.4.0   |
