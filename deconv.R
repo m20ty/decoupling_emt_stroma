@@ -1,5 +1,3 @@
-# bsub -q tirosh -R rusage[mem=64000] -o deconv_alt_v2.o -e deconv_alt_v2.e Rscript deconv_alt_v2.R
-
 library(data.table) # 1.12.8
 library(ggplot2) # This is version 3.3.1 on my laptop's WSL setup but 3.3.0 on WEXAC.
 library(magrittr) # 1.5
@@ -12,7 +10,6 @@ library(caTools) # 1.18.0
 source('general_functions.R')
 source('tcga_functions.R')
 
-# I need cell_type_markers for the gene filtering:
 cell_type_markers <- fread('../../cell_type_markers.csv')
 
 emt_markers <- fread('../../emt_markers.csv')[, gene := alias2SymbolTable(gene)][source != 'GO', sort(unique(gene))]
@@ -35,7 +32,6 @@ subtypes_data <- fread('../../TCGA_data/tcga_subtypes_data_centred.csv', key = '
 ccle <- fread('../../CCLE_cancer_type_Av.csv', key = 'gene_id')
 extra_data <- fread('../data_and_figures/collated_extra_data.csv', key = 'gene')
 
-# I won't need the normal tissue samples, so let's take them out now:
 expression_data <- expression_data[meta_data[sample_type != 'normal', id]]
 meta_data <- meta_data[sample_type != 'normal']
 
@@ -228,7 +224,6 @@ deconv_args_per_ct <- list(
         extra_data_source = 'liver_ma',
         seed = 9349,
         plot_title = 'LIHC',
-		# genes_filter_fun = function(x) 1:260,
 		genes_filter_fun = function(x) 1:230,
 		cell_type_weights = FALSE
     ),
@@ -477,7 +472,6 @@ deconv_data <- sapply(
 					meta_data = meta_data,
 					genes = emt_markers,
 					cell_type_markers = cell_type_markers,
-					# heatmap_annotations = heatmap_annotations,
 					ccle_data = ccle,
 					subtypes_data = subtypes_data,
 					subtypes_var = 'subtype',
@@ -511,9 +505,7 @@ deconv_plots <- sapply(
 			args = c(
 				list(
 					data = deconv_ct,
-					# Include the following only if you want epithelial scores (takes much longer):
-					# expression_data = expression_data,
-					heatmap_axis_title = '', # Change heat_map() function so I can put NULL here
+					heatmap_axis_title = '',
 					heatmap_legend_title = 'Coexpression',
 					heatmap_colours = rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)),
 					heatmap_annotations = heatmap_annotations,

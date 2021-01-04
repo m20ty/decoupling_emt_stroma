@@ -1,7 +1,5 @@
-# bsub -q tirosh -R rusage[mem=128000] -o sc_big_cna_heatmap_all.o -e sc_big_cna_heatmap_all.e Rscript sc_big_cna_heatmap_all.R
-
 library(data.table) # 1.12.8
-library(ggplot2) # This is version 3.3.1 on my laptop's WSL setup but 3.3.0 on WEXAC.
+library(ggplot2) # 3.3.0
 library(magrittr) # 1.5
 library(cowplot) # 1.0.0
 library(infercna) # 1.0.0
@@ -77,39 +75,39 @@ cohort_data <- list(
 all_plot_data <- sapply(
 	names(cohort_data),
 	function(cohort) {
-		
+
 		cat(paste0(cohort, '\n'))
-		
+
 		sc_data <- eval(cohort_data[[cohort]]$read_quote)[, -'cell_type_author']
-		
+
 		if('cell_type_lenient' %in% names(sc_data)) {
 			sc_data <- sc_data[cell_type_lenient %in% c('caf', 'cancer')]
 		} else {
 			sc_data <- sc_data[cell_type %in% c('caf', 'cancer')]
 		}
-		
+
 		inferred_cna <- readRDS(paste0('../data_and_figures/inferred_cna_', cohort, '.rds'))
 		inferred_cna <- inferred_cna[names(inferred_cna) %in% sc_data$patient]
-		
+
 		x_line_breaks <- .chromosomeBreaks(rownames(inferred_cna[[1]]))
 		x_text_breaks <- round(.chromosomeBreaks(rownames(inferred_cna[[1]]), halfway = TRUE, hide = c('13', '18', '21', 'Y')))
-		
+
 		cna_signal_files <- dir(paste0('../data_and_figures/sc_find_malignant/', cohort))
 		cna_signal_files <- cna_signal_files[endsWith(cna_signal_files, '_data.csv')]
-		
+
 		classification_data <- lapply(
 			cna_signal_files,
 			function(x) cbind(fread(paste0('../data_and_figures/sc_find_malignant/', cohort, '/', x)))#, patient = gsub('_data.csv', '', x))
 		) %>% rbindlist(fill = TRUE)
-		
+
 		setkey(classification_data, cell_id)
-		
+
 		classification_data <- classification_data[sc_data[cell_type == 'cancer', id]]
 		classification_data <- classification_data[classification == classification_final]
-		
+
 		# For some reason, the key sometimes disappears after the above two lines, so I'm setting it again:
 		setkey(classification_data, cell_id)
-		
+
 		classification_data <- sc_data[
 			,
 			.(
@@ -118,7 +116,7 @@ all_plot_data <- sapply(
 			),
 			by = id
 		]
-		
+
 		# The following deals with cases where all cells of one subclone get changed to 'ambiguous' at some point, presumably because their
 		# I disagree with the authors as to their malignancy.  This happened in HNSCC, where all cells in malignant clone 2 became 'ambiguous'
 		# leaving only 'Patient 6: clone 1' in the final heatmap, which obviously looks odd.
@@ -130,17 +128,16 @@ all_plot_data <- sapply(
 			][dodgy == TRUE, patient],
 			classification := 'malignant'
 		]
-		
+
 		plot_data <- rbindlist(
 			lapply(
 				unique(classification_data$patient),
 				function(p) cbind(classification_data[patient == p], t(inferred_cna[[as.character(p)]][, classification_data[patient == p, id]]))
 			)
 		)
-		
+
 		# Downsample where a patient is overrepresented:
-		# Note the final proportion won't be 2/#patients, because you're taking a sample of size 2*sum(N)/#patients, but then of course sum(N)
-		# becomes smaller.
+		# Note the final proportion won't be 2/#patients, because we take a sample of size 2*sum(N)/#patients, but then sum(N) becomes smaller.
 		set.seed(cohort_data[[cohort]]$seeds)
 		downsampled_ids <- plot_data[, .N, by = .(patient, classification)][
 			,
@@ -154,10 +151,9 @@ all_plot_data <- sapply(
 					sample(id[patient == patient_id & classification == cl_full], 2*.N/length(unique(patient)))
 				]
 			),
-			# plot_data[, sample(id[patient == patient_id], 3*sum(startsWith(classification, cl))/length(unique(patient)))],
 			by = .(cl, patient_id, cl_full)
 		]
-		
+
 		downsampled_ids <- plot_data[
 			,
 			.(
@@ -169,10 +165,10 @@ all_plot_data <- sapply(
 			),
 			by = .(patient, classification)
 		]$sampled_ids
-		
+
 		plot_data <- plot_data[id %in% downsampled_ids]
 		classification_data <- classification_data[id %in% downsampled_ids]
-		
+
 		plot_data <- melt(
 			plot_data,
 			id.vars = c('id', 'patient', 'classification'),
@@ -180,11 +176,11 @@ all_plot_data <- sapply(
 			value.name = 'cna_score'
 		)
 		plot_data[, gene := factor(gene, levels = rownames(inferred_cna[[1]]))]
-		
+
 		# For cancer cell heatmap:
-		
+
 		y_breaks_cancer_major <- classification_data[classification != 'caf'][order(patient), .(brks = .N), by = patient]$brks %>% cumsum
-		
+
 		y_breaks_cancer_minor <- numeric(0)
 		temp <- classification_data[classification != 'caf'][order(patient, classification)]
 		for(i in 2:nrow(temp)) {
@@ -196,12 +192,12 @@ all_plot_data <- sapply(
 			) {y_breaks_cancer_minor <- c(y_breaks_cancer_minor, i)}
 		}
 		rm(temp)
-		
+
 		all_y_breaks <- sort(c(0, y_breaks_cancer_major, y_breaks_cancer_minor))
 		y_text_breaks_cancer <- sapply(2:length(all_y_breaks), function(i) round(all_y_breaks[i - 1] + (all_y_breaks[i] - all_y_breaks[i - 1])/2))
-		
+
 		y_breaks_cancer_major <- y_breaks_cancer_major[1:(length(y_breaks_cancer_major) - 1)]
-		
+
 		patient_annotations_cancer <- character(classification_data[classification != 'caf', .N])
 		patient_annotations_cancer[y_text_breaks_cancer] <- classification_data[classification != 'caf'][
 			order(patient, classification),
@@ -214,27 +210,27 @@ all_plot_data <- sapply(
 				)
 			)
 		]
-		
+
 		# For CAF heatmap:
-		
+
 		y_breaks_caf <- classification_data[classification == 'caf'][order(patient), .(brks = .N), by = patient]$brks %>% cumsum
-		
+
 		y_text_breaks_caf <- sapply(
 			2:(length(y_breaks_caf) + 1),
 			function(i) round(c(0, y_breaks_caf)[i - 1] + (c(0, y_breaks_caf)[i] - c(0, y_breaks_caf)[i - 1])/2)
 		)
-		
+
 		y_breaks_caf <- y_breaks_caf[1:(length(y_breaks_caf) - 1)]
-		
+
 		patient_annotations_caf <- character(classification_data[classification == 'caf', .N])
 		patient_annotations_caf[y_text_breaks_caf] <- classification_data[classification == 'caf'][
 			order(patient, classification),
 			sapply(y_text_breaks_caf, function(x) paste0('Patient ', patient[x]))
 		]
-		
+
 		# For adjustment of chromosome 6p:
 		genes_split_by_arm <- splitGenes(rownames(inferred_cna[[1]]), by = 'arm')
-		
+
 		list(
 			plot_data = plot_data,
 			classification_data = classification_data,
@@ -249,7 +245,7 @@ all_plot_data <- sapply(
 			x_text_breaks = x_text_breaks,
 			genes_split_by_arm = genes_split_by_arm
 		)
-		
+
 	},
 	simplify = FALSE,
 	USE.NAMES = TRUE
@@ -260,10 +256,9 @@ all_plot_data <- sapply(
 
 
 pdf('../data_and_figures/final_figures_resubmission/S1.pdf', width = 10, height = 12)
-# pdf('../data_and_figures/sc_big_cna_heatmap/cna_heatmap_all.pdf', width = 10, height = 12)
 
 for(cohort in names(all_plot_data)) {
-	
+
 	cna_heatmap_cancer <- ggplot(all_plot_data[[cohort]]$plot_data[classification != 'caf']) +
 		geom_raster(
 			aes(
@@ -306,7 +301,7 @@ for(cohort in names(all_plot_data)) {
 			panel.border = element_rect(colour = 'black', size = 0.5, fill = NA)
 		) +
 		labs(x = 'Chromosome', y = 'Cells', fill = 'Inferred CNA')
-	
+
 	annotations_cancer <- heat_map_labels_repel(
 		all_plot_data[[cohort]]$patient_annotations_cancer,
 		edge = 'right',
@@ -314,7 +309,7 @@ for(cohort in names(all_plot_data)) {
 		axis_title = 'Cancer cells',
 		title_edge_margin = 5.5
 	)
-	
+
 	cna_heatmap_caf <- ggplot(all_plot_data[[cohort]]$plot_data[classification == 'caf']) +
 		geom_raster(
 			aes(
@@ -350,7 +345,7 @@ for(cohort in names(all_plot_data)) {
 			plot.title = element_text(margin = margin(b = 30), size = 18)
 		) +
 		labs(x = 'Chromosome', y = 'Cells', fill = 'Inferred CNA', title = cohort_data[[cohort]]$plot_title)
-	
+
 	annotations_caf <- heat_map_labels_repel(
 		all_plot_data[[cohort]]$patient_annotations_caf,
 		edge = 'right',
@@ -358,7 +353,7 @@ for(cohort in names(all_plot_data)) {
 		axis_title = 'CAFs',
 		title_edge_margin = 5.5
 	)
-	
+
 	print(
 		plot_grid(
 			plot_grid(
@@ -399,7 +394,7 @@ for(cohort in names(all_plot_data)) {
 			rel_widths = c(7, 1)
 		)
 	)
-	
+
 }
 
 dev.off()
@@ -413,10 +408,10 @@ dev.off()
 pdf('../data_and_figures/sc_big_cna_heatmap/cna_heatmap_all_6padj.pdf', width = 10, height = 12)
 
 for(cohort in names(all_plot_data)) {
-	
+
 	plot_data <- copy(all_plot_data[[cohort]]$plot_data)
 	plot_data[gene %in% all_plot_data[[cohort]]$genes_split_by_arm[['6p']] & cna_score < 0 & cna_score > -0.35, cna_score := 0]
-	
+
 	cna_heatmap_cancer_6padj <- ggplot(plot_data[classification != 'caf']) +
 		geom_raster(
 			aes(
@@ -459,7 +454,7 @@ for(cohort in names(all_plot_data)) {
 			panel.border = element_rect(colour = 'black', size = 0.5, fill = NA)
 		) +
 		labs(x = 'Chromosome', y = 'Cells', fill = 'Inferred CNA')
-	
+
 	annotations_cancer <- heat_map_labels_repel(
 		all_plot_data[[cohort]]$patient_annotations_cancer,
 		edge = 'right',
@@ -467,7 +462,7 @@ for(cohort in names(all_plot_data)) {
 		axis_title = 'Cancer cells',
 		title_edge_margin = 5.5
 	)
-	
+
 	cna_heatmap_caf_6padj <- ggplot(plot_data[classification == 'caf']) +
 		geom_raster(
 			aes(
@@ -503,7 +498,7 @@ for(cohort in names(all_plot_data)) {
 			plot.title = element_text(margin = margin(b = 30), size = 18)
 		) +
 		labs(x = 'Chromosome', y = 'Cells', fill = 'Inferred CNA', title = cohort_data[[cohort]]$plot_title)
-	
+
 	annotations_caf <- heat_map_labels_repel(
 		all_plot_data[[cohort]]$patient_annotations_caf,
 		edge = 'right',
@@ -511,7 +506,7 @@ for(cohort in names(all_plot_data)) {
 		axis_title = 'CAFs',
 		title_edge_margin = 5.5
 	)
-	
+
 	print(
 		plot_grid(
 			plot_grid(
@@ -544,7 +539,6 @@ for(cohort in names(all_plot_data)) {
 				nrow = 2,
 				ncol = 1,
 				rel_heights = c(2, 3)
-				# rel_heights = c(1, 2)
 			),
 			get_legend(cna_heatmap_caf),
 			nrow = 1,
@@ -552,7 +546,7 @@ for(cohort in names(all_plot_data)) {
 			rel_widths = c(7, 1)
 		)
 	)
-	
+
 }
 
 dev.off()

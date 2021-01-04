@@ -1,10 +1,9 @@
 # This script doesn't produce all the rebuttal figures: the code for making R1 can be found in sc_deconv_comp.R.
 
 library(data.table) # 1.12.8
-library(ggplot2) # This is version 3.3.1 on my laptop's WSL setup but 3.3.0 on WEXAC.
+library(ggplot2) # 3.3.0
 library(cowplot) # 1.0.0
 library(magrittr) # 1.5
-library(cowplot) # 1.0.0
 library(Rtsne) # 0.15
 library(plyr) # 1.8.6
 library(stringr) # 1.4.0
@@ -87,13 +86,7 @@ cell_type_colours <- c(
 
 
 
-cohort_data <- list(
-	luad_kim = list(
-		read_quote = quote(fread('../data_and_figures/kim_luad_2020_reclassified.csv')),
-		seed = 5481
-	)
-)
-
+cohort_data <- list(luad_kim = list(read_quote = quote(fread('../data_and_figures/kim_luad_2020_reclassified.csv')), seed = 5481))
 cohort <- 'luad_kim'
 
 sc_data <- eval(cohort_data[[cohort]]$read_quote)[, -'cell_type_author']
@@ -165,7 +158,6 @@ downsampled_ids <- plot_data[, .N, by = .(patient, classification)][
             sample(id[patient == patient_id & classification == cl_full], 2*.N/length(unique(patient)))
         ]
     ),
-    # plot_data[, sample(id[patient == patient_id], 3*sum(startsWith(classification, cl))/length(unique(patient)))],
     by = .(cl, patient_id, cl_full)
 ]
 
@@ -345,12 +337,7 @@ annotations_caf <- heat_map_labels_repel(
 
 
 
-cohort_data <- list(
-    luad_kim = list(
-		read_quote = quote(fread('../data_and_figures/kim_luad_2020_reclassified.csv')),
-		seeds = c(4573, 2106, 7294)
-	)
-)
+cohort_data <- list(luad_kim = list( read_quote = quote(fread('../data_and_figures/kim_luad_2020_reclassified.csv')), seeds = c(4573, 2106, 7294)))
 
 sc_data <- eval(cohort_data[[cohort]]$read_quote)[, -'cell_type_author']
 
@@ -367,8 +354,8 @@ sc_data <- sc_data[, c('id', 'patient', 'cell_type', names(gene_averages)[gene_a
 # Run t-SNE:
 # set.seed(cohort_data[[cohort]]$seeds[1])
 # sc_tsne <- Rtsne(
-    # as.matrix(sc_data[, lapply(.SD, function(x) {x - mean(x)}), .SDcols = -c('id', 'patient', 'cell_type')])#,
-    # # num_threads = 16
+#     as.matrix(sc_data[, lapply(.SD, function(x) {x - mean(x)}), .SDcols = -c('id', 'patient', 'cell_type')])#,
+#     # num_threads = 16
 # )
 
 # saveRDS(sc_tsne, paste0('../data_and_figures/sc_tsne_final/tsne_', cohort, '.rds'))
@@ -379,10 +366,6 @@ if('cells_to_exclude' %in% names(cohort_data[[cohort]])) {
     sc_tsne$Y <- sc_tsne$Y[-which(sc_data$id %in% cohort_data[[cohort]]$cells_to_exclude), ]
     sc_data <- sc_data[!(id %in% cohort_data[[cohort]]$cells_to_exclude)]
 }
-
-# If cohort == 'pdac_peng' and we haven't removed T8_TGGTTCCTCGCATGGC and T17_CGTGTAACAGTACACT, we can see these are the T cell and CAF in the wrong
-# clusters by the following:
-# sc_data[(cell_type == 't_cell' & sc_tsne$Y[, 1] > 35) | (cell_type == 'caf' & sc_tsne$Y[, 1] < -35), id]
 
 plot_data <- setNames(
     cbind(as.data.table(sc_tsne$Y), sc_data[, .(patient, cell_type)]),
@@ -403,10 +386,8 @@ tsne_plot_cell_types <- ggplot(plot_data, aes(x = x, y = y, colour = cell_type))
 cna_score_files <- dir(paste0('../data_and_figures/sc_find_malignant/', cohort))
 cna_score_files <- cna_score_files[endsWith(cna_score_files, '_data.csv')]
 
-cna_score_data <- lapply(
-    cna_score_files,
-    function(x) cbind(fread(paste0('../data_and_figures/sc_find_malignant/', cohort, '/', x)))#, patient = gsub('_data.csv', '', x))
-) %>% rbindlist(fill = TRUE)
+cna_score_data <- lapply(cna_score_files, function(x) cbind(fread(paste0('../data_and_figures/sc_find_malignant/', cohort, '/', x)))) %>%
+    rbindlist(fill = TRUE)
 
 setkey(cna_score_data, cell_id)
 
@@ -450,10 +431,6 @@ tsne_plot_cna_score <- ggplot(plot_data, aes(x = x, y = y, colour = cna_score)) 
     theme_minimal() +
     scale_colour_gradientn(colours = colorRamps::matlab.like(50), limits = c(0, 1), oob = scales::squish) +
     labs(title = 'CNA score', colour = NULL, x = 't-SNE 1', y = 't-SNE 2')
-
-# The following calculation of immune score is a bit complicated, but it's designed to put all the immune cells on roughly the same scale so that we
-# don't get some immune cell types having much higher scores than the others.  It works OK but not brilliantly, possibly because taking the maximum
-# makes it more noisy.
 
 immune_cell_types <- c('B', 'B_plasma', 'DC', 'macrophage', 'mast', 'T')[
     sapply(
@@ -525,15 +502,7 @@ immune_scores <- as.data.table(
     keep.rownames = 'cell_id'
 )
 
-immune_scores[
-    ,
-    # which_max := apply(.SD, 1, function(x) names(.SD)[which.max(x)]),
-    c('which_max', 'cell_type') := .(
-        apply(.SD, 1, function(x) names(.SD)[which.max(x)]),
-        sc_data$cell_type
-    ),
-    .SDcols = -'cell_id'
-]
+immune_scores[, c('which_max', 'cell_type') := .(apply(.SD, 1, function(x) names(.SD)[which.max(x)]), sc_data$cell_type), .SDcols = -'cell_id']
 
 immune_cell_type_scaling_factors <- sapply(
     immune_cell_types,
@@ -546,21 +515,16 @@ immune_cell_type_scaling_factors <- sapply(
                 warn_missing = FALSE
             ),
             setNames(quantile(get(x), 0.9), NULL)
-            # mean(get(x))
         ]
     },
     USE.NAMES = TRUE
 )
 
-immune_scores[
-    ,
-    score := get(unique(which_max))/immune_cell_type_scaling_factors[unique(which_max)],
-    by = which_max
-]
+immune_scores[, score := get(unique(which_max))/immune_cell_type_scaling_factors[unique(which_max)], by = which_max]
 
 plot_data[
     ,
-    c('immune_score', 'caf_score', 'endothelial_score') := .( # Should add pericyte score, but need to make my own signature
+    c('immune_score', 'caf_score', 'endothelial_score') := .(
         immune_scores$score,
         signature_score(
             sc_data[, set_colnames(t(.SD), id), .SDcols = -c('id', 'patient', 'cell_type')],
@@ -601,7 +565,7 @@ caf_endothelial_sigs <- sapply(
 
 plot_data[
     ,
-    c('caf_score', 'endothelial_score') := .( # Should add pericyte score, but need to make my own signature
+    c('caf_score', 'endothelial_score') := .(
         signature_score(
             sc_data[, set_colnames(t(.SD), id), .SDcols = -c('id', 'patient', 'cell_type')],
             sig_genes = caf_endothelial_sigs$caf,
@@ -622,8 +586,6 @@ plot_data[
     c('caf_score', 'endothelial_score') := .(
         caf_score/.SD[cell_type == 'caf', quantile(caf_score, 0.9)],
         endothelial_score/.SD[cell_type == 'endothelial', quantile(endothelial_score, 0.9)]
-        # caf_score/.SD[cell_type == 'caf', mean(caf_score)],
-        # endothelial_score/.SD[cell_type == 'endothelial', mean(endothelial_score)]
     )
 ]
 
@@ -694,7 +656,6 @@ plot_grid(
                 nrow = 2,
                 ncol = 1,
                 rel_heights = c(1, 2)
-                # rel_heights = c(1, 2)
             ),
             get_legend(cna_heatmap_caf),
             nrow = 1,
@@ -963,7 +924,7 @@ deconv_plot_args_per_ct <- list(
         heatmap_annotations = c('CALU', 'COL1A2', 'COL3A1', 'MMP2', 'QSOX1', 'SDC4', 'THY1', 'VEGFA'),
         plot_title = 'Lung Adenocarcinoma'
     ),
-    lusc = list( # Need to change annotations from here downwards...
+    lusc = list(
         heatmap_annotations = c('COL1A2', 'COL3A1', 'FAP', 'IGFBP2', 'PFN2', 'SDC1', 'THY1', 'TNC'),
         plot_title = 'Lung squamous'
     ),
@@ -1003,8 +964,6 @@ simulated_deconv_plots <- sapply(
             args = c(
                 list(
                     data = simulated_deconvs[[ct]],
-                    # Include the following only if you want epithelial scores (takes much longer):
-                    # expression_data = simulated_bulk_data,
                     heatmap_legend_title = 'Correlation',
                     heatmap_colours = rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)),
                     heatmap_colour_limits = c(-1, 1),
@@ -1032,8 +991,6 @@ simulated_deconv_plots <- sapply(
                     extra_legend_direction = 'horizontal',
                     extra_axis_title = NULL,
                     bar_legend_justification = 'left'
-                    # bar_legend_width = NULL,
-                    # bar_legend_height = NULL
                 ),
                 deconv_plot_args_per_ct[[ct]]
             )
@@ -1045,25 +1002,7 @@ simulated_deconv_plots <- sapply(
 
 lineplots <- readRDS('../data_and_figures/simulated_bulk_lineplots.rds')
 
-# sample_sizes <- list(
-#     brca = 1000,
-# 	brca_lenient = 1000,
-#     coadread = 800,
-# 	coadread_lenient = 800,
-#     hnsc = 400,
-#     lihc = 150,
-# 	lihc_lenient = 200,
-#     luad = 1000,
-# 	# luad = 200,
-# 	# luad_lenient = 300,
-# 	lusc = 100,
-# 	lusc_lenient = 100,
-#     ov = 1500,
-# 	ov_lenient = 2000,
-#     paad = 1500
-# )
-
-set.seed(4508) # Is it enough to set a single seed before the whole loop?
+set.seed(4508)
 
 sc_sim_deconv_comp <- sapply(
 	names(simulated_deconvs),
@@ -1076,15 +1015,6 @@ sc_sim_deconv_comp <- sapply(
 		sc_deconv_comp <- sapply(
 			c('cancer', 'caf'),
 			function(x) {
-
-				# plot_data <- copy(sc_data[cell_type == x])[
-				# 	,
-				# 	complexity := apply(.SD, 1, function(x) sum(x > 0)),
-				# 	.SDcols = -c('id', 'patient', 'cell_type')
-				# ][
-				# 	,
-				# 	.SD[sample(1:.N, sample_sizes[[ct]], prob = complexity)]
-				# ][, complexity := NULL][, c('id', simulated_deconvs[[ct]]$genes_filtered), with = FALSE]
 
 				plot_data <- sc_data[cell_type == x, c('id', simulated_deconvs[[ct]]$genes_filtered), with = FALSE]
 
@@ -1168,7 +1098,6 @@ sc_sim_deconv_comp <- sapply(
 							axis.ticks = element_blank(),
 							axis.ticks.length = unit(0, 'pt'),
 							plot.margin = unit(c(5.5, 5.5, 1.25, 0), 'pt')
-							# plot.margin = switch((x == 'cancer') + 1, unit(c(1.25, 5.5, 5.5, 5.5), 'pt'), unit(c(5.5, 5.5, 1.25, 5.5), 'pt'))
 						) +
 						labs(y = mapvalues(x, c('cancer', 'caf'), c('Cancer', 'CAF'), warn_missing = FALSE), fill = 'Relative\nexpression\nlevel')
 				},
@@ -1190,12 +1119,6 @@ sc_sim_deconv_comp <- sapply(
 			.SDcols = simulated_deconvs[[ct]]$genes_filtered
 		]
 		filtered_genes <- names(filtered_genes)[filtered_genes]
-
-		# filtered_genes <- gene_averages_cancer_caf[
-			# ,
-			# .(pass = ave_exp[cell_type == 'cancer'] > 0.25 | ave_exp[cell_type == 'caf'] > 0.25),
-			# by = gene
-		# ][pass == TRUE, as.character(gene)]
 
 		ordered_filtered_genes <- with(simulated_deconv_filtered, genes_filtered[ordering][genes_filtered[ordering] %in% filtered_genes])
 
@@ -1287,12 +1210,9 @@ sc_sim_deconv_comp <- sapply(
 				function(x) {
 					ggplot(
 						plot_data[[x]],
-						# plot_data[cell_type == x],
 						aes(
 							x = gene,
 							y = id,
-							# x = factor(gene, levels = with(simulated_deconv_filtered, genes_filtered[ordering])),
-							# y = factor(id, levels = sc_deconv_comp[[x]]$ordered_cell_ids),
 							fill = get(expr_var)
 						)
 					) +
@@ -1304,7 +1224,6 @@ sc_sim_deconv_comp <- sapply(
 								sequential_hcl(25, h = 190, c = 70, l = c(70, 99), power = 0.8),
 								sequential_hcl(25, h = 60, c = 100, l = c(80, 99), power = 0.8, rev = TRUE)
 							),
-							# colours = rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)),
 							limits = switch((expr_var == 'expression_level_cc_rm') + 1, c(-4, 4), c(-2, 2)),
 							breaks = switch((expr_var == 'expression_level_cc_rm') + 1, c(-4, -2, 0, 2, 4), c(-2, -1, 0, 1, 2)),
 							labels = switch(
@@ -1312,9 +1231,6 @@ sc_sim_deconv_comp <- sapply(
 								c('-4' = '\u2264 -4', '-2' = '-2', '0' = '0', '2' = '2', '4' = '\u2265 4'),
 								c('-2' = '\u2264 -2', '-1' = '-1', '0' = '0', '1' = '1', '2' = '\u2265 2')
 							),
-							# limits = c(-4, 4),
-							# breaks = c(-4, -2, 0, 2, 4),
-							# labels = c('-4' = '\u2264 -4', '-2' = '-2', '0' = '0', '2' = '2', '4' = '\u2265 4'),
 							oob = squish
 						) +
 						theme(
@@ -1377,8 +1293,7 @@ dummy_legend_plot <- ggplot(
             'cancer' = '#FB8072',
             'endothelial' = '#BC80BD',
             'macrophage' = '#80B1D3',
-			'mast' = '#FCCDE5', # This is better than the yellow (#FFED6F) previously used for mast
-            # 'mast' = '#FFED6F',
+			'mast' = '#FCCDE5',
             't_cell' = '#B3DE69'
         )
     ) +
@@ -1455,14 +1370,6 @@ plot_grid(
                                     plot.margin = unit(c(5.5, 0, 1.25, 5.5), 'pt')
                                 ) +
                                 labs(y = paste0('\nCAFs\n(n = ', length(sc_sim_deconv_comp[[ct]]$ordered_cell_ids$caf), ')')),
-                            # blank_plot() +
-                            #     labs(y = 'Cancer\ncells') +
-                            #     scale_y_continuous(position = 'right') +
-                            #     theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
-                            # blank_plot() +
-                            #     labs(y = 'CAFs') +
-                            #     scale_y_continuous(position = 'right') +
-                            #     theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
                             blank_plot(),
                             nrow = 7,
                             ncol = 1,
@@ -1753,8 +1660,6 @@ if(paste0('simulated_bulk_data_', sc_metadata[[ct]]$ref, '.csv') %in% dir('../da
         types = sc_data$cell_type,
         id_prefix = ct,
         max_mean_count = sc_data[cell_type == 'cancer', .N, by = patient][, round(quantile(N, 0.9))]
-        # max_mean_count = max_mean_counts[[ct]]
-        # genes = genes_list[[ct]]
     )
     simulated_bulk_metadata <- as.data.table(simulated_bulk_data$meta_data, keep.rownames = 'id')
     simulated_bulk_data <- as.data.table(simulated_bulk_data$expression_data, keep.rownames = 'id')
@@ -1845,10 +1750,6 @@ simulated_deconv_plots_scran <- do.call(
             ccle_legend_title = 'Tumours vs. cell lines\n',
             ccle_legend_direction = 'horizontal',
             ccle_axis_title = NULL,
-            # extra_colours = c(
-                # colorspace::sequential_hcl(25, h = 190, c = 70, l = c(70, 99), power = 0.8),
-                # colorspace::sequential_hcl(25, h = 60, c = 100, l = c(80, 99), power = 0.8, rev = TRUE)
-            # ),
             extra_colours = colorRampPalette(c('turquoise4', 'turquoise', 'azure', 'gold2', 'gold4'))(50),
             extra_fun = function(x) caTools::runmean(x, 30),
             extra_colour_limits = c(-4, 4),
@@ -1868,15 +1769,6 @@ simulated_deconv_plots_scran <- do.call(
 sc_deconv_comp <- sapply(
     c('cancer', 'caf'),
     function(x) {
-
-        # plot_data <- copy(sc_data[cell_type == x])[
-        #     ,
-        #     complexity := apply(.SD, 1, function(x) sum(x > 0)),
-        #     .SDcols = -c('id', 'patient', 'cell_type')
-        # ][
-        #     ,
-        #     .SD[sample(1:.N, sc_metadata[[ct]]$sample_size, prob = complexity)]
-        # ][, complexity := NULL][, c('id', simulated_deconv$genes_filtered), with = FALSE]
 
         plot_data <- sc_data[cell_type == x, c('id', simulated_deconv$genes_filtered), with = FALSE]
 
@@ -2116,7 +2008,6 @@ if('annotations_side' %in% names(sc_metadata[[ct]])) {
 
 sc_sim_deconv_comp_figures_tpm <- sapply(
     c(simulated_deconv_plots$coadread$plots, sc_sim_deconv_comp$coadread$sc_heatmaps_unfiltered$expression_level_cc_rm),
-    # c(sc_sim_deconv_comp$coadread$filtered_deconv_figures, sc_sim_deconv_comp$coadread$sc_heatmaps_filtered),
     function(x) x + theme(legend.position = 'none', plot.title = element_blank(), axis.title.y = element_blank()),
     simplify = FALSE,
     USE.NAMES = TRUE
@@ -2219,14 +2110,6 @@ plot_grid(
                         plot.margin = unit(c(5.5, 0, 1.25, 5.5), 'pt')
                     ) +
                     labs(y = paste0('\nCAFs\n(n = ', length(sc_sim_deconv_comp$coadread$ordered_cell_ids$caf), ')')),
-                # blank_plot() +
-                #     labs(y = 'Cancer\ncells') +
-                #     scale_y_continuous(position = 'right') +
-                #     theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
-                # blank_plot() +
-                #     labs(y = 'CAFs') +
-                #     scale_y_continuous(position = 'right') +
-                #     theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
                 blank_plot(),
                 nrow = 7,
                 ncol = 1,
@@ -2326,14 +2209,6 @@ plot_grid(
                         plot.margin = unit(c(5.5, 0, 1.25, 5.5), 'pt')
                     ) +
                     labs(y = paste0('\nCAFs\n(n = ', length(sc_deconv_comp$caf$ordered_cell_ids), ')')),
-                # blank_plot() +
-                #     labs(y = 'Cancer\ncells') +
-                #     scale_y_continuous(position = 'right') +
-                #     theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
-                # blank_plot() +
-                #     labs(y = 'CAFs') +
-                #     scale_y_continuous(position = 'right') +
-                #     theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
                 blank_plot(),
                 nrow = 7,
                 ncol = 1,
@@ -2428,18 +2303,6 @@ plot_grid(
                     ) +
                     labs(fill = 'Correlation')
             ),
-            # get_legend(
-            #     sc_sim_deconv_comp$coadread$sc_heatmaps_filtered[[1]] +
-            #         guides(fill = guide_colourbar(title.position = 'right')) +
-            #         theme(
-            #             legend.justification = c(0, 0),
-            #             legend.direction = 'vertical',
-            #             legend.key.width = NULL,
-            #             legend.key.height = NULL,
-            #             legend.box.margin = margin(l = 10)
-            #         ) +
-            #         labs(fill = 'Relative\nexpression\nlevel')
-            # ),
             blank_plot(),
             nrow = 7,
             ncol = 1,
@@ -2473,12 +2336,12 @@ deconv_plots <- readRDS('../data_and_figures/deconv_plots.rds')
 
 ct_to_keep <- c('blca_luminal_papillary', 'blca_basal_squamous', 'brca_luminal_a', 'brca_luminal_b', 'brca_basal_like', 'brca_her2_enriched',
     'coad', 'esca_ac', 'hnsc_mesenchymal_basal', 'hnsc_classical', 'luad_proximal_inflammatory', 'luad_proximal_proliferative',
-    'luad_terminal_respiratory_unit', 'lusc_classical', 'lusc_secretory', 'ov_differentiated', 'ov_immunoreactive', 'ov_proliferative', 'paad',
-    'read', 'stad_cin', 'stad_msi', 'ucec')
+    'luad_terminal_respiratory_unit', 'lusc_classical', 'lusc_secretory', 'ov_differentiated', 'ov_immunoreactive', 'ov_proliferative',
+    'paad_basal_moffitt', 'paad_classical_moffitt', 'read', 'stad_cin', 'stad_msi', 'ucec')
 nice_names_for_figure <- c('BLCA - Luminal-Papillary', 'BLCA - Basal-Squamous', 'BRCA - Luminal A', 'BRCA - Luminal B', 'BRCA - Basal-like',
     'BRCA - HER2-enriched', 'COAD', 'ESCA - Adenocarcinoma', 'HNSC - Malignant-Basal', 'HNSC - Classical', 'LUAD - Squamoid', 'LUAD - Magnoid',
-    'LUAD - Bronchioid', 'LUSC - Classical', 'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive', 'OV - Proliferative', 'PAAD', 'READ',
-    'STAD - CIN', 'STAD - MSI', 'UCEC')
+    'LUAD - Bronchioid', 'LUSC - Classical', 'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive', 'OV - Proliferative', 'PAAD - Basal',
+    'PAAD - Classical', 'READ', 'STAD - CIN', 'STAD - MSI', 'UCEC')
 
 scores_data <- sapply(
     ct_to_keep,
@@ -2551,11 +2414,7 @@ barplot_data[
     ,
     c('cancer_type', 'Signature threshold') := .(
         mapvalues(
-            factor(
-                cancer_type,
-                levels = .SD[`Signature threshold` == 'Lenient', cancer_type[order(-corr)]]
-                # levels = .SD[, .(corr_diff = abs(diff(corr))), by = cancer_type][order(-corr_diff), cancer_type]
-            ),
+            factor(cancer_type, levels = .SD[`Signature threshold` == 'Lenient', cancer_type[order(-corr)]]),
             ct_to_keep,
             nice_names_for_figure
         ),
@@ -2588,13 +2447,14 @@ scatterplots <- ggplot(data = scatterplot_data) +
     theme(plot.title = element_text(margin = margin(b = 30))) +
     labs(x = 'Number of genes in signatures', y = 'Correlation between signature scores', title = 'Correlation of pEMT and CAF signatures')
 
-pdf('../data_and_figures/final_figures_resubmission/R5.pdf', width = 10, height = 7)
+pdf('../data_and_figures/final_figures_resubmission/R5.pdf', width = 10, height = 8)
 plot_grid(
     plot_grid(
         scatterplots,
         summary_barplot + theme(plot.margin = unit(c(20, 5.5, 5.5, 5.5), 'pt'), legend.position = 'none'),
         nrow = 2,
         ncol = 1,
+        rel_heights = c(3.5, 4.5),
         axis = 'l',
         align = 'v'
     ),
@@ -2609,7 +2469,7 @@ dev.off()
 
 
 
-# Subset of lineplots with "error bars":
+# Subset of lineplots with error bars:
 
 sc_metadata_subset <- list(
 	coadread = list(

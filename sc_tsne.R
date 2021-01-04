@@ -1,35 +1,5 @@
-# I ran this on WEXAC using the following command:
-
-# bsub -q tirosh -n 8 -R "rusage[mem=2000]" -o sc_tsne_log.o -e sc_tsne_log.e Rscript sc_tsne.R
-
-# It was run using data.table version 1.12.8 and Rtsne version 0.15, the same versions as I have on my laptop's WSL setup.
-
 library(data.table) # 1.12.8
 library(Rtsne) # 0.15
-
-# The following is just to check the R version:
-cat(R.Version()$version.string, '\n')
-
-# Just to check all the files are there:
-
-# all(
-	# c(
-		# 'chung_breast_cancer_2017.csv',
-		# 'karaayvaz_tnbc_2018.csv',
-		# 'li_colorectal_2017.csv',
-		# 'lee_crc_2020_smc.csv',
-		# 'lee_crc_2020_kul3.csv',
-		# 'puram_hnscc_2017.csv',
-		# 'ma_liver_2019.csv',
-		# 'lambrechts_nsclc_2018.csv',
-		# 'song_nsclc_2019.csv',
-		# 'kim_luad_2020.csv',
-		# 'izar_ovarian_2020_ss2.csv',
-		# 'izar_ovarian_2020_10x.csv',
-		# 'elyada_pdac_2019.csv',
-		# 'peng_pdac_2019.csv'
-	# ) %in% dir('../data_and_figures')
-# )
 
 
 
@@ -91,7 +61,12 @@ cohort_data <- list(
 		seed = 8988
 	),
 	luad_kim = list(
-		read_quote = quote(fread('../data_and_figures/kim_luad_2020.csv')[, -c('cell_type', 'cell_type_refined', 'cell_subtype', 'sample_site', 'sample_id', 'sample_origin')]),
+		read_quote = quote(
+			fread('../data_and_figures/kim_luad_2020.csv')[
+				,
+				-c('cell_type', 'cell_type_refined', 'cell_subtype', 'sample_site', 'sample_id', 'sample_origin')
+			]
+		),
 		seed = 3118
 	),
 	lung_lambrechts = list(
@@ -120,11 +95,15 @@ cohort_data <- list(
 		seed = 9656
 	),
 	lung_qian_luad = list(
-		read_quote = quote(fread('../data_and_figures/qian_lung_2020.csv')[sample_type != 'normal' & disease == 'LUAD', -c('sample_type', 'disease', 'cell_type')]),
+		read_quote = quote(
+			fread('../data_and_figures/qian_lung_2020.csv')[sample_type != 'normal' & disease == 'LUAD', -c('sample_type', 'disease', 'cell_type')]
+		),
 		seed = 3615
 	),
 	lung_qian_lusc = list(
-		read_quote = quote(fread('../data_and_figures/qian_lung_2020.csv')[sample_type != 'normal' & disease == 'LUSC', -c('sample_type', 'disease', 'cell_type')]),
+		read_quote = quote(
+			fread('../data_and_figures/qian_lung_2020.csv')[sample_type != 'normal' & disease == 'LUSC', -c('sample_type', 'disease', 'cell_type')]
+		),
 		seed = 1684
 	),
 	lung_song = list(
@@ -132,11 +111,15 @@ cohort_data <- list(
 		seed = 6114
 	),
 	lung_song_luad = list(
-		read_quote = quote(fread('../data_and_figures/song_nsclc_2019.csv')[sample_type == 'tumour' & disease == 'LUAD', -c('sample_type', 'cell_type', 'disease')]),
+		read_quote = quote(
+			fread('../data_and_figures/song_nsclc_2019.csv')[sample_type == 'tumour' & disease == 'LUAD', -c('sample_type', 'cell_type', 'disease')]
+		),
 		seed = 8619
 	),
 	lung_song_lusc = list(
-		read_quote = quote(fread('../data_and_figures/song_nsclc_2019.csv')[sample_type == 'tumour' & disease == 'LUSC', -c('sample_type', 'cell_type', 'disease')]),
+		read_quote = quote(
+			fread('../data_and_figures/song_nsclc_2019.csv')[sample_type == 'tumour' & disease == 'LUSC', -c('sample_type', 'cell_type', 'disease')]
+		),
 		seed = 7720
 	),
 	ovarian_izar_ss2 = list(
@@ -166,34 +149,30 @@ cohort_data <- list(
 
 
 for(cohort in names(cohort_data)) {
-	
+
 	cat(paste0(cohort, ':\n'))
-	
+
 	cat('\tReading in data\n')
-	
+
 	sc_data <- eval(cohort_data[[cohort]]$read_quote)
-	
-	# Start by taking genes with log average TPM at least 4:
-	
+
+	# Take genes with log average TPM at least 4:
+
 	cat('\tFiltering genes\n')
-	
-	gene_averages <- sapply(
-		sc_data[, -c('id', 'patient')],
-		function(x) {log2(mean(10*(2^x - 1)) + 1)},
-		USE.NAMES = TRUE
-	)
-	
+
+	gene_averages <- sapply(sc_data[, -c('id', 'patient')], function(x) {log2(mean(10*(2^x - 1)) + 1)}, USE.NAMES = TRUE)
+
 	sc_data <- sc_data[, c('id', 'patient', names(gene_averages)[gene_averages >= 4]), with = FALSE]
-	
+
 	# Clustering by t-SNE and DBSCAN:
-	
+
 	cat('\tRunning t-SNE\n')
-	
+
 	set.seed(cohort_data[[cohort]]$seed)
 	sc_tsne <- Rtsne(as.matrix(sc_data[, lapply(.SD, function(x) {x - mean(x)}), .SDcols = -c('id', 'patient')]))
-	
+
 	saveRDS(sc_tsne, paste0('../data_and_figures/tsne_', cohort, '.rds'))
-	
+
 	cat('\tDone!\n')
-	
+
 }

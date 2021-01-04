@@ -1,5 +1,5 @@
 library(data.table) # 1.12.8
-library(ggplot2) # This is version 3.3.1 on my laptop's WSL setup but 3.3.0 on WEXAC.
+library(ggplot2) # 3.3.0
 library(cowplot) # 1.0.0
 library(magrittr) # 1.5
 library(limma) # 3.42.2
@@ -32,9 +32,6 @@ emt_markers <- fread('../../emt_markers.csv')[, gene := alias2SymbolTable(gene)]
 
 
 
-
-# We could select which cell types to keep and which to put under 'other' using a fraction of the maximum of the cell type frequencies.  I decided to
-# select them manually instead, because there are certain cell types I want to show in some cases, even though they're a bit rare.
 
 sc_metadata <- list(
 	brca = list(
@@ -109,28 +106,6 @@ sc_metadata <- list(
 		initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 'mast', 't_cell', 'caf', 'cancer'),
 		rare_cell_types = 'dendritic'
 	),
-	# luad = list(
-		# tcga_cancer_types = 'LUAD',
-		# read_quote = quote(
-		# 	fread('../data_and_figures/qian_lung_2020_reclassified.csv')[
-		# 		disease == 'LUAD' & cell_type != 'ambiguous',
-		# 		-c('disease', 'cell_type_author', 'cell_type_lenient')
-		# 	]
-		# ),
-		# initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
-		# rare_cell_types = c('alveolar', 'dendritic', 'epithelial', 'mast')
-	# ),
-	# luad_lenient = list(
-		# tcga_cancer_types = 'LUAD',
-		# read_quote = quote(
-		# 	fread('../data_and_figures/qian_lung_2020_reclassified.csv')[
-		# 		disease == 'LUAD' & cell_type_lenient != 'ambiguous',
-		# 		-c('disease', 'cell_type_author', 'cell_type')
-		# 	] %>% setnames('cell_type_lenient', 'cell_type')
-		# ),
-		# initial_cell_types = c('b_cell', 'endothelial', 'macrophage', 't_cell', 'caf', 'cancer'),
-		# rare_cell_types = c('alveolar', 'dendritic', 'epithelial', 'mast')
-	# ),
     lusc = list(
         tcga_cancer_types = 'LUSC',
         read_quote = quote(
@@ -188,13 +163,6 @@ sc_metadata <- list(
     )
 )
 
-# Some background info on PDAC from previous versions of this analysis:
-# Acinar cells seem to express epithelial markers at much lower levels than the ductal cells (maybe this is obvious to a real biologist), and it is
-# actually the ductal cells that the cancer originates from (the clue is in the name - PDAC - also see
-# https://www.pancreaticcancer.org.uk/information-and-support/facts-about-pancreatic-cancer/types-of-pancreatic-cancer/, where they claim that less
-# than 1% of pancreatic cancers are acinar cell cancers).  So we can assume that the acinar cells won't be malignant.  This is similar to alveolar
-# cells in the lung, which makes sense because the alveolar duct is similar in form to the acinar duct in pancreas.
-
 
 
 
@@ -222,12 +190,6 @@ genes_list <- sapply(
 			unfiltered = unfiltered,
 			filtered_cancer_caf = filter_for_groups(sc_data[, c('cell_type', ..unfiltered)], groups = c('caf', 'cancer'))
 		)
-		# if('cell_type_lenient' %in% names(sc_data)) {
-			# out <- c(
-				# out,
-				# list(filtered_cancer_caf_lenient = filter_for_groups(sc_data[, c('cell_type_lenient', ..unfiltered)], groups = c('caf', 'cancer')))
-			# )
-		# }
 		out
     },
     simplify = FALSE,
@@ -235,7 +197,6 @@ genes_list <- sapply(
 )
 
 # Save to RDS:
-
 saveRDS(genes_list, '../data_and_figures/sc_genes_list.rds')
 
 
@@ -285,11 +246,6 @@ sc_cancer_caf_args <- list(
         genes_filter_fun = function(x) {log2(mean(10*(2^x - 1)) + 1) >= 4 | sum(x >= 7) >= length(x)/100},
         scores_filter_fun = function(x) {log2(mean(10*(2^x - 1)) + 1) >= 5.5 | sum(x >= 7) >= length(x)/100}
     ),
-	# luad_lenient = list(
-        # seed = 5226,
-        # genes_filter_fun = function(x) {log2(mean(10*(2^x - 1)) + 1) >= 4.5 | sum(x >= 7) >= length(x)/100},
-        # scores_filter_fun = function(x) {log2(mean(10*(2^x - 1)) + 1) >= 5.5 | sum(x >= 7) >= length(x)/100}
-    # ),
     lusc = list(
         seed = 2566,
         genes_filter_fun = function(x) {log2(mean(10*(2^x - 1)) + 1) >= 4 | sum(x >= 7) >= length(x)/100},
@@ -342,7 +298,7 @@ sc_cancer_caf <- sapply(
 					score_cells_nbin = 30,
 					score_cells_n = 40,
                     min_sig_size = 0,
-                    scores_filter_groups = 'cancer' # Better for removing effect of complexity
+                    scores_filter_groups = 'cancer'
                 ),
                 sc_cancer_caf_args[[ct]][-1]
             )
@@ -352,9 +308,9 @@ sc_cancer_caf <- sapply(
     USE.NAMES = TRUE
 )
 
-# Use the following to check if we need to reverse the order of the genes to make the genes more highly expressed by CAFs to appear
-# at the bottom of the heatmap.  For each cancer type, it gives the average expression of the 20 genes in the head and tail of the
-# list.  We want the "head" avearge to be highest in the CAFs and the "tail" average to be higher in the cancer cells.
+# Use the following to check if we need to reverse the order of the genes to make the genes more highly expressed by CAFs to appear at the bottom of
+# the heatmap.  For each cancer type, it gives the average expression of the 20 genes in the head and tail of the list.  We want the "head" average to
+# be highest in the CAFs and the "tail" average to be higher in the cancer cells.
 check_ends <- rbindlist(
 	lapply(
 		names(sc_cancer_caf),
@@ -366,15 +322,7 @@ check_ends <- rbindlist(
 					id.vars = c('id', 'cell_type'),
 					variable.name = 'gene',
 					value.name = 'expval'
-				)[
-					,
-					.(meanexp = mean(expval)),
-					by = .(gene, cell_type)
-				][
-					,
-					.SD[sc_cancer_caf[[ct]]$ordering_genes],
-					keyby = cell_type
-				][
+				)[, .(meanexp = mean(expval)), by = .(gene, cell_type)][, .SD[sc_cancer_caf[[ct]]$ordering_genes], keyby = cell_type][
 					c('caf', 'cancer'),
 					.(end = c('head', 'tail'), ave_exp = c(mean(head(meanexp, 20)), mean(tail(meanexp, 20)))),
 					by = cell_type
@@ -431,11 +379,6 @@ sc_cancer_caf_heatmaps_args <- list(
 		annotations = c('AREG', 'CALU', 'COL1A1', 'FN1', 'RHOB', 'SDC4', 'SNAI1', 'SNAI2', 'SPARC', 'TWIST1', 'VEGFA', 'VIM', 'ZEB1', 'ZEB2'),
 		annotations_title = 'Lung Adenocarcinoma'
 	),
-	# luad_lenient = list(
-		# annotations = c('CALU', 'VEGFA', 'AREG', 'PVR', 'QSOX1', 'SNAI1', 'SNAI2', 'TWIST1', 'ZEB1', 'ZEB2', 'VIM', 'TPM2', 'FN1', 'COL1A2'),
-		# annotations_title = 'Lung Adeno.',
-		# annotations_side = 'right'
-	# ),
     lusc = list(
         annotations = c('CALU', 'COL1A1', 'DCN', 'FN1', 'IGFBP2', 'SDC1', 'SNAI1', 'SNAI2', 'TAGLN', 'TNC', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2'),
         annotations_title = 'Lung Squamous',
@@ -937,7 +880,6 @@ plot_grid(
         nrow = 1,
         ncol = 4
     ),
-	# blank_plot(),
     plot_grid(
         cowplot_sc(
             sc_cancer_caf_heatmaps_final$coadread,
@@ -986,7 +928,6 @@ plot_grid(
     blank_plot(),
     plot_grid(
 		plotlist = c(
-			# list(blank_plot()),
 			list(
 				ggplot(data.frame(y = 1:100), aes(x = 0:1, y = y)) +
 					theme(
@@ -1123,7 +1064,6 @@ patient_subclone_bars <- sapply(
 			) +
 				geom_raster() +
 				scale_fill_manual(values = subclone_colours) +
-				# scale_fill_manual(values = c('malignant' = 'white', 'malignant clone 1' = 'coral', 'malignant clone 2' = 'cornflowerblue')) +
 				scale_x_discrete(expand = c(0, 0)) +
 				scale_y_continuous(expand = c(0, 0)) +
 				theme(
@@ -1141,7 +1081,6 @@ patient_subclone_bars <- sapply(
 				) +
 					geom_raster() +
 					scale_fill_manual(values = setNames(subclone_colours[subclones], as.character(1:length(subclones)))) +
-					# scale_fill_manual(values = c('1' = 'coral', '2' = 'cornflowerblue')) +
 					theme(legend.justification = 'top')
 			)
 
@@ -1347,7 +1286,6 @@ plot_grid(
         nrow = 1,
         ncol = 4
     ),
-	# blank_plot(),
     plot_grid(
         cowplot_sc(
             sc_cancer_caf_heatmaps_final$brca,
@@ -1436,7 +1374,6 @@ dev.off()
 
 # Plots to show average expression of mesenchymal and epithelial genes:
 
-# For this I need the analysis of EMT genes in just the cancer cells.  I hoped not to have to do this - I could reengineer everything so I don't.
 # sc_cancer <- readRDS('../data_and_figures/sc_cancer.rds')
 
 sc_cancer <- sapply(
@@ -1526,47 +1463,31 @@ emt_epi_comparison <- sapply(
 
         epi_heatmap <- ggplot(
             melt(
-                plot_data[
-                    , # Z scores instead of expression levels to make correlation with EMT score clearer
-                    c(.(id = id), sapply(.SD, function(x) {(x - mean(x))/sd(x)}, simplify = FALSE, USE.NAMES = TRUE)),
-                    .SDcols = epi_markers
-                ],
-                # plot_data[, c('id', ..epi_markers)],
+                plot_data[, c(.(id = id), sapply(.SD, function(x) {(x - mean(x))/sd(x)}, simplify = FALSE, USE.NAMES = TRUE)), .SDcols = epi_markers],
                 id.vars = 'id',
                 variable.name = 'gene',
                 value.name = 'expression_level'
             ),
             aes(
                 x = factor(id, levels = unique(id)[sc_cancer[[ct]]$ordering_cells$cancer]),
-                y = factor(
-                    gene,
-                    # levels = plot_data[, names(sort(colMeans(.SD))), .SDcols = epi_markers]
-                    levels = names(epi_emt_corr)
-                ),
+                y = factor(gene, levels = names(epi_emt_corr)),
                 fill = expression_level
             )
         ) +
             geom_raster() +
             scale_fill_gradientn(
                 limits = c(-2, 2),
-                # limits = c(0, 12),
                 colours = rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)),
-                # colours = rev(colorRampPalette(brewer.pal(11, "Spectral"))(50)),
                 oob = scales::squish,
                 breaks = c(-2, -1, 0, 1, 2),
                 labels = c('-2' = '\u2264 -2', '-1' = '-1', '0' = '0', '1' = '1', '2' = '\u2265 2')
-                # breaks = c(0, 3, 6, 9, 12),
-                # labels = c('0' = '0', '3' = '3', '6' = '6', '9' = '9', '12' = '\u2265 12')
             ) +
             scale_x_discrete(expand = c(0, 0)) +
             scale_y_discrete(expand = c(0, 0)) +
             theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
             labs(x = 'Cells', y = 'Epithelial markers', fill = 'Expression\nlevel Z-score')
 
-        epi_emt_corr_barplot <- ggplot(
-            data.table(gene = names(epi_emt_corr), corr = epi_emt_corr),
-            aes(x = factor(gene, levels = gene), y = corr)
-        ) +
+        epi_emt_corr_barplot <- ggplot(data.table(gene = names(epi_emt_corr), corr = epi_emt_corr), aes(x = factor(gene, levels = gene), y = corr)) +
             geom_col(width = 0.8) +
             scale_x_discrete(expand = c(0, 0.5)) +
             theme_test() +
@@ -1579,7 +1500,6 @@ emt_epi_comparison <- sapply(
             lineplots = lineplots,
             combined_lineplot = combined_lineplot,
             epi_heatmap = epi_heatmap,
-            # epi_emt_corr_lineplot = epi_emt_corr_lineplot,
             epi_emt_corr_barplot = epi_emt_corr_barplot,
             data = plot_data,
             epi_markers = epi_markers,
@@ -1615,12 +1535,10 @@ aligned_plots <- sapply(
 					axis.text.y = element_blank(),
 					axis.title.y = element_blank(),
 					axis.ticks.y = element_blank(),
-					# Setting margin is a bodge to allow us to align everything:
-					axis.title.x = element_text(margin = margin(t = 50)),
+					axis.title.x = element_text(margin = margin(t = 50)), # Setting margin is a bodge to allow us to align everything
 					plot.margin = unit(c(20, 20, 5.5, 1), 'pt')
 				) +
-				# ylim(range(unlist(lapply(emt_epi_comparison, `[[`, 'epi_emt_corr')))) +
-				labs(y = 'Correlation with\nEMT score'), # It's confusing with coord_flip()...
+				labs(y = 'Correlation with\nEMT score'), # Remember we used coord_flip()
 			align = 'h'
 		)
 
@@ -1639,14 +1557,7 @@ aligned_plots <- sapply(
 					plot.margin = unit(c(1, 1, 5.5, 20), 'pt'),
 					legend.position = 'none'
 				) +
-				labs(
-					x = 'Cells'
-					# x = switch(
-						# (which(names(emt_epi_comparison) == ct) == length(emt_epi_comparison)) + 1,
-						# NULL,
-						# 'Cells'
-					# )
-				),
+				labs(x = 'Cells'),
 			align = 'v'
 		)
 
@@ -1666,7 +1577,6 @@ aligned_plots <- sapply(
 )
 
 cairo_pdf('../data_and_figures/final_figures_resubmission/S5.pdf', width = 12, height = 16)
-# cairo_pdf('../data_and_figures/sc_epi_vs_emt.pdf', width = 12, height = 16)
 
 plot_grid(
     plot_grid(
@@ -1701,16 +1611,13 @@ plot_grid(
 						nrow = 2,
 						ncol = 2,
 						rel_heights = c(3 + length(emt_epi_comparison[[ct]]$epi_markers), 8),
-						# rel_heights = c(2 + (length(emt_epi_comparison[[ct]]$epi_markers) - 12)*0.15, 1),
 						rel_widths = c(3, 1)
 					)
 				}
 			),
 			nrow = 4,
 			ncol = 1,
-			# align = 'v',
 			rel_heights = sapply(emt_epi_comparison[1:4], function(li) {11 + length(li$epi_markers)})
-			# rel_heights = sapply(emt_epi_comparison[1:4], function(li) {3 + (length(li$epi_markers) - 12)*0.075})
 		),
 		plot_grid(
 			plotlist = lapply(
@@ -1721,16 +1628,13 @@ plot_grid(
 						nrow = 2,
 						ncol = 2,
 						rel_heights = c(3 + length(emt_epi_comparison[[ct]]$epi_markers), 8),
-						# rel_heights = c(2 + (length(emt_epi_comparison[[ct]]$epi_markers) - 12)*0.15, 1),
 						rel_widths = c(3, 1)
 					)
 				}
 			),
 			nrow = 4,
 			ncol = 1,
-			# align = 'v',
 			rel_heights = sapply(emt_epi_comparison[5:8], function(li) {11 + length(li$epi_markers)})
-			# rel_heights = sapply(emt_epi_comparison[5:8], function(li) {3 + (length(li$epi_markers) - 12)*0.075})
 		),
 		nrow = 1,
 		ncol = 2
@@ -1741,8 +1645,6 @@ plot_grid(
 )
 
 dev.off()
-
-# I don't think we need to bother doing this for the lenient classifications, because this shouldn't change the analysis of the cancer cells.
 
 
 
@@ -1759,7 +1661,6 @@ max_mean_counts <- list(
     hnsc = 100,
     lihc = 100,
 	luad = 1000,
-    # luad = 400,
 	lusc = 200,
     ov = 500,
     paad = 1000
@@ -1767,15 +1668,11 @@ max_mean_counts <- list(
 
 # lineplots <- readRDS('../data_and_figures/simulated_bulk_lineplots.rds')
 
-# In the below, I'm setting normalise_fun to NULL, so that I don't divide each gene by its 95th percentile (the default behaviour).  I think I could
-# also use normalise_fun to reverse the log before computing the contributions: try setting normalise_fun = function(x) {2^x - 1}
-
 lineplots <- sapply(
     names(sc_metadata),
     function(ct) {
 		cat(paste0(ct, '\n'))
         sc_data <- eval(sc_metadata[[ct]]$read_quote)
-		# if('cell_type_lenient' %in% names(sc_data)) {sc_data[, cell_type_lenient := NULL]}
 		if(!is.null(sc_metadata[[ct]]$rare_cell_types)) {
 			sc_data[, cell_type := mapvalues(cell_type, sc_metadata[[ct]]$rare_cell_types, rep('rare', length(sc_metadata[[ct]]$rare_cell_types)))]
 		}
@@ -1815,12 +1712,6 @@ lineplots <- sapply(
 
 saveRDS(lineplots, '../data_and_figures/simulated_bulk_lineplots.rds')
 
-# Save to PDF with each figure on a separate page:
-
-# pdf('../data_and_figures/simulated_bulk_lineplots.pdf', width = 7, height = 5)
-# lapply(lineplots, `[[`, 'lineplot')
-# dev.off()
-
 # Save as a single combined figure on one page:
 
 dummy_legend_plot <- ggplot(
@@ -1859,10 +1750,6 @@ dummy_legend_plot <- ggplot(
     theme(legend.key = element_rect(size = 1, colour = 'white'), legend.key.size = unit(15, 'pt'))
 
 dummy_legend <- get_legend(dummy_legend_plot)
-
-# To see just the legend:
-# grid::grid.newpage()
-# grid::grid.draw(dummy_legend)
 
 pdf('../data_and_figures/simulated_bulk_lineplots.pdf', width = 12, height = 6)
 
@@ -1939,16 +1826,8 @@ plot_grid(
     ),
     plot_grid(
         plotlist = list(
-            # luad = lineplots$luad_lenient$lineplot +
-                # theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 20, 20), 'pt')) +
-                # labs(x = NULL, y = NULL),
             lusc = lineplots$lusc_lenient$lineplot +
-                theme(
-                    # axis.text.y = element_blank(),
-                    legend.position = 'none',
-					plot.margin = unit(c(5.5, 5.5, 20, 20), 'pt')
-                    # plot.margin = unit(c(5.5, 5.5, 20, 5.5), 'pt')
-                ) +
+                theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 20, 20), 'pt')) +
                 labs(x = NULL, y = NULL),
             ov = lineplots$ov_lenient$lineplot +
                 theme(axis.text.y = element_blank(), legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 20, 5.5), 'pt')) +
@@ -1979,8 +1858,7 @@ simulated_bulk_data <- sapply(
 
         cat(paste0(ct, '\n'))
         sc_data <- eval(sc_metadata[[ct]]$read_quote)
-		# if('cell_type_lenient' %in% names(sc_data)) {sc_data[, cell_type_lenient := NULL]}
-		if(!is.null(sc_metadata[[ct]]$rare_cell_types)) { # Check if this is necessary here
+		if(!is.null(sc_metadata[[ct]]$rare_cell_types)) {
 			sc_data[, cell_type := mapvalues(cell_type, sc_metadata[[ct]]$rare_cell_types, rep('rare', length(sc_metadata[[ct]]$rare_cell_types)))]
 		}
         set.seed(sc_cancer_caf_args[[ct]]$seed)
@@ -1989,15 +1867,11 @@ simulated_bulk_data <- sapply(
             types = sc_data$cell_type,
             id_prefix = ct,
             max_mean_count = sc_data[cell_type == 'cancer', .N, by = patient][, round(quantile(N, 0.9))]
-            # max_mean_count = max_mean_counts[[ct]]
-            # genes = genes_list[[ct]]
         )
     },
     simplify = FALSE,
     USE.NAMES = TRUE
 )
-
-# Change the following to convert the expression data from a matrix into a data table.
 
 simulated_bulk_data <- sapply(
     c('expression_data', 'meta_data'),
@@ -2009,7 +1883,6 @@ simulated_bulk_data <- sapply(
 # Replace NAs arising from fill = TRUE to zeros:
 simulated_bulk_data$expression_data[is.na(simulated_bulk_data$expression_data)] <- 0
 
-# simulated_bulk_data$meta_data[, cancer_type := str_extract(id, '^[a-z]*')]
 simulated_bulk_data$meta_data[, cancer_type := gsub('[0-9]+', '', id)]
 
 setcolorder(simulated_bulk_data$meta_data, c('id', 'cancer_type'))
@@ -2028,10 +1901,6 @@ simulated_bulk_metadata <- fread('../data_and_figures/simulated_bulk_metadata.cs
 
 ccle <- fread('../../CCLE_cancer_type_Av.csv', key = 'gene_id')
 cell_type_markers <- fread('../../cell_type_markers.csv')
-# extra_data <- fread('../data_and_figures/collated_extra_data.csv', key = 'gene')
-
-# The name 'tcga_cancer_type' in this list is confusing - it's really the elements of simulated_bulk_data$meta_data$cancer_type (hence it's lower case).
-# I guess I need to call it this for the deconv function.
 
 deconv_args_per_ct <- list(
     brca = list(tcga_cancer_types = 'brca', ccle_cancer_type = 'breast', seed = 1087,
@@ -2043,15 +1912,13 @@ deconv_args_per_ct <- list(
 	coadread_lenient = list(tcga_cancer_types = 'coadread_lenient', ccle_cancer_type = 'large intestine', seed = 5106,
         plot_title = 'Colorectal', genes_filter_fun = function(x) 1:200),
     hnsc = list(tcga_cancer_types = 'hnsc', ccle_cancer_type = 'HNSCC', seed = 6367,
-        plot_title = 'Head and Neck', genes_filter_fun = function(x) 1:200),# extra_data_source = 'puram_hnscc_2017
+        plot_title = 'Head and Neck', genes_filter_fun = function(x) 1:200),
     lihc = list(tcga_cancer_types = 'lihc', ccle_cancer_type = 'liver', seed = 5199,
-        plot_title = 'Liver', genes_filter_fun = function(x) 1:200),# extra_data_source = 'ma_liver_2019'
+        plot_title = 'Liver', genes_filter_fun = function(x) 1:200),
 	lihc_lenient = list(tcga_cancer_types = 'lihc_lenient', ccle_cancer_type = 'liver', seed = 1682,
         plot_title = 'Liver', genes_filter_fun = function(x) 1:200),
     luad = list(tcga_cancer_types = 'luad', ccle_cancer_type = 'lung', seed = 5395,
         plot_title = 'Lung Adenocarcinoma', genes_filter_fun = function(x) 1:200),
-	# luad_lenient = list(tcga_cancer_types = 'luad_lenient', ccle_cancer_type = 'lung', seed = 5561,
-        # plot_title = 'Lung Adenocarcinoma', genes_filter_fun = function(x) 1:200),
     lusc = list(tcga_cancer_types = 'lusc', ccle_cancer_type = 'lung', seed = 6212,
         plot_title = 'Lung squamous', genes_filter_fun = function(x) 1:200),
     lusc_lenient = list(tcga_cancer_types = 'lusc_lenient', ccle_cancer_type = 'lung', seed = 5596,
@@ -2066,9 +1933,6 @@ deconv_args_per_ct <- list(
 
 # Defining gene list from the simulated bulk data:
 
-# Note I tried it with the genes we got from the single cell data and the result was worse.  If you do want to use the genes from single cell data,
-# delete initial_gene_weights = FALSE and put genes_filter_fun = NULL and genes_from_tcga_fun = NULL.
-
 # simulated_deconvs <- readRDS('../data_and_figures/simulated_deconvs.rds')
 
 simulated_deconvs <- sapply(
@@ -2081,7 +1945,6 @@ simulated_deconvs <- sapply(
                 list(
                     expression_data = simulated_bulk_data,
                     meta_data = simulated_bulk_metadata,
-                    # extra_data = extra_data,
                     genes = emt_markers,
                     cell_type_markers = cell_type_markers,
                     ccle_data = ccle,
@@ -2163,11 +2026,7 @@ deconv_plot_args_per_ct <- list(
         heatmap_annotations = c('CALU', 'COL1A2', 'COL3A1', 'MMP2', 'QSOX1', 'SDC4', 'THY1', 'VEGFA'),
         plot_title = 'Lung Adenocarcinoma'
     ),
-	# luad_lenient = list(
-        # heatmap_annotations = c('ACTA2', 'COL1A1', 'COL1A2', 'ITGB1', 'LAMC2', 'QSOX1', 'RHOB', 'THY1'),
-        # plot_title = 'Lung Adenocarcinoma'
-    # ),
-    lusc = list( # Need to change annotations from here downwards...
+    lusc = list(
         heatmap_annotations = c('COL1A2', 'COL3A1', 'FAP', 'IGFBP2', 'PFN2', 'SDC1', 'THY1', 'TNC'),
         plot_title = 'Lung squamous'
     ),
@@ -2196,9 +2055,6 @@ for(ct in names(deconv_plot_args_per_ct)) {
 	)
 }
 
-# In the following, I am not opting to include epithelial cells in the diagnostics, mainly to save time (it saves a lot of time), but also because
-# the epithelial cell correlations are (thankfully) as I would expect, and because conceptually I don't think it adds much.
-
 simulated_deconv_plots <- sapply(
     names(deconv_args_per_ct),
     function(ct) {
@@ -2208,8 +2064,6 @@ simulated_deconv_plots <- sapply(
             args = c(
                 list(
                     data = simulated_deconvs[[ct]],
-                    # Include the following only if you want epithelial scores (takes much longer):
-                    # expression_data = simulated_bulk_data,
                     heatmap_legend_title = 'Correlation',
                     heatmap_colours = rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)),
                     heatmap_colour_limits = c(-1, 1),
@@ -2237,8 +2091,6 @@ simulated_deconv_plots <- sapply(
                     extra_legend_direction = 'horizontal',
                     extra_axis_title = NULL,
                     bar_legend_justification = 'left'
-                    # bar_legend_width = NULL,
-                    # bar_legend_height = NULL
                 ),
                 deconv_plot_args_per_ct[[ct]]
             )
@@ -2248,87 +2100,13 @@ simulated_deconv_plots <- sapply(
     USE.NAMES = TRUE
 )
 
-# The following won't work unless we remove heatmap_annotations_side = 'left' from the above.
-
-# cairo_pdf('../data_and_figures/simulated_deconv_figures.pdf', width = 7, height = 6, onefile = TRUE)
-# for(ct in names(simulated_deconv_plots)[!grepl('lenient', names(simulated_deconv_plots))]) {
-# 	deconv_plot(
-# 		simulated_deconv_plots[ct],
-# 		legends_rel_size = c(0.5, 0.75, 0, 0.75, 0, 0.75, 0.75, 3, 2),
-# 		legends_space = 0.7,
-# 		title.position = 'right'
-# 	) %>% print
-# }
-# dev.off()
-#
-# cairo_pdf('../data_and_figures/simulated_deconv_figures_lenient.pdf', width = 7, height = 6, onefile = TRUE)
-# for(ct in names(simulated_deconv_plots)[grepl('lenient', names(simulated_deconv_plots))]) {
-# 	deconv_plot(
-# 		simulated_deconv_plots[ct],
-# 		legends_rel_size = c(0.5, 0.75, 0, 0.75, 0, 0.75, 0.75, 3, 2),
-# 		legends_space = 0.7,
-# 		title.position = 'right'
-# 	) %>% print
-# }
-# dev.off()
-
-# Diagnostic figures:
-# pdf('../data_and_figures/simulated_deconv_diagnostics.pdf', width = 10, height = 16.8)
-# i <- 1
-# for(deconv_ct in simulated_deconv_plots) {
-#     ggarrange(
-#         plots = c(list(deconv_ct$plots$heatmap), deconv_ct$diagnostics$alternative_purity_cor, deconv_ct$diagnostics$cell_type_bars),
-#         ncol = 1,
-#         nrow = 11,
-#         heights = c(8, rep(0.8, 10)),
-#         newpage = switch((i == 1) + 1, TRUE, FALSE)
-#     )
-#     i <- i + 1
-# }
-# dev.off()
-
-# This is a bit worrying because some analyses fail the criterion I used for filtering the TCGA deconvs (regression slope < -0.1):
-# diagnostic_cell_type_lms <- sapply(
-#     simulated_deconvs,
-#     function(deconv_ct) {
-#         with(
-#             deconv_ct,
-#             cor_with_initial_and_cell_types[genes_filtered][
-#                 ordering,
-#                 sapply(.SD, function(ct) setNames(lm(ct ~ I(.I/.N))$coeff['I(.I/.N)'], NULL), USE.NAMES = TRUE),
-#                 .SDcols = cell_types
-#             ]
-#         )
-#     },
-#     USE.NAMES = TRUE
-# )
-
 
 
 
 
 # Heatmaps showing expression of genes in single cells data, ordered as in the deconv results:
 
-# Can't use max_mean_counts because that means too few cells in some cases.
-# sample_sizes <- list(
-#     brca = 1000,
-# 	brca_lenient = 1000,
-#     coadread = 800,
-# 	coadread_lenient = 800,
-#     hnsc = 400,
-#     lihc = 150,
-# 	lihc_lenient = 200,
-#     luad = 1000,
-# 	# luad = 200,
-# 	# luad_lenient = 300,
-# 	lusc = 100,
-# 	lusc_lenient = 100,
-#     ov = 1500,
-# 	ov_lenient = 2000,
-#     paad = 1500
-# )
-
-set.seed(4508) # Is it enough to set a single seed before the whole loop?
+set.seed(4508)
 
 sc_sim_deconv_comp <- sapply(
 	names(simulated_deconvs),
@@ -2341,15 +2119,6 @@ sc_sim_deconv_comp <- sapply(
 		sc_deconv_comp <- sapply(
 			c('cancer', 'caf'),
 			function(x) {
-
-				# plot_data <- copy(sc_data[cell_type == x])[
-				# 	,
-				# 	complexity := apply(.SD, 1, function(x) sum(x > 0)),
-				# 	.SDcols = -c('id', 'patient', 'cell_type')
-				# ][
-				# 	,
-				# 	.SD[sample(1:.N, sample_sizes[[ct]], prob = complexity)]
-				# ][, complexity := NULL][, c('id', simulated_deconvs[[ct]]$genes_filtered), with = FALSE]
 
 				plot_data <- sc_data[cell_type == x, c('id', simulated_deconvs[[ct]]$genes_filtered), with = FALSE]
 
@@ -2433,7 +2202,6 @@ sc_sim_deconv_comp <- sapply(
 							axis.ticks = element_blank(),
 							axis.ticks.length = unit(0, 'pt'),
 							plot.margin = unit(c(5.5, 5.5, 1.25, 0), 'pt')
-							# plot.margin = switch((x == 'cancer') + 1, unit(c(1.25, 5.5, 5.5, 5.5), 'pt'), unit(c(5.5, 5.5, 1.25, 5.5), 'pt'))
 						) +
 						labs(y = mapvalues(x, c('cancer', 'caf'), c('Cancer', 'CAF'), warn_missing = FALSE), fill = 'Relative\nexpression\nlevel')
 				},
@@ -2455,12 +2223,6 @@ sc_sim_deconv_comp <- sapply(
 			.SDcols = simulated_deconvs[[ct]]$genes_filtered
 		]
 		filtered_genes <- names(filtered_genes)[filtered_genes]
-
-		# filtered_genes <- gene_averages_cancer_caf[
-			# ,
-			# .(pass = ave_exp[cell_type == 'cancer'] > 0.25 | ave_exp[cell_type == 'caf'] > 0.25),
-			# by = gene
-		# ][pass == TRUE, as.character(gene)]
 
 		ordered_filtered_genes <- with(simulated_deconv_filtered, genes_filtered[ordering][genes_filtered[ordering] %in% filtered_genes])
 
@@ -2550,17 +2312,7 @@ sc_sim_deconv_comp <- sapply(
 			function(expr_var) sapply(
 				c('cancer', 'caf'),
 				function(x) {
-					ggplot(
-						plot_data[[x]],
-						# plot_data[cell_type == x],
-						aes(
-							x = gene,
-							y = id,
-							# x = factor(gene, levels = with(simulated_deconv_filtered, genes_filtered[ordering])),
-							# y = factor(id, levels = sc_deconv_comp[[x]]$ordered_cell_ids),
-							fill = get(expr_var)
-						)
-					) +
+					ggplot(plot_data[[x]], aes(x = gene, y = id, fill = get(expr_var))) +
 						geom_raster() +
 						scale_x_discrete(expand = c(0, 0)) +
 						scale_y_discrete(expand = c(0, 0)) +
@@ -2569,7 +2321,6 @@ sc_sim_deconv_comp <- sapply(
 								sequential_hcl(25, h = 190, c = 70, l = c(70, 99), power = 0.8),
 								sequential_hcl(25, h = 60, c = 100, l = c(80, 99), power = 0.8, rev = TRUE)
 							),
-							# colours = rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)),
 							limits = switch((expr_var == 'expression_level_cc_rm') + 1, c(-4, 4), c(-2, 2)),
 							breaks = switch((expr_var == 'expression_level_cc_rm') + 1, c(-4, -2, 0, 2, 4), c(-2, -1, 0, 1, 2)),
 							labels = switch(
@@ -2577,9 +2328,6 @@ sc_sim_deconv_comp <- sapply(
 								c('-4' = '\u2264 -4', '-2' = '-2', '0' = '0', '2' = '2', '4' = '\u2265 4'),
 								c('-2' = '\u2264 -2', '-1' = '-1', '0' = '0', '1' = '1', '2' = '\u2265 2')
 							),
-							# limits = c(-4, 4),
-							# breaks = c(-4, -2, 0, 2, 4),
-							# labels = c('-4' = '\u2264 -4', '-2' = '-2', '0' = '0', '2' = '2', '4' = '\u2265 4'),
 							oob = squish
 						) +
 						theme(
@@ -2632,10 +2380,6 @@ for(ct in names(sc_sim_deconv_comp)[!grepl('lenient', names(sc_sim_deconv_comp))
 			plotlist = c(
 				list(blank_plot() + theme(plot.margin = unit(c(5.5, 5.5, 5.5, 5.5), 'pt')) + labs(title = deconv_plot_args_per_ct[[ct]]$plot_title)),
 				sim_deconv_figures,
-				# lapply(
-					# simulated_deconv_plots[[ct]]$plots[c('purity_bar', 'ccle_bar', 'heatmap')],
-					# function(x) x + theme(legend.position = 'none', plot.title = element_blank())
-				# ),
 				lapply(sc_sim_deconv_comp[[ct]]$sc_heatmaps_unfiltered$expression_level_cc_rm, function(x) x + theme(legend.position = 'none'))
 			),
 			nrow = 6,
@@ -2703,10 +2447,6 @@ for(ct in names(sc_sim_deconv_comp)[grepl('lenient', names(sc_sim_deconv_comp))]
 			plotlist = c(
 				list(blank_plot() + theme(plot.margin = unit(c(5.5, 5.5, 5.5, 5.5), 'pt')) + labs(title = deconv_plot_args_per_ct[[ct]]$plot_title)),
 				sim_deconv_lenient_figures,
-				# lapply(
-					# simulated_deconv_plots[[ct]]$plots[c('purity_bar', 'ccle_bar', 'heatmap')],
-					# function(x) x + theme(legend.position = 'none', plot.title = element_blank())
-				# ),
 				lapply(sc_sim_deconv_comp[[ct]]$sc_heatmaps_unfiltered$expression_level_cc_rm, function(x) x + theme(legend.position = 'none'))
 			),
 			nrow = 6,
@@ -2777,13 +2517,6 @@ for(ct in names(sc_sim_deconv_comp)[!grepl('lenient', names(sc_sim_deconv_comp))
 			plotlist = c(
 				list(blank_plot() + theme(plot.margin = unit(c(5.5, 5.5, 5.5, 5.5), 'pt')) + labs(title = deconv_plot_args_per_ct[[ct]]$plot_title)),
 				sc_sim_deconv_comp_figures
-				# lapply(
-					# c(
-						# sc_sim_deconv_comp[[ct]]$filtered_deconv_figures[c('purity_bar', 'ccle_bar', 'heatmap')],
-						# sc_sim_deconv_comp[[ct]]$sc_heatmaps_filtered
-					# ),
-					# function(x) x + theme(legend.position = 'none', plot.title = element_blank())
-				# )
 			),
 			nrow = 6,
 			ncol = 1,
@@ -2841,13 +2574,6 @@ for(ct in names(sc_sim_deconv_comp)[grepl('lenient', names(sc_sim_deconv_comp))]
 			plotlist = c(
 				list(blank_plot() + theme(plot.margin = unit(c(5.5, 5.5, 5.5, 5.5), 'pt')) + labs(title = deconv_plot_args_per_ct[[ct]]$plot_title)),
 				sc_sim_deconv_comp_lenient_figures
-				# lapply(
-					# c(
-						# sc_sim_deconv_comp[[ct]]$filtered_deconv_figures[c('purity_bar', 'ccle_bar', 'heatmap')],
-						# sc_sim_deconv_comp[[ct]]$sc_heatmaps_filtered
-					# ),
-					# function(x) x + theme(legend.position = 'none', plot.title = element_blank())
-				# )
 			),
 			nrow = 6,
 			ncol = 1,
@@ -2905,15 +2631,9 @@ print(
 		plot_grid(
 			plot_grid(
 				plotlist = list(
-					lineplots$coadread$lineplot +
-						theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 30), 'pt')),# +
-						# labs(x = NULL, y = NULL),
-					lineplots$hnsc$lineplot +
-						theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 15), 'pt')) +
-						labs(y = NULL),
-					lineplots$luad$lineplot +
-						theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 15), 'pt')) +
-						labs(y = NULL)
+					lineplots$coadread$lineplot + theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 30), 'pt')),
+					lineplots$hnsc$lineplot + theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 15), 'pt')) + labs(y = NULL),
+					lineplots$luad$lineplot + theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 15), 'pt')) + labs(y = NULL)
 				),
 				nrow = 1,
 				ncol = 3,
@@ -2925,9 +2645,7 @@ print(
 			nrow = 1,
 			ncol = 3,
 			rel_widths = c(8, 1.5, 0.5)
-		),# +
-			# draw_label('Proportion of tumour', x = 0.47, y = 0, vjust = -0.5, size = 12) +
-			# draw_label('Proportion of gene expression', x = 0, y = 0.5, vjust = 1.3, angle = 90, size = 12),
+		),
 		blank_plot(),
 		plot_grid(
 			plot_grid(
@@ -2945,12 +2663,6 @@ print(
 							theme(plot.margin = unit(c(0, 5.5, 1.25, 0), 'pt'))
 						sc_sim_deconv_comp_figures$axis_labels <- sc_sim_deconv_comp_figures$axis_labels +
 							theme(plot.margin = unit(c(0, 0, 1.25, 0), 'pt'))
-						# sc_sim_deconv_comp_figures$sc_heatmaps_unfiltered <- sapply(
-							# sc_sim_deconv_comp_figures$sc_heatmaps_unfiltered,
-							# function(x) {x + theme(plot.margin = unit(c(5.5, 5.5, 1.25, 0), 'pt'))},
-							# simplify = FALSE,
-							# USE.NAMES = TRUE
-						# )
 
 						plot_grid(
 							plot_grid(
@@ -3013,14 +2725,6 @@ print(
 										plot.margin = unit(c(5.5, 0, 1.25, 5.5), 'pt')
 							        ) +
 									labs(y = paste0('\nCAFs\n(n = ', length(sc_sim_deconv_comp[[ct]]$ordered_cell_ids$caf), ')')),
-								# blank_plot() +
-								# 	labs(y = 'Cancer\ncells') +
-								# 	scale_y_continuous(position = 'right') +
-								# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
-								# blank_plot() +
-								# 	labs(y = 'CAFs') +
-								# 	scale_y_continuous(position = 'right') +
-								# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
 								blank_plot(),
 								nrow = 5,
 								ncol = 1,
@@ -3067,11 +2771,6 @@ print(
 				get_legend(
 					simulated_deconv_plots[[ct]]$plots$heatmap +
 						guides(fill = guide_colourbar(title.position = 'right')) +
-						# scale_fill_gradientn(
-							# colours = rev(colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(50)),
-							# limits = c(-1, 1),
-							# breaks = c(-1, 0, 1)
-						# ) +
 						theme(
 							legend.justification = c(0, 1),
 							legend.direction = 'horizontal',
@@ -3128,35 +2827,23 @@ print(
 		blank_plot(),
 		plot_grid(
 			plotlist = list(
-				lineplots$brca$lineplot +
-					theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 30), 'pt')),# +
-					# labs(x = NULL, y = NULL),
-				lineplots$lihc$lineplot +
-					theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 15), 'pt')) +
-					labs(y = NULL),
-				lineplots$lusc$lineplot +
-					theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 15), 'pt')) +
-					labs(y = NULL)
+				lineplots$brca$lineplot + theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 30), 'pt')),
+				lineplots$lihc$lineplot + theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 15), 'pt')) + labs(y = NULL),
+				lineplots$lusc$lineplot + theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 15), 'pt')) + labs(y = NULL)
 			),
 			nrow = 1,
 			ncol = 3,
 			rel_widths = c(1.125, 1, 1) # Left plots are squashed by larger left margin
-			# align = 'h'
 		),
 		plot_grid(
 			plotlist = list(
-				lineplots$ov$lineplot +
-					theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 30), 'pt')),# +
-					# labs(x = NULL, y = NULL),
-				lineplots$paad$lineplot +
-					theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 15), 'pt')) +
-					labs(y = NULL),
+				lineplots$ov$lineplot + theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 30), 'pt')),
+				lineplots$paad$lineplot + theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 15), 'pt')) + labs(y = NULL),
 				dummy_legend
 			),
 			nrow = 1,
 			ncol = 3,
 			rel_widths = c(1.125, 1, 1) # Left plots are squashed by larger left margin
-			# align = 'h'
 		),
 		nrow = 3,
 		ncol = 1,
@@ -3256,14 +2943,6 @@ print(
 									plot.margin = unit(c(5.5, 0, 1.25, 5.5), 'pt')
 								) +
 								labs(y = paste0('\nCAFs\n(n = ', length(sc_sim_deconv_comp[[ct]]$ordered_cell_ids$caf), ')')),
-							# blank_plot() +
-							# 	labs(y = 'Cancer\ncells') +
-							# 	scale_y_continuous(position = 'right') +
-							# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
-							# blank_plot() +
-							# 	labs(y = 'CAFs') +
-							# 	scale_y_continuous(position = 'right') +
-							# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
 							blank_plot(),
 							nrow = 5,
 							ncol = 1,
@@ -3378,14 +3057,6 @@ print(
 	                                    plot.margin = unit(c(5.5, 0, 1.25, 5.5), 'pt')
 	                                ) +
 	                                labs(y = paste0('\nCAFs\n(n = ', length(sc_sim_deconv_comp[[ct]]$ordered_cell_ids$caf), ')')),
-								# blank_plot() +
-								# 	labs(y = 'Cancer\ncells') +
-								# 	scale_y_continuous(position = 'right') +
-								# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
-								# blank_plot() +
-								# 	labs(y = 'CAFs') +
-								# 	scale_y_continuous(position = 'right') +
-								# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
 								blank_plot(),
 								nrow = 5,
 								ncol = 1,
@@ -3481,7 +3152,6 @@ print(
 		nrow = 5,
 		ncol = 1,
 		rel_heights = c(0.125, 1.8, 0.125, 1.8, 0.125)
-		# rel_heights = c(0.05, 1, 0.05, 1)
 	) + draw_label('B', x = 0, y = 0.99, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2)
 )
 
@@ -3546,7 +3216,6 @@ print(
 					es_y_axis_title_angle = 0,
 					es_y_axis_title_xpos = 0.8
 				),
-				# blank_plot(),
 				cowplot_sc(
 					sc_cancer_caf_heatmap_lenient_final$coadread_lenient,
 					legend_space = 0,
@@ -3565,32 +3234,16 @@ print(
 				),
 				ncol = 3,
 				nrow = 1
-				# rel_widths = c(20, 1, 20)
 			),
-			# blank_plot(),
-			# plot_grid(
-				# cowplot_sc(
-					# all_figures$paad$sc_cancer_caf_heatmap_combining,
-					# legend_space = 0,
-					# heights = c(1.5, 20, 4),
-					# es_x_axis_title_vjust = 1.3,
-					# es_y_axis_title_angle = 0,
-					# es_y_axis_title_xpos = 0.8
-				# ),
+			blank_plot(),
+			plot_grid(
+				sc_cancer_caf_heatmap_lenient_final$brca_lenient$plots$genes_detected_legend,
 				blank_plot(),
-				plot_grid(
-					sc_cancer_caf_heatmap_lenient_final$brca_lenient$plots$genes_detected_legend,
-					# all_figures$paad$sc_cancer_caf_heatmap_scran$plots$genes_detected_legend,
-					blank_plot(),
-					sc_cancer_caf_heatmap_lenient_final$brca_lenient$plots$heatmap_legend,
-					nrow = 1,
-					ncol = 3,
-					rel_widths = c(5, 1, 5)
-				),
-				# ncol = 3,
-				# nrow = 1,
-				# rel_widths = c(20, 1, 20)
-			# ),
+				sc_cancer_caf_heatmap_lenient_final$brca_lenient$plots$heatmap_legend,
+				nrow = 1,
+				ncol = 3,
+				rel_widths = c(5, 1, 5)
+			),
 			ncol = 1,
 			nrow = 3,
 			rel_heights = c(20, 2, 3)
@@ -3599,9 +3252,7 @@ print(
 		plot_grid(
 			plot_grid(
 				plotlist = list(
-					lineplots$brca_lenient$lineplot +
-						theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 30), 'pt')),# +
-						# labs(x = NULL, y = NULL),
+					lineplots$brca_lenient$lineplot + theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 30), 'pt')),
 					lineplots$coadread_lenient$lineplot +
 						theme(legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 15, 15), 'pt')) +
 						labs(y = NULL),
@@ -3618,9 +3269,7 @@ print(
 			nrow = 1,
 			ncol = 2,
 			rel_widths = c(7.5, 1.5)
-		),# +
-			# draw_label('Proportion of tumour', x = 0.47, y = 0, vjust = -0.5, size = 12) +
-			# draw_label('Proportion of gene expression', x = 0, y = 0.5, vjust = 1.3, angle = 90, size = 12),
+		),
 		blank_plot(),
 		plot_grid(
 			plot_grid(
@@ -3681,14 +3330,6 @@ print(
 	                                    plot.margin = unit(c(5.5, 0, 1.25, 5.5), 'pt')
 	                                ) +
 	                                labs(y = paste0('\nCAFs\n(n = ', length(sc_sim_deconv_comp[[ct]]$ordered_cell_ids$caf), ')')),
-								# blank_plot() +
-								# 	labs(y = 'Cancer\ncells') +
-								# 	scale_y_continuous(position = 'right') +
-								# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
-								# blank_plot() +
-								# 	labs(y = 'CAFs') +
-								# 	scale_y_continuous(position = 'right') +
-								# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
 								blank_plot(),
 								nrow = 5,
 								ncol = 1,
@@ -3735,11 +3376,6 @@ print(
 				get_legend(
 					simulated_deconv_plots$brca_lenient$plots$heatmap +
 						guides(fill = guide_colourbar(title.position = 'right')) +
-						# scale_fill_gradientn(
-							# colours = rev(colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(50)),
-							# limits = c(-1, 1),
-							# breaks = c(-1, 0, 1)
-						# ) +
 						theme(
 							legend.justification = c(0, 1),
 							legend.direction = 'horizontal',

@@ -1,5 +1,3 @@
-# I've written the version numbers of the packages below, which are the same on R version 3.6.3 on WEXAC and on my laptop's WSL setup.
-
 library(data.table) # 1.12.8
 library(Matrix) # 1.2.18
 library(stringr) # 1.4.0
@@ -101,7 +99,7 @@ sc_meta <- rbindlist(
     )
 )
 
-# Sadly, there are a few duplicate cell IDs.  We'll deal with them by adjoining the patient number as a suffix.
+# There are a few duplicate cell IDs.  We'll deal with them by adjoining the patient number as a suffix.
 sc_data[id %in% names(table(id))[table(id) > 1], id := paste(id, patient, sep = '_')]
 sc_meta[cells %in% names(table(cells))[table(cells) > 1], cells := paste(cells, patient, sep = '_')]
 
@@ -113,13 +111,10 @@ sc_data[, cell_type := sc_meta[id, type]]
 # Read in series matrix to get disease type:
 series_mat <- tdt(fread('../../single_cell_data/song_nsclc_2019/GSE117570_series_matrix.txt', skip = 31, header = FALSE))[, id := NULL]
 
-# series_mat <- series_mat[str_split_fixed(`!Sample_title`, '_', 2)[, 2] == 'Tumor']
-
 series_mat <- series_mat[
     ,
     .(
         patient_number = gsub('P', '', str_split_fixed(`!Sample_title`, '_', 2)[, 1]),
-		# mapvalues(str_split_fixed(`!Sample_title`, '_', 2)[, 2], c('Tumor', 'Normal'), c('tumour', 'normal')),
         disease_code = mapvalues(
             gsub('diagnosis: ', '', `!Sample_characteristics_ch1`),
             c('Lung adenocarcinoma', 'Lung squamous cell carcinoma'),
@@ -148,83 +143,34 @@ fwrite(sc_data, '../data_and_figures/song_nsclc_2019.csv')
 
 # Lung dataset from Lambrechts et al., 2018:
 
-sc_data <- readRDS('../../single_cell_data/lambrechts_nsclc_2018/RawDataLung.table.rds')
-
-# Note this is a sparse matrix, so operations on it are very fast!
-
-sc_meta <- as.data.table(
-    readxl::read_xlsx(
-        '../../single_cell_data/lambrechts_nsclc_2018/MetaData.xlsx'
-    )[, -1]
-)
+sc_data <- readRDS('../../single_cell_data/lambrechts_nsclc_2018/RawDataLung.table.rds') # Note this is a sparse matrix
+sc_meta <- as.data.table(readxl::read_xlsx('../../single_cell_data/lambrechts_nsclc_2018/MetaData.xlsx')[, -1])
 
 # Update gene names using alias2SymbolTable() and remove resulting NAs and repeated genes:
 gene_ids <- limma::alias2SymbolTable(rownames(sc_data))
 rownames(sc_data) <- gene_ids
-sc_data <- sc_data[
-    !is.na(gene_ids) &
-        gene_ids %in% names(table(gene_ids))[table(gene_ids) == 1],
-]
+sc_data <- sc_data[!is.na(gene_ids) & gene_ids %in% names(table(gene_ids))[table(gene_ids) == 1], ]
 
 # Convert to dgTMatrix, which uses x, i and j instead of x, i and p:
 sc_data <- as(sc_data, 'dgTMatrix')
 
 # Find number of genes detected per cell, which is just the length of x for each j:
-genes_detected <- tapply(
-    sc_data@x,
-    sc_data@j,
-    length
-)
+genes_detected <- tapply(sc_data@x, sc_data@j, length)
 
-sc_data <- sc_data[
-    ,
-    which(genes_detected >= 1000) # Doesn't work without which()!
-]
-
-# The total expression level per cell ranges from ~1000 to just over 70,000, so perhaps
-# 1e+04 would be a more suitable factor than 1e+05:
-
-# summary(colSums(sc_data))
-
-# I guess it's now small enough to be converted to a data.table:
+sc_data <- sc_data[, which(genes_detected >= 1000)] # Doesn't work without which()!
 
 sc_data <- as.data.table(as.matrix(sc_data), keep.rownames = 'id')
 
-# Sum rows for repeated genes:
-
-# sc_data[
-#     id %in% names(table(id))[table(id) > 1],
-#     names(sc_data[, -'id']) := lapply(.SD, sum),
-#     by = id
-# ]
-
-# sc_data <- unique(sc_data)
-
 # Convert to "TPM/10", take logs and round to 4 decimal places:
-
-sc_data[
-    ,
-    names(sc_data[, -'id']) := lapply(
-        .SD,
-        function(x) {round(log2(1e+05*x/sum(x) + 1), 4)}
-    ),
-    .SDcols = -'id'
-]
+sc_data[, names(sc_data[, -'id']) := lapply(.SD, function(x) {round(log2(1e+05*x/sum(x) + 1), 4)}), .SDcols = -'id']
 
 sc_data <- tdt(sc_data)
 
 setkey(sc_meta, cell)
 
-# The following shows that the number in each entry of the Patient_piece column matches the
-# corresponding entry of the `PatientNumber MS` column:
-
-# sc_meta[, sum(str_split_fixed(Patient_piece, '_', 2)[, 1] == `PatientNumber MS`)]
-
-# In the following, we add a 'disease' column, the information for which can be found in the
-# paper in Fig. 1A and Supplementary Table 1.  Patients 1 & 2 are LUSC; patients 3 & 4 are
-# LUAD; and patient 5 is ambiguous - in Fig. 1A they call it simply "NSCLC", while in the
-# supplementary table they call it "Large cell" and describe it as "poorly differentiated
-# morphology, negative for TTF1 and p63".
+# In the following, we add a 'disease' column, the information for which can be found in the paper in Fig. 1A and Supplementary Table 1.  Patients 1 &
+# 2 are LUSC; patients 3 & 4 are LUAD; and patient 5 is ambiguous - in Fig. 1A they call it simply "NSCLC", while in the supplementary table they call
+# it "Large cell" and describe it as "poorly differentiated morphology, negative for TTF1 and p63".
 
 sc_data[
     ,
@@ -232,27 +178,16 @@ sc_data[
         id,
         .(
             `PatientNumber MS`,
-            mapvalues(
-                tolower(CellType),
-                c('ec', 'fibro', 'tumor', 'epi'),
-                c('endothelial', 'fibroblast', 'cancer', 'epithelial')
-            ),
+            mapvalues(tolower(CellType), c('ec', 'fibro', 'tumor', 'epi'), c('endothelial', 'fibroblast', 'cancer', 'epithelial')),
             cluster,
-            mapvalues(
-                `PatientNumber MS`,
-                1:5,
-                c('LUSC', 'LUSC', 'LUAD', 'LUAD', 'NSCLC')
-            ),
+            mapvalues(`PatientNumber MS`, 1:5, c('LUSC', 'LUSC', 'LUAD', 'LUAD', 'NSCLC')),
             str_split_fixed(Patient_piece, '_', 2)[, 2],
             Annotation
         )
     ]
 ]
 
-setcolorder(
-    sc_data,
-    c('id', 'patient', 'cell_type', 'cluster', 'disease', 'sample_type', 'annotation')
-)
+setcolorder(sc_data, c('id', 'patient', 'cell_type', 'cluster', 'disease', 'sample_type', 'annotation'))
 
 fwrite(sc_data, '../data_and_figures/lambrechts_nsclc_2018.csv')
 
@@ -260,31 +195,16 @@ fwrite(sc_data, '../data_and_figures/lambrechts_nsclc_2018.csv')
 
 
 
-# BRCA data from Chung et al.  Note if you sum each cell across all the RNAs, without first
-# removing all the miRNA, lincRNA etc, then the sums do equal 1e+06, indicating that it is
-# in TPM (not log space).  So they should at least have normalised for gene length.  However,
-# after you remove all the miRNA etc. the cell totals vary considerably, indicating that
-# this non-coding stuff accounted for a large proportion of the totals in some cases.  We
-# will divide by the cell totals again after filtering out these genes.
+# BRCA data from Chung et al:
 
-# While the Ensembl IDs are supplied here, we opt for using alias2SymbolTable() on the gene
-# names, since the Ensembl IDs actually give more NAs when converted into symbols, while
-# the non-NA elements don't give any more useful genes.  We then use mapIds() only on the
-# genes that end up as repeats after alias2SymbolTable().  This is useful because the
-# repeated genes include some that may be important for EMT, such as AREG, ITGB3 and TIMP2.
+# While the Ensembl IDs are supplied here, we opt for using alias2SymbolTable() on the gene names, since the Ensembl IDs actually give more NAs when
+# converted into symbols, while the non-NA elements don't give any more useful genes.  We then use mapIds() only on the genes that end up as repeats
+# after alias2SymbolTable().  This is useful because the repeated genes include some that may be important for EMT, such as AREG, ITGB3 and TIMP2.
 # Genes which still occur more than once (or become NA) after this procedure are removed.
 
-sc_data <- fread(
-    paste0(
-        '../../single_cell_data/chung_breast_cancer_2017/',
-        'GSE75688_GEO_processed_Breast_Cancer_raw_TPM_matrix.txt'
-    )
-)[
+sc_data <- fread(paste0('../../single_cell_data/chung_breast_cancer_2017/', 'GSE75688_GEO_processed_Breast_Cancer_raw_TPM_matrix.txt'))[
     gene_type %in% c('protein_coding', 'pseudogene')
-][
-    ,
-    gene_name := limma::alias2SymbolTable(gene_name)
-][
+][, gene_name := limma::alias2SymbolTable(gene_name)][
     gene_name %in% names(table(gene_name))[table(gene_name) > 1],
     gene_name := mapIds(
         org.Hs.eg.db,
@@ -292,103 +212,30 @@ sc_data <- fread(
         keytype = 'ENSEMBL',
         column = 'SYMBOL'
     )
-][
-    !is.na(gene_name) & gene_name %in% names(table(gene_name))[table(gene_name) == 1]
-][
-    ,
-    c('gene_id', 'gene_type') := NULL
-]
+][!is.na(gene_name) & gene_name %in% names(table(gene_name))[table(gene_name) == 1]][, c('gene_id', 'gene_type') := NULL]
 
-# Remove the bulk samples, and also the ones labelled 'Tumor', which I don't trust (they
-# don't appear in the metadata, so they could also be bulk samples - the numbers for these
-# samples look a bit like bulk):
-
-sc_data[
-    ,
-    names(sc_data)[
-        endsWith(names(sc_data), 'Pooled') | endsWith(names(sc_data), 'Tumor')
-    ] := NULL
-]
-
-# Deal with repeated gene names.  The numbers were TPM before filtering genes, not on a
-# log scale, so we don't need to do (2^matrix - 1) before summing.  Note that some
-# genes appear more than twice (e.g. XAGE1B appears 4 times).
-
-# repeated_genes <- sc_data[, names(table(gene_name))[table(gene_name) > 1]]
-#
-# sc_data[
-#     gene_name %in% repeated_genes,
-#     names(sc_data[, -'gene_name']) := lapply(
-#         .SD,
-#         sum
-#     ),
-#     by = gene_name
-# ]
-#
-# sc_data <- unique(sc_data)
+# Remove the bulk samples, and also the ones labelled 'Tumor', which I don't trust (they don't appear in the metadata, so they could also be bulk
+# samples - the numbers for these samples look a bit like bulk):
+sc_data[, names(sc_data)[endsWith(names(sc_data), 'Pooled') | endsWith(names(sc_data), 'Tumor')] := NULL]
 
 # Filter out cells with less than 1000 genes detected (there aren't many):
+sc_data <- sc_data[, c(TRUE, apply(sc_data[, -'gene_name'], 2, function(x) sum(x > 0)) >= 1000), with = FALSE]
 
-sc_data <- sc_data[
-	,
-    c(TRUE, apply(sc_data[, -'gene_name'], 2, function(x) sum(x > 0)) >= 1000),
-	with = FALSE
-]
-
-# I've decided to use the constant 1e+05 here, just to make the data on the same scale
-# as the head and neck data.  The data would have originally been on the 1e+06 scale,
-# which may be more appropriate for calculations on the data.
-
-sc_data[
-    ,
-    names(sc_data[, -'gene_name']) := lapply(
-        .SD,
-        function(x) {round(log2(1e+05*x/sum(x) + 1), 4)}
-    ),
-    .SDcols = -'gene_name'
-]
+sc_data[, names(sc_data[, -'gene_name']) := lapply(.SD, function(x) {round(log2(1e+05*x/sum(x) + 1), 4)}), .SDcols = -'gene_name']
 
 sc_data <- tdt(sc_data)
 
 # Add metadata:
 
-sc_meta <- fread(
-    '../../single_cell_data/chung_breast_cancer_2017/GSE75688_final_sample_information.txt',
-    key = 'sample'
-)
+sc_meta <- fread('../../single_cell_data/chung_breast_cancer_2017/GSE75688_final_sample_information.txt', key = 'sample')
 
 sc_data[
     ,
     c('patient', 'cell_type') := .(
-        as.numeric(
-            gsub(
-                'BC',
-                '',
-                gsub(
-                    'LN',
-                    '',
-                    str_split_fixed(id, '_', 2)[, 1]
-                )
-            )
-        ),
-        mapvalues(
-            tolower(sc_meta[id, index3]),
-            c('tumor', 'stromal', 'tcell', 'bcell'),
-            c('cancer', 'fibroblast', 't_cell', 'b_cell')
-        )
+        as.numeric(gsub('BC', '', gsub('LN', '', str_split_fixed(id, '_', 2)[, 1]))),
+        mapvalues(tolower(sc_meta[id, index3]), c('tumor', 'stromal', 'tcell', 'bcell'), c('cancer', 'fibroblast', 't_cell', 'b_cell'))
     )
-][
-    ,
-    lymph_node := switch(
-        endsWith(
-            str_split_fixed(id, '_', 2)[, 1],
-            'LN'
-        ) + 1,
-        0,
-        1
-    ),
-    by = id
-]
+][, lymph_node := switch(endsWith(str_split_fixed(id, '_', 2)[, 1], 'LN') + 1, 0, 1), by = id]
 
 setcolorder(sc_data, c('id', 'patient', 'cell_type', 'lymph_node'))
 
@@ -400,84 +247,41 @@ fwrite(sc_data, '../data_and_figures/chung_breast_cancer_2017.csv')
 
 # BRCA (TNBC) data from Karaayvaz et al.:
 
-# BIG PROBLEM WITH THIS: I divided the genes by the gene totals, not the cells by the cell totals...
-# So it's not TPM!!  Need to check I didn't fuck this up with other cancer types too...
-
-sc_data <- fread(
-    '../../single_cell_data/karaayvaz_tnbc_2018/GSE118389_tpm_rsem.txt',
-    key = 'V1'
-)
+sc_data <- fread('../../single_cell_data/karaayvaz_tnbc_2018/GSE118389_tpm_rsem.txt', key = 'V1')
 
 # Update gene names:
-
 sc_data[, V1 := alias2SymbolTable(V1)]
-
-# The gene names appear to be pretty good - after alias2SymbolTable(), we only get 8 NAs and
-# 4 repeated genes, which don't seem to be anything interesting anyway (see
-# sc_data[, table(V1)[table(V1) > 1]] and sum(is.na(sc_data$V1))), so we can safely delete them:
-
 sc_data <- sc_data[!is.na(V1) & !(V1 %in% names(table(V1))[table(V1) > 1])]
 
-# Transpose so we can include cell type information, and also a column for patient IDs (which
-# are already contained in the cell IDs):
-
 sc_data <- tdt(sc_data)
-
 sc_data[, patient := stringr::str_split_fixed(id, '_', 2)[, 1]]
 
 # The data on cell type assignments can be obtained from Github:
-
 # download.file(
 #     # 'https://github.com/Michorlab/tnbc_scrnaseq/blob/master/data/cell_types_tab_S9.txt',
 #     'https://raw.githubusercontent.com/Michorlab/tnbc_scrnaseq/master/data/cell_types_tab_S9.txt',
 #     destfile = '../../single_cell_data/karaayvaz_tnbc_2018/cell_types_tab_S9.txt'
 # )
 
-# There are only 1112 cells in this file, fewer than in the counts matrix, but this is because
-# these are the ones that survived their two-step clustering process, and which they presumably
-# therefore have confidence in assigning to cell types.  See pp. 35-37 of the supplementary
-# information file from the paper (in particular, it says at the bottom of p. 37 that they're
-# left with 1112 cells).
+# There are only 1112 cells in this file, fewer than in the counts matrix, but this is because these are the ones that survived their two-step
+# clustering process, and which they presumably therefore have confidence in assigning to cell types.  See pp. 35-37 of the supplementary information
+# file from the paper (in particular, it says at the bottom of p. 37 that they're left with 1112 cells).
 
-cell_types_data <- fread(
-    '../../single_cell_data/karaayvaz_tnbc_2018/cell_types_tab_S9.txt'
-)[, 2:3] %>% setNames(c('cell_id', 'cell_type'))
-
+cell_types_data <- fread('../../single_cell_data/karaayvaz_tnbc_2018/cell_types_tab_S9.txt')[, 2:3] %>% setNames(c('cell_id', 'cell_type'))
 setkey(cell_types_data, cell_id)
-
 sc_data[, cell_type := cell_types_data[id, cell_type]]
-
 setcolorder(sc_data, c('id', 'patient', 'cell_type'))
 
 # Filter out cells with fewer than 1000 genes detected:
+sc_data <- sc_data[apply(sc_data[, -c('id', 'patient', 'cell_type')], 1, function(x) sum(x > 0)) >= 1000]
 
-sc_data <- sc_data[
-    apply(sc_data[, -c('id', 'patient', 'cell_type')], 1, function(x) sum(x > 0)) >= 1000
-]
-
-# Let's remove the cells that seem to have considerably lower total gene expression than the
-# others (despite the data supposedly being TPM):
-
-sc_data <- sc_data[
-    rowSums(sc_data[, -c('id', 'patient', 'cell_type')]) >= 9e+05
-]
-
-# The following shows that PT058 has fewer than 50 cancer ("epithelial") cells, so we might
-# want to remove it further down the line:
-
-# sc_data[cell_type == 'epithelial', .N, by = patient]
+# Remove the cells that seem to have considerably lower total gene expression than the others (despite the data supposedly being TPM):
+sc_data <- sc_data[rowSums(sc_data[, -c('id', 'patient', 'cell_type')]) >= 9e+05]
 
 # Scale to TPM/10, take logs and round to 4 decimal places:
-
 sc_data[
     ,
-    names(sc_data[, -c('id', 'patient', 'cell_type')]) := transpose(
-		lapply(
-			transpose(.SD),
-			function(x) {round(log2(1e+05*x/sum(x) + 1), 4)}
-			# function(x) round(log2(x/10 + 1), 4)
-		)
-	),
+    names(sc_data[, -c('id', 'patient', 'cell_type')]) := transpose(lapply(transpose(.SD), function(x) {round(log2(1e+05*x/sum(x) + 1), 4)})),
     .SDcols = -c('id', 'patient', 'cell_type')
 ]
 
@@ -489,9 +293,8 @@ fwrite(sc_data, '../data_and_figures/karaayvaz_tnbc_2018.csv')
 
 # Colorectal data from Li et al.:
 
-# I'm using the same strategy for updating gene names as I used in the Breast dataset.  The
-# method of dealing with repeats is important because I have potentially EMT-relevant genes
-# among the repeats including AREG, ITGB3 and TIMP2, as before.
+# I'm using the same strategy for updating gene names as I used in the Chung et al. Breast dataset.  The method of dealing with repeats is important
+# because I have potentially EMT-relevant genes among the repeats including AREG, ITGB3 and TIMP2, as before.
 
 sc_data <- merge(
     fread('../../single_cell_data/li_colorectal_2017/GSE81861_CRC_tumor_all_cells_FPKM.csv'),
@@ -500,25 +303,10 @@ sc_data <- merge(
 )[
     ,
     c('ensembl_id', 'symbol') := .(
-        str_split_fixed(
-            gsub('.+_ENSG', 'ENSG', V1),
-            '\\.',
-            2
-        )[, 1],
-        gsub(
-            '^chr[A-Z]*[0-9]*:[0-9]+-[0-9]+_',
-            '',
-            gsub(
-                '_ENSG[A-Z]*[0-9]+\\.[0-9]+$',
-                '',
-                V1
-            )
-        )
+        str_split_fixed(gsub('.+_ENSG', 'ENSG', V1), '\\.', 2)[, 1],
+        gsub('^chr[A-Z]*[0-9]*:[0-9]+-[0-9]+_', '', gsub('_ENSG[A-Z]*[0-9]+\\.[0-9]+$', '', V1))
     )
-][
-    ,
-    symbol := alias2SymbolTable(symbol)
-][
+][, symbol := alias2SymbolTable(symbol)][
     symbol %in% names(table(symbol))[table(symbol) > 1],
     symbol := mapIds(
         org.Hs.eg.db,
@@ -526,129 +314,30 @@ sc_data <- merge(
         keytype = 'ENSEMBL',
         column = 'SYMBOL'
     )
-][
-    !is.na(symbol) & symbol %in% names(table(symbol))[table(symbol) == 1]
-][
-    ,
-    c('V1', 'ensembl_id') := NULL
-]
+][!is.na(symbol) & symbol %in% names(table(symbol))[table(symbol) == 1]][, c('V1', 'ensembl_id') := NULL]
 
 setcolorder(sc_data, 'symbol')
 
-# Test of regular expressions to extract gene symbols:
-
-# chr_pos <- sc_data[, str_extract(V1, '^chr[A-Z]*[0-9]*:[0-9]+-[0-9]+')]
-# ensg <- sc_data[, str_extract(V1, 'ENSG[A-Z]*[0-9]+\\.[0-9]+$')]
-
-# sum(is.na(chr_pos))
-# sum(is.na(ensg))
-
-# gene_symbols <- sc_data[
-#     ,
-#     gsub(
-#         '^chr[A-Z]*[0-9]*:[0-9]+-[0-9]+_',
-#         '',
-#         gsub(
-#             '_ENSG[A-Z]*[0-9]+\\.[0-9]+$',
-#             '',
-#             V1
-#         )
-#     )
-# ]
-
-# sum(!is.na(str_extract(gene_symbols, 'ENSG')))
-# sum(!is.na(str_extract(gene_symbols, 'chr')))
-
-# sc_data[
-#     ,
-#     V1 := limma::alias2SymbolTable(
-#         gsub(
-#             '^chr[A-Z]*[0-9]*:[0-9]+-[0-9]+_',
-#             '',
-#             gsub(
-#                 '_ENSG[A-Z]*[0-9]+\\.[0-9]+$',
-#                 '',
-#                 V1
-#             )
-#         )
-#     )
-# ]
-#
-# sc_data <- sc_data[!is.na(V1)]
-
-# We have some repeated genes again, and some are repeated a lot: SNORD3P1 appears 82 times!
-
-# sc_data[, sort(table(V1)[table(V1) > 1], decreasing = TRUE)]
-
-# We'll sum the repeats anyway:
-
-# sc_data[
-#     V1 %in% names(table(V1))[table(V1) > 1],
-#     names(sc_data[, -'V1']) := lapply(
-#         .SD,
-#         sum
-#     ),
-#     by = V1
-# ]
-#
-# sc_data <- unique(sc_data)
-
-# The following suggests that 1e+06 is an appropriate scaling factor:
-
-# summary(colSums(sc_data[, -'V1']))
-
 # Filter out cells with fewer than 1000 genes detected (there aren't many):
+sc_data <- sc_data[, c(TRUE, apply(sc_data[, -'symbol'], 2, function(x) sum(x > 0)) >= 1000), with = FALSE]
 
-sc_data <- sc_data[
-	,
-    c(TRUE, apply(sc_data[, -'symbol'], 2, function(x) sum(x > 0)) >= 1000),
-	with = FALSE
-]
-
-# Convert to TPM (the values are already in FPKM, so conversion is the same process as for
-# length-normalised counts, or rates, and they're not on a log scale so we don't have to
-# take (2^matrix - 1) before doing this - also, I've decided to use the constant 1e+05 so
-# that the data is on the same scale as the head and neck data, though it would originally
-# have been on the 1e+06 scale):
-
-sc_data[
-    ,
-    names(sc_data[, -'symbol']) := lapply(
-        .SD,
-        function(x) {round(log2(1e+05*x/sum(x) + 1), 4)}
-    ),
-    .SDcols = -'symbol'
-]
+# Convert to TPM (the values are already in FPKM, so conversion is the same process as for length-normalised counts, or rates, and they're not on a
+# log scale so we don't have to take (2^matrix - 1) before doing this):
+sc_data[, names(sc_data[, -'symbol']) := lapply(.SD, function(x) {round(log2(1e+05*x/sum(x) + 1), 4)}), .SDcols = -'symbol']
 
 sc_data <- tdt(sc_data)
 
 # Extract cell type names from the cell IDs:
-
 sc_data[
     ,
-    cell_type := mapvalues(
-        tolower(
-            str_split_fixed(id, '__', 3)[, 2]
-        ),
-        c('tcell', 'bcell', 'na', 'mastcell'),
-        c('t_cell', 'b_cell', NA, 'mast')
-    )
-][
-    ,
-    id := str_split_fixed(id, '__', 3)[, 1]
-]
+    cell_type := mapvalues(tolower(str_split_fixed(id, '__', 3)[, 2]), c('tcell', 'bcell', 'na', 'mastcell'), c('t_cell', 'b_cell', NA, 'mast'))
+][, id := str_split_fixed(id, '__', 3)[, 1]]
 
-# Get series matrix (can't seem to download it from GEO now, but I assume the one I downloaded
-# previously is the one on GEO) - note I'm pasting .I to V1 because some of them are the same,
-# which is not good for variabe names:
+# Get series matrix (can't seem to download it from GEO now, but I assume the one I downloaded previously is the one on GEO) - note I'm pasting .I to
+# V1 because some of them are the same, which is not good for variabe names:
 
 series_mat <- tdt(
-    fread(
-        '../../single_cell_data/li_colorectal_2017/series_matrix.txt',
-        skip = 38,
-        nrows = 44,
-        header = FALSE
-    )[
+    fread('../../single_cell_data/li_colorectal_2017/series_matrix.txt', skip = 38, nrows = 44, header = FALSE)[
         ,
         V1 := paste0(gsub('!', '', V1), paste0('_', .I))
     ]
@@ -661,59 +350,29 @@ sc_data[
     c('patient', 'sample_type') := series_mat[
         id,
         .(
-            as.numeric(
-                gsub('patient id: CRC', '', Sample_characteristics_ch1_10)
-            ),
-            mapvalues(
-                Sample_characteristics_ch1_12,
-                c('tissue type: Colorectal Tumor', 'tissue type: Normal Mucosa'),
-                c('tumour', 'normal')
-            )
+            as.numeric(gsub('patient id: CRC', '', Sample_characteristics_ch1_10)),
+            mapvalues(Sample_characteristics_ch1_12, c('tissue type: Colorectal Tumor', 'tissue type: Normal Mucosa'), c('tumour', 'normal'))
         )
     ]
 ]
 
 # Get epithelial cluster assignments:
-
 epi_clusters <- unlist(
     lapply(
         c('NM', 'tumor'),
         function(x) {
             as.character(
-                fread(
-                    paste0(
-                        '../../single_cell_data/li_colorectal_2017/GSE81861_CRC_',
-                        x,
-                        '_epithelial_cells_FPKM.csv'
-                    ),
-                    nrows = 1,
-                    header = FALSE
-                )[, -'V1']
+                fread(paste0('../../single_cell_data/li_colorectal_2017/GSE81861_CRC_', x, '_epithelial_cells_FPKM.csv'), nrows = 1, header = FALSE)[
+                    ,
+                    -'V1'
+                ]
             )
         }
     )
 )
-
-epi_clusters <- setNames(
-    as.data.table(
-        str_split_fixed(
-            epi_clusters,
-            '__',
-            3
-        )[, 1:2]
-    ),
-    c('cell_id', 'epi_cluster')
-)
-
+epi_clusters <- setNames(as.data.table(str_split_fixed(epi_clusters, '__', 3)[, 1:2]), c('cell_id', 'epi_cluster'))
 setkey(epi_clusters, cell_id)
-
-sc_data[
-    cell_type == 'epithelial',
-    epithelial_cluster := epi_clusters[
-        id,
-        epi_cluster
-    ]
-]
+sc_data[cell_type == 'epithelial', epithelial_cluster := epi_clusters[id, epi_cluster]]
 
 setcolorder(sc_data, c('id', 'patient', 'cell_type', 'sample_type', 'epithelial_cluster'))
 
@@ -725,8 +384,8 @@ fwrite(sc_data, '../data_and_figures/li_colorectal_2017.csv')
 
 # CRC data from Lee et al., 2020:
 
-# This data is divided into two parts: 23 Korean patients from the Samsung Medical Center (SMC) and 6 Belgian
-# patients from Katholieke Universiteit Leuven (KUL3).
+# This data is divided into two parts: 23 Korean patients from the Samsung Medical Center (SMC) and 6 Belgian patients from Katholieke Universiteit
+# Leuven (KUL3).  It's probably best to treat the SMC and KUL3 datasets separately, as they do in the paper, to avoid batch effects.
 
 # To download the count matrices in R:
 
@@ -744,7 +403,7 @@ fwrite(sc_data, '../data_and_figures/li_colorectal_2017.csv')
 
 # R.utils::gunzip('GSE144735_processed_KUL3_CRC_10X_raw_UMI_count_matrix.txt.gz')
 
-# I first ran the following on WEXAC (in the lee_crc_2020 folder) to convert to sparse matrices:
+# I first ran the following (in the lee_crc_2020 folder) to convert to sparse matrices:
 
 # sc_data_smc <- fread('../../single_cell_data/lee_crc_2020/GSE132465_GEO_processed_CRC_10X_raw_UMI_count_matrix.txt')
 # sc_data_smc <- set_rownames(as.matrix(sc_data_smc[, -'Index']), sc_data_smc$Index)
@@ -759,9 +418,6 @@ fwrite(sc_data, '../data_and_figures/li_colorectal_2017.csv')
 # saveRDS(sc_data_kul3, 'GSE144735_processed_KUL3_CRC_10X_raw_UMI_count_matrix.rds')
 
 # From sparse matrix RDS files:
-
-# It's probably best to treat the SMC and KUL3 datasets separately, as they do in the paper,
-# to avoid batch effects.
 
 
 
@@ -797,22 +453,8 @@ sc_data <- cbind(
 			sample_type = mapvalues(Class, c('Normal', 'Tumor'), c('normal', 'tumour')),
 			cell_type = mapvalues(
 				Cell_type,
-				c(
-					'B cells',
-					'Epithelial cells',
-					'Mast cells',
-					'Myeloids',
-					'Stromal cells',
-					'T cells'
-				),
-				c(
-					'b_cell',
-					'epithelial',
-					'mast',
-					'myeloid',
-					'fibroblast',
-					't_cell'
-				)
+				c('B cells', 'Epithelial cells', 'Mast cells', 'Myeloids', 'Stromal cells', 'T cells'),
+				c('b_cell', 'epithelial', 'mast', 'myeloid', 'fibroblast', 't_cell')
 			),
 			cell_subtype = Cell_subtype
 		)
@@ -856,22 +498,8 @@ sc_data <- cbind(
 			sample_type = mapvalues(Class, c('Normal', 'Border', 'Tumor'), c('normal', 'border', 'tumour')),
 			cell_type = mapvalues(
 				Cell_type,
-				c(
-					'B cells',
-					'Epithelial cells',
-					'Mast cells',
-					'Myeloids',
-					'Stromal cells',
-					'T cells'
-				),
-				c(
-					'b_cell',
-					'epithelial',
-					'mast',
-					'myeloid',
-					'fibroblast',
-					't_cell'
-				)
+				c('B cells', 'Epithelial cells', 'Mast cells', 'Myeloids', 'Stromal cells', 'T cells'),
+				c('b_cell', 'epithelial', 'mast', 'myeloid', 'fibroblast', 't_cell')
 			),
 			cell_subtype = Cell_subtype
 		)
@@ -887,106 +515,25 @@ fwrite(sc_data, '../data_and_figures/lee_crc_2020_kul3.csv')
 
 # HNSCC data from Puram et al.:
 
-sc_data <- fread(
-    '../../single_cell_data/puram_hnscc_2017/HNSCC_all_data.txt',
-    skip = 6,
-    header = FALSE
-)[
-    ,
-    V1 := gsub("'", "", V1)
-]
-
-sc_meta <- tdt(
-    fread(
-        '../../single_cell_data/puram_hnscc_2017/HNSCC_all_data.txt',
-        nrows = 5
-    ),
-    new_id = 'cell_id'
-)
-
-setnames(
-    sc_data,
-    names(sc_data),
-    c('id', sc_meta$cell_id)
-)
-
-# The following shows the data is basically TPM/10 after reversing the log - the cell
-# totals are 1e+05 plus or minus a few...
-
-# summary(colSums(2^sc_data[, -'id'] - 1))
+sc_data <- fread('../../single_cell_data/puram_hnscc_2017/HNSCC_all_data.txt', skip = 6, header = FALSE)[, V1 := gsub("'", "", V1)]
+sc_meta <- tdt(fread('../../single_cell_data/puram_hnscc_2017/HNSCC_all_data.txt', nrows = 5), new_id = 'cell_id')
+setnames(sc_data, names(sc_data), c('id', sc_meta$cell_id))
 
 # Convert gene IDs using alias2SymbolTable() and delete repeated genes:
-
-sc_data[
-    ,
-    id := limma::alias2SymbolTable(id)
-]
-
+sc_data[, id := limma::alias2SymbolTable(id)]
 sc_data <- sc_data[!is.na(id) & id %in% names(table(id))[table(id) == 1]]
 
-# Sum rows for repeated genes:
-
-# sc_data[
-#     id %in% names(table(id))[table(id) > 1],
-#     names(sc_data[, -'id']) := as.list(colSums(.SD)),
-#     by = id
-# ]
-#
-# sc_data <- unique(sc_data)
-
 # Re-scale to log TPM/10 (need to reverse the log):
-
-sc_data[
-    ,
-    names(sc_data[, -'id']) := lapply(
-        .SD,
-        function(x) {round(log2(1e+05*(2^x - 1)/sum(2^x - 1) + 1), 4)}
-    ),
-    .SDcols = -'id'
-]
+sc_data[, names(sc_data[, -'id']) := lapply(.SD, function(x) {round(log2(1e+05*(2^x - 1)/sum(2^x - 1) + 1), 4)}), .SDcols = -'id']
 
 sc_data <- tdt(sc_data)
 
 # There are no cells with fewer than 1000 genes detected, so no need to filter for this.
 
 # Use tumour assignment file to save me decomposing the cell IDs to get patient numbers:
-
-tumour_assignments <- fread(
-    '../../single_cell_data/puram_hnscc_2017/puram_2017_tumour_assignment.csv',
-    key = 'cell'
-)
-
-sc_meta[
-    ,
-    cell_type := switch(
-        (`classified  as cancer cell` == 1) + 1,
-        `non-cancer cell type`,
-        'cancer'
-    ),
-    by = cell_id
-]
-
-sc_meta[
-    ,
-    c('patient', 'cell_type') := .(
-        tumour_assignments[cell_id, tumor],
-        mapvalues(
-            tolower(
-                gsub(
-                    '-',
-                    '',
-                    gsub(
-                        ' ',
-                        '_',
-                        cell_type
-                    )
-                )
-            ),
-            '0',
-            NA
-        )
-    )
-]
+tumour_assignments <- fread('../../single_cell_data/puram_hnscc_2017/puram_2017_tumour_assignment.csv', key = 'cell')
+sc_meta[, cell_type := switch((`classified  as cancer cell` == 1) + 1, `non-cancer cell type`, 'cancer'), by = cell_id]
+sc_meta[, c('patient', 'cell_type') := .(tumour_assignments[cell_id, tumor], mapvalues(tolower(gsub('-', '', gsub(' ', '_', cell_type))), '0', NA))]
 
 setkey(sc_meta, cell_id)
 
@@ -998,13 +545,9 @@ sc_data[
     ]
 ]
 
-setcolorder(
-    sc_data,
-    c('id', 'patient', 'cell_type', 'lymph_node', 'processed_by_maxima_enzyme')
-)
+setcolorder(sc_data, c('id', 'patient', 'cell_type', 'lymph_node', 'processed_by_maxima_enzyme'))
 
 # Subset only the patients whose data were deemed high-quality in the Puram et al. paper:
-
 sc_data <- sc_data[patient %in% c(5, 6, 16, 17, 18, 20, 22, 25, 26, 28)]
 
 fwrite(sc_data, '../data_and_figures/puram_hnscc_2017.csv')
@@ -1013,45 +556,17 @@ fwrite(sc_data, '../data_and_figures/puram_hnscc_2017.csv')
 
 
 
-# PAAD:
+# PDAC dataset from Elyada et al.:
 
-sc_data <- fread(
-    '../../single_cell_data/elyada_pdac_2019/elyada_pdac_2019.txt',
-    key = 'V1'
-)
+sc_data <- fread('../../single_cell_data/elyada_pdac_2019/elyada_pdac_2019.txt', key = 'V1')
 
-# I believe the data has been transformed by natural log.  This is partly because the Series
-# Matrix File from the GEO page for the mouse scRNA-seq data from the same study
-# (https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE129455) says in one of the rows, "Each
-# filtered counts matrix was then normalized such that the number of UMIs in each cell is equal
-# to the median UMI count across the dataset and natural log transformed."  Also, if we try the
-# following:
+# The data has been transformed by natural log: see the Series Matrix File from the GEO page for the mouse scRNA-seq data from the same study
+# (https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE129455), which says in one of the rows, "Each filtered counts matrix was then normalized such
+# that the number of UMIs in each cell is equal to the median UMI count across the dataset and natural log transformed."
 
-# summary(colSums(exp(sc_data[!(V1 %in% c('ENSGGENES', 'ENSGUMI')), -'V1']) - 1))
-
-# The sums are reasonably close to each other, much more so than if we try 2^x.  The numbers
-# are still not exactly the same, and despite the documentation claiming they are normalised to
-# the median UMI count, the cell sums do not equal the following...
-
-# median(as.numeric(sc_data[V1 == 'ENSGUMI', -'V1']))
-
-# ...I think it should still be fairly safe to exponentiate and then convert to TPM after my
-# own filtering.
-
-cluster_data <- fread(
-    '../../single_cell_data/elyada_pdac_2019/combined_tsne.csv',
-    key = 'V1'
-)
-
+cluster_data <- fread('../../single_cell_data/elyada_pdac_2019/combined_tsne.csv', key = 'V1')
 names(cluster_data)[1] <- 'cell_id'
-
-genes_data <- fread(
-    '../../single_cell_data/elyada_pdac_2019/genes.tsv',
-    header = FALSE,
-    key = 'V1'
-)[
-    V1 %in% sc_data$V1
-]
+genes_data <- fread('../../single_cell_data/elyada_pdac_2019/genes.tsv', header = FALSE, key = 'V1')[V1 %in% sc_data$V1]
 
 # Extract patient IDs from the cell IDs, according to info from Ela:
 
@@ -1068,12 +583,10 @@ genes_data <- fread(
 # "9" = "HN150",
 # "10" = "HT150"
 
-# However, the matrix only contains 8 samples and not 10. 6 was omitted from the dataset because
-# it's not a PDAC and 5 is the fibroblast-enriched sample, which was analyzed in Fig. 3. Samples
-# 7 and 9 are the adj. normals relating to 8 and 10, respectively, and are present in the matrix.
+# However, the matrix only contains 8 samples and not 10. 6 was omitted from the dataset because it's not a PDAC and 5 is the fibroblast-enriched
+# sample, which was analyzed in Fig. 3. Samples 7 and 9 are the adj. normals relating to 8 and 10, respectively, and are present in the matrix.
 
-# The following gives a warning, "The following `from` values were not present in `x`: 5, 6",
-# which agrees nicely with what Ela said.
+# The following gives a warning, "The following `from` values were not present in `x`: 5, 6", which agrees nicely with what Ela said.
 
 cluster_data[
     ,
@@ -1086,76 +599,22 @@ cluster_data[
 
 sc_data <- sc_data[!(V1 %in% c('ENSGGENES', 'ENSGUMI'))]
 
-# Next, convert the ensembl gene IDs to symbols.  The following demonstrates that some of the symbols
-# in genes_data are not up-to-date or are just wrong according to AnnotationDBI, so I think it's
-# safest to use AnnotationDbi and remove the genes that don't return a match.
-
-# genes_data[
-#     ,
-#     c('ann_dbi_symbols', 'a2s_V2') := .(
-#         mapIds(org.Hs.eg.db, keys = V1, keytype = 'ENSEMBL', column = 'SYMBOL'),
-#         alias2SymbolTable(V2)
-#     )
-# ][
-#     ,
-#     .(
-#         non_na_ann_dbi = sum(!is.na(ann_dbi_symbols)),
-#         non_na_a2s = sum(!is.na(a2s_V2)),
-#         number_equal = sum(!is.na(ann_dbi_symbols) & !is.na(a2s_V2) & ann_dbi_symbols == V2),
-#         up_to_date_a2s = sum(a2s_V2[!is.na(a2s_V2)] == V2[!is.na(a2s_V2)])
-#     )
-# ]
-
-genes_data[
-    ,
-    ann_dbi_symbols := AnnotationDbi::mapIds(
-        org.Hs.eg.db,
-        keys = V1,
-        keytype = 'ENSEMBL',
-        column = 'SYMBOL'
-    )
-]
-
-genes_data <- genes_data[
-    !is.na(ann_dbi_symbols) &
-        !(ann_dbi_symbols %in% names(table(ann_dbi_symbols))[table(ann_dbi_symbols) > 1])
-]
+# Convert the ensembl gene IDs to symbols:
+genes_data[, ann_dbi_symbols := AnnotationDbi::mapIds(org.Hs.eg.db, keys = V1, keytype = 'ENSEMBL', column = 'SYMBOL')]
+genes_data <- genes_data[!is.na(ann_dbi_symbols) & !(ann_dbi_symbols %in% names(table(ann_dbi_symbols))[table(ann_dbi_symbols) > 1])]
 
 sc_data[, V1 := genes_data[sc_data$V1, ann_dbi_symbols]]
-
 sc_data <- sc_data[!is.na(V1)]
 
-# Now all the gene names in the data table are unique.
-
 # Filter out cells with fewer than 1000 genes detected:
+sc_data <- sc_data[, c(TRUE, apply(sc_data[, -'V1'], 2, function(x) sum(x > 0)) >= 1000), with = FALSE]
 
-sc_data <- sc_data[
-	,
-    c(TRUE, apply(sc_data[, -'V1'], 2, function(x) sum(x > 0)) >= 1000),
-	with = FALSE
-]
-
-# Re-scale the data by reversing the natural log (i.e. exponentiating), converting to TPM/10,
-# then taking log to the base 2.  It might be better to use, instead of the standard 1e+05
-# multiplier, the median UMI count or something similar to the strategy used in the study.
-# This might be better for doing calculations on the data; we can always convert to TPM/10
-# for the figures, so they are comparable between cancer types.
-
-sc_data[
-    ,
-    names(sc_data[, -'V1']) := lapply(
-        .SD,
-        function(x) {round(log2(1e+05*(exp(x) - 1)/sum(exp(x) - 1) + 1), 4)}
-    ),
-    .SDcols = -'V1'
-]
-
-# Transpose data table:
+# Re-scale the data by exponentiating, converting to TPM/10, then taking log to the base 2:
+sc_data[, names(sc_data[, -'V1']) := lapply(.SD, function(x) {round(log2(1e+05*(exp(x) - 1)/sum(exp(x) - 1) + 1), 4)}), .SDcols = -'V1']
 
 sc_data <- tdt(sc_data)
 
 # Add column of cluster assignments, changing a few of the cluster names:
-
 sc_data[
     ,
     c('patient', 'cluster', 'cell_type') := cluster_data[
@@ -1165,48 +624,16 @@ sc_data[
             cluster_name,
             mapvalues(
                 cluster_name,
-                c(
-                    'Acinar cells',
-                    'Activated DC',
-                    'B cells',
-                    'Ductal cells 1',
-                    'Ductal cells 2',
-                    'Ductal cells 3',
-                    'Fenestrated EC',
-                    'Fibroblasts',
-                    'Mast cells',
-                    'Myeloid & Macrophages',
-                    'pDCs',
-                    'Perivascular cells',
-                    'Plasma cells',
-                    'RBCs',
-                    'T and NK cells'
-                ),
-                c(
-                    'acinar',
-                    'dendritic',
-                    'b_cell',
-                    'ductal',
-                    'ductal',
-                    'ductal',
-                    'endothelial',
-                    'fibroblast',
-                    'mast',
-                    'myeloid',
-                    'dendritic',
-                    'perivascular',
-                    'plasma',
-                    'red_blood_cell',
-                    'lymphoid'
-                )
+                c('Acinar cells', 'Activated DC', 'B cells', 'Ductal cells 1', 'Ductal cells 2', 'Ductal cells 3', 'Fenestrated EC', 'Fibroblasts',
+                  'Mast cells', 'Myeloid & Macrophages', 'pDCs', 'Perivascular cells', 'Plasma cells', 'RBCs', 'T and NK cells'),
+                c('acinar', 'dendritic', 'b_cell', 'ductal', 'ductal', 'ductal', 'endothelial', 'fibroblast', 'mast', 'myeloid', 'dendritic',
+                  'perivascular', 'plasma', 'red_blood_cell', 'lymphoid')
             )
         )
     ]
 ]
 
 setcolorder(sc_data, c('id', 'patient', 'cell_type', 'cluster'))
-
-# Write to CSV file:
 
 fwrite(sc_data, '../data_and_figures/elyada_pdac_2019.csv')
 
@@ -1225,51 +652,36 @@ fwrite(sc_data, '../data_and_figures/elyada_pdac_2019.csv')
 # download.file('ftp://download.big.ac.cn/gsa/CRA001160/other_files/all_celltype.txt', destfile = 'all_celltype.txt')
 # download.file('ftp://download.big.ac.cn/gsa/CRA001160/other_files/count-matrix.txt', destfile = 'count-matrix.txt')
 
-# I then ran the following on WEXAC, to convert the data matrix to a sparse matrix:
-
+# I then ran the following to convert the data matrix to a sparse matrix:
 # sc_data <- fread('../../single_cell_data/peng_pdac_2019/count-matrix.txt')
-
-# sc_data <- set_rownames(
-# 	as.matrix(sc_data[, -'V1']),
-# 	sc_data$V1
-# )
-
+# sc_data <- set_rownames(as.matrix(sc_data[, -'V1']), sc_data$V1)
 # sc_data <- as(sc_data, 'dgCMatrix')
-
 # saveRDS(sc_data, 'count-matrix.rds')
 
 # Preprocessing from sparse matrix:
 
-# I ran this on WEXAC as well...  There are still a lot of cells, and
-# it's too memory-heavy for my laptop - it causes crashes when done via WSL.
-
 sc_data <- readRDS('../../single_cell_data/peng_pdac_2019/count-matrix.rds')
-
 cell_types_data <- fread('../../single_cell_data/peng_pdac_2019/all_celltype.txt', key = 'cell.name')
 
 # When we run the following, we see that two of the repeated gene names are AREG and TIMP2:
 # updated_gene_names <- alias2SymbolTable(rownames(sc_data))
 # names(table(updated_gene_names))[table(updated_gene_names) > 1]
-# Since these are potentially important pEMT genes, I'll remove AREGB and DDC8 from the data,
-# which are the two extra genes that map to AREG and TIMP2 (respectively), as can be seen
-# from the following:
+# Since these are potentially important pEMT genes, I'll remove AREGB and DDC8 from the data, which are the two extra genes that map to AREG and TIMP2
+# (respectively), as can be seen from the following:
 # rownames(sc_data)[!is.na(updated_gene_names) & updated_gene_names == 'AREG']
 # rownames(sc_data)[!is.na(updated_gene_names) & updated_gene_names == 'TIMP2']
 
 sc_data <- sc_data[!(rownames(sc_data) %in% c('AREGB', 'DDC8')), ]
-
 gn <- alias2SymbolTable(rownames(sc_data))
 rownames(sc_data) <- gn
 sc_data <- sc_data[!is.na(gn) & gn %in% names(table(gn))[table(gn) == 1], ]
 
 # Remove cells with fewer than 1000 genes detected (we still retain a lot of cells...):
-
 sc_data <- sc_data[, col_nnz(sc_data) >= 1000]
 
 sc_data <- t(sc_data)
 
 # Convert to log TPM/10 and round to 4 decimal places:
-
 sc_data <- round(log_transform(to_frac(sc_data, MARGIN = 1)*1e+05), 4)
 
 # Add cell types and patient IDs, converting to data.table:
@@ -1281,30 +693,9 @@ cell_types_data[
 	c('cluster', 'patient', 'sample_type') := .(
 		mapvalues(
 			cluster,
-			c(
-				'Acinar cell',
-				'B cell',
-				'Ductal cell type 1',
-				'Ductal cell type 2',
-				'Endocrine cell',
-				'Endothelial cell',
-				'Fibroblast cell',
-				'Macrophage cell',
-				'Stellate cell',
-				'T cell'
-			),
-			c(
-				'acinar',
-				'b_cell',
-				'ductal_1',
-				'ductal_2',
-				'endocrine',
-				'endothelial',
-				'fibroblast',
-				'macrophage',
-				'stellate',
-				't_cell'
-			)
+			c('Acinar cell', 'B cell', 'Ductal cell type 1', 'Ductal cell type 2', 'Endocrine cell', 'Endothelial cell', 'Fibroblast cell',
+              'Macrophage cell', 'Stellate cell', 'T cell'),
+			c('acinar', 'b_cell', 'ductal_1', 'ductal_2', 'endocrine', 'endothelial', 'fibroblast', 'macrophage', 'stellate', 't_cell')
 		),
 		str_split_fixed(cell.name, '_', 2)[, 1],
 		mapvalues(str_extract(cell.name, '^[A-Z]'), c('T', 'N'), c('tumour', 'normal'))
@@ -1313,10 +704,7 @@ cell_types_data[
 
 setnames(cell_types_data, c('cell.name', 'cluster'), c('id', 'cell_type'))
 
-sc_data <- cbind(
-	cell_types_data,
-	as.data.table(as.matrix(sc_data))
-)
+sc_data <- cbind(cell_types_data, as.data.table(as.matrix(sc_data)))
 
 fwrite(sc_data, '../data_and_figures/peng_pdac_2019.csv')
 
@@ -1330,80 +718,33 @@ sc_data <- lapply(
     1:2,
     function(i) {
 
-        file_root <- paste0(
-            '../../single_cell_data/ma_liver_2019/GSE125449_Set',
-            i,
-            '_'
-        )
+        file_root <- paste0('../../single_cell_data/ma_liver_2019/GSE125449_Set', i, '_')
 
         barcodes <- fread(paste0(file_root, 'barcodes.tsv'), header = FALSE)$V1
+        genes <- setNames(fread(paste0(file_root, 'genes.tsv'), header = FALSE), c('ensembl_id', 'symbol'))
 
-        genes <- setNames(
-            fread(paste0(file_root, 'genes.tsv'), header = FALSE),
-            c('ensembl_id', 'symbol')
-        )
-
-        # Get gene symbols using AnnotationDbi on the Ensembl IDs.  I could then remove all genes
-        # where the symbol and ensembl_id columns disagree, but it seems like doing that will get
-        # rid of some important genes, like CAVIN1.
-
-        genes[
-            ,
-            ann_dbi_symbols := AnnotationDbi::mapIds(
-                org.Hs.eg.db,
-                keys = ensembl_id,
-                keytype = 'ENSEMBL',
-                column = 'SYMBOL'
-            )
-        ]
+        # Get gene symbols using AnnotationDbi on the Ensembl IDs.  I could then remove all genes where the symbol and ensembl_id columns disagree,
+        # but it seems like doing that will get rid of some important genes, like CAVIN1.
+        genes[, ann_dbi_symbols := AnnotationDbi::mapIds(org.Hs.eg.db, keys = ensembl_id, keytype = 'ENSEMBL', column = 'SYMBOL')]
 
         samples <- fread(paste0(file_root, 'samples.txt'), key = 'Cell Barcode')
 
         # Get count matrix and subset genes which are not NA or repeats:
-
         expression_matrix <- Matrix::readMM(paste0(file_root, 'matrix.mtx'))
-
         expression_matrix <- expression_matrix[
-            genes[
-                ,
-                !is.na(ann_dbi_symbols) &
-                    !(ann_dbi_symbols %in% names(table(ann_dbi_symbols))[table(ann_dbi_symbols) > 1])
-            ],
+            genes[, !is.na(ann_dbi_symbols) & !(ann_dbi_symbols %in% names(table(ann_dbi_symbols))[table(ann_dbi_symbols) > 1])],
         ]
 
         expression_matrix <- as.matrix(t(expression_matrix))
-
         rownames(expression_matrix) <- barcodes
-
         colnames(expression_matrix) <- genes[
-            !is.na(ann_dbi_symbols) &
-                !(ann_dbi_symbols %in% names(table(ann_dbi_symbols))[table(ann_dbi_symbols) > 1]),
+            !is.na(ann_dbi_symbols) & !(ann_dbi_symbols %in% names(table(ann_dbi_symbols))[table(ann_dbi_symbols) > 1]),
             ann_dbi_symbols
         ]
 
-        # # Convert to log TPM/10:
-        #
-        # expression_matrix <- t( # Annoyingly, apply() transposes the matrix...
-        #     apply(
-        #         expression_matrix,
-        #         1,
-        #         function(r) round(log2(1e+05*r/sum(r) + 1), 4)
-        #     )
-        # )
-        #
-        # # Filter out cells with fewer than 750 genes detected (being a bit more lenient than
-        # # in other cancer types...):
-        #
-        # expression_matrix <- expression_matrix[
-        #     apply(expression_matrix, 1, function(x) sum(x > 0)) >= 750,
-        # ]
-
         # Convert to data table and add metadata columns:
-
         expression_matrix <- as.data.table(expression_matrix, keep.rownames = 'id')
-
         expression_matrix[, c('sample', 'cell_type') := samples[id, .(Sample, Type)]]
-
         setcolorder(expression_matrix, c('id', 'cell_type', 'sample'))
 
         expression_matrix
@@ -1411,104 +752,35 @@ sc_data <- lapply(
     }
 )
 
-# sc_data <- rbind(
-#     sc_data[[1]][, intersect(names(sc_data[[1]]), names(sc_data[[2]])), with = FALSE],
-#     sc_data[[2]][, intersect(names(sc_data[[1]]), names(sc_data[[2]])), with = FALSE]
-# )
-
 sc_data <- rbindlist(sc_data, use.names = TRUE, fill = TRUE)
-
 sc_data[is.na(sc_data)] <- 0
 
-# Change cell types and add patient ID and disease type columns (patient IDs as they
-# appear in the paper):
-
+# Change cell types and add patient ID and disease type columns (patient IDs as they appear in the paper):
 sc_data[
     ,
     c('cell_type', 'patient') := .(
         mapvalues(
             cell_type,
-            c(
-                'B cell',
-                'CAF',
-                'HPC-like',
-                'Malignant cell',
-                'T cell',
-                'TAM',
-                'TEC'
-            ),
-            c(
-                'b_cell',
-                'fibroblast',
-                'hpc-like',
-                'cancer',
-                't_cell',
-                'macrophage',
-                'endothelial'
-            )
+            c('B cell', 'CAF', 'HPC-like', 'Malignant cell', 'T cell', 'TAM', 'TEC'),
+            c('b_cell', 'fibroblast', 'hpc-like', 'cancer', 't_cell', 'macrophage', 'endothelial')
         ),
         as.numeric(stringr::str_extract(sample, '[0-9]+$'))
     )
 ][
     ,
-    disease := switch(
-        (patient %in% c(18, 21, 23, 28, 30, 34, 37, 38, 65)) + 1,
-        'iCCA',
-        'HCC'
-    ),
+    disease := switch((patient %in% c(18, 21, 23, 28, 30, 34, 37, 38, 65)) + 1, 'iCCA', 'HCC'),
     by = patient
-][
-    ,
-    patient := paste0(mapvalues(disease, c('iCCA', 'HCC'), c('C', 'H')), patient)
-]
+][, patient := paste0(mapvalues(disease, c('iCCA', 'HCC'), c('C', 'H')), patient)]
 
 setcolorder(sc_data, c('id', 'patient', 'cell_type', 'sample', 'disease'))
 
-# Filter out cells with fewer than 1000 genes detected (earlier I used 750, but this
-# doesn't have a big difference on the number of cancer cells you get per tumour, and
-# we still get the same number of tumours (8) with at least 50 cancer cells):
-
-sc_data <- sc_data[
-    apply(
-        sc_data[, -c('id', 'patient', 'cell_type', 'sample', 'disease')],
-        1,
-        function(x) sum(x > 0)
-    ) >= 1000
-]
-
-# The following shows there are some tumours with few cancer cells, which me might want
-# to filter out later:
-
-# sc_data[cell_type == 'cancer', .N, by = patient]
-
-# The following suggests that patients 30 and 66 may have lower quality data than the
-# others (even than the tumours with very few cells), so we might want to consider
-# removing them.
-
-# ggplot(
-#     sc_data[
-#         ,
-#         .(genes_detected = apply(.SD, 1, function(x) sum(x > 0))),
-#         by = patient,
-#         .SDcols = -c('id', 'cell_type')
-#     ]
-# ) +
-#     geom_boxplot(aes(x = patient, y = genes_detected)) +
-#     theme(axis.text.x = element_text(angle = 90, hjust = 1))
-
-# There are also some cells with very low total counts, e.g. around 1500, which spread
-# over 1000 genes means the nonzero counts could all be less than 10.  We might want
-# to consider filtering out these cells too...
+# Filter out cells with fewer than 1000 genes detected:
+sc_data <- sc_data[apply(sc_data[, -c('id', 'patient', 'cell_type', 'sample', 'disease')], 1, function(x) sum(x > 0)) >= 1000]
 
 # Convert to log TPM/10:
-
 sc_data <- cbind(
     sc_data[, .(id, patient, cell_type, sample, disease)],
-    apply(
-        sc_data[, -c('id', 'patient', 'cell_type', 'sample', 'disease')],
-        1,
-        function(x) round(log2(1e+05*x/sum(x) + 1), 4)
-    ) %>% t # Annoyingly, apply() transposes it
+    apply(sc_data[, -c('id', 'patient', 'cell_type', 'sample', 'disease')], 1, function(x) round(log2(1e+05*x/sum(x) + 1), 4)) %>% t
 )
 
 fwrite(sc_data, '../data_and_figures/ma_liver_2019.csv')
@@ -1519,7 +791,7 @@ fwrite(sc_data, '../data_and_figures/ma_liver_2019.csv')
 
 # Ovarian SS2 data from Izar et al., 2020:
 
-# Had to first manually delete a spurious extra tab at the end of line 4 (patient numbers) in Notepad++...
+# Had to first manually delete an extra tab at the end of line 4 (patient numbers) in Notepad++...
 
 sc_data <- fread('../../single_cell_data/izar_ovarian_2020/Izar_HGSOC_ascites_SS2_log.tsv')
 
@@ -1533,36 +805,17 @@ gn <- alias2SymbolTable(sc_data$Cell_ID)
 sc_data$Cell_ID <- gn
 sc_data <- sc_data[!is.na(gn) & gn %in% names(table(gn))[table(gn) == 1], ]
 
-# There are no cells with fewer than 1000 genes detected.  In fact, the lowest number of genes detected
-# among these cells is over 3000.
+# There are no cells with fewer than 1000 genes detected.  In fact, the lowest number of genes detected among these cells is over 3000.
 
 # Rescale to log TPM/10 and round to 4 decimal places:
-
-sc_data[
-	,
-	names(sc_data[, -'Cell_ID']) := lapply(
-		.SD,
-		function(x) round(log2(1e+05*(2^x - 1)/sum(2^x - 1) + 1), 4)
-	),
-	.SDcols = -'Cell_ID'
-]
+sc_data[, names(sc_data[, -'Cell_ID']) := lapply(.SD, function(x) round(log2(1e+05*(2^x - 1)/sum(2^x - 1) + 1), 4)), .SDcols = -'Cell_ID']
 
 sc_data <- tdt(sc_data)
 
-# Add metadata (need to find out what the clusters mean):
-
-# Clusters 1-6 are cancer, 7 is CAFs, according to Itay.  Not sure what 8 and 9 are.
-
+# Add metadata:
 sc_data <- cbind(
 	sc_data[, .(id)],
-	sc_meta[
-		sc_data$id,
-		.(
-			patient = Patient,
-			cell_type = mapvalues(clst, c(1:6, 7), c(rep('cancer', 6), 'fibroblast')),
-			cluster = clst
-		)
-	],
+	sc_meta[sc_data$id, .(patient = Patient, cell_type = mapvalues(clst, c(1:6, 7), c(rep('cancer', 6), 'fibroblast')), cluster = clst)],
 	sc_data[, -'id']
 )
 
@@ -1590,28 +843,16 @@ gn <- alias2SymbolTable(sc_data$Cell_ID)
 sc_data$Cell_ID <- gn
 sc_data <- sc_data[!is.na(gn) & gn %in% names(table(gn))[table(gn) == 1]]
 
-#Take cells with at least 1000 genes detected:
+# Take cells with at least 1000 genes detected:
 
 sc_data <- sc_data[, c(TRUE, apply(sc_data[, -'Cell_ID'], 2, function(x) {sum(x > 0) >= 1000})), with = FALSE]
 
 # Rescale to log TPM/10 and round to 4 decimal places:
-
-sc_data[
-	,
-	names(sc_data[, -'Cell_ID']) := lapply(
-		.SD,
-		function(x) round(log2(1e+05*(2^x - 1)/sum(2^x - 1) + 1), 4)
-	),
-	.SDcols = -'Cell_ID'
-]
+sc_data[, names(sc_data[, -'Cell_ID']) := lapply(.SD, function(x) round(log2(1e+05*(2^x - 1)/sum(2^x - 1) + 1), 4)), .SDcols = -'Cell_ID']
 
 sc_data <- tdt(sc_data)
 
-# Add metadata (need to find out what the clusters mean):
-
-# Clusters 1-5 are cancer and 6-9 are CAFs, according to Itay.  Don't know what 10-21 are,
-# and there's also a '-1'.
-
+# Add metadata:
 sc_data <- cbind(
 	sc_data[, .(id)],
 	sc_meta[
@@ -1634,29 +875,24 @@ fwrite(sc_data, '../data_and_figures/izar_ovarian_2020_10x.csv')
 
 
 
-# 4 datasets from Qian et al., 2020 - note the lung one is the same as the one from Lambrechts et al., 2018, but seems to include all 8 samples.
+# 4 datasets from Qian et al., 2020 - note the lung one is the same as the one from Lambrechts et al., 2018, but includes all 8 samples.
 
 
 
 # Breast:
 
 sc_data <- readMM('../../single_cell_data/qian_2020/BC_counts/matrix.mtx')
-
 barcodes <- fread('../../single_cell_data/qian_2020/BC_counts/barcodes.tsv', header = FALSE)$V1
 
-# The genes table has 2 columns, but they are identical!
+# The genes table has 2 columns, but they are identical
 genes <- fread('../../single_cell_data/qian_2020/BC_counts/genes.tsv', header = FALSE)$V1
 
 # Update gene names:
-
 gn <- alias2SymbolTable(genes)
-
-# There are no interesting genes among the repeats, so ditch them:
 sc_data <- sc_data[!is.na(gn) & gn %in% names(table(gn))[table(gn) == 1], ]
 genes <- gn[!is.na(gn) & gn %in% names(table(gn))[table(gn) == 1]]
 
 # Take cells with at least 1000 genes detected:
-
 genes_detected <- col_nnz(sc_data)
 barcodes <- barcodes[genes_detected >= 1000]
 sc_data <- sc_data[, genes_detected >= 1000]
@@ -1670,7 +906,6 @@ sc_data <- round(log_transform(1e+05*to_frac(sc_data)), 4)
 sc_data <- t(sc_data)
 
 # Add metadata:
-
 sc_meta <- fread('../../single_cell_data/qian_2020/BC_metadata.csv', key = 'Cell')[
 	rownames(sc_data),
 	.(id = Cell, patient = PatientNumber, cell_type = CellType)
@@ -1685,22 +920,17 @@ fwrite(sc_data, '../data_and_figures/qian_breast_2020.csv')
 # CRC:
 
 sc_data <- readMM('../../single_cell_data/qian_2020/CRC_counts/matrix.mtx')
-
 barcodes <- fread('../../single_cell_data/qian_2020/CRC_counts/barcodes.tsv', header = FALSE)$V1
 
-# The genes table has 2 columns, but they are identical!
+# The genes table has 2 columns, but they are identical
 genes <- fread('../../single_cell_data/qian_2020/CRC_counts/genes.tsv', header = FALSE)$V1
 
 # Update gene names:
-
 gn <- alias2SymbolTable(genes)
-
-# There are no interesting genes among the repeats, so ditch them:
 sc_data <- sc_data[!is.na(gn) & gn %in% names(table(gn))[table(gn) == 1], ]
 genes <- gn[!is.na(gn) & gn %in% names(table(gn))[table(gn) == 1]]
 
 # Take cells with at least 1000 genes detected:
-
 genes_detected <- col_nnz(sc_data)
 barcodes <- barcodes[genes_detected >= 1000]
 sc_data <- sc_data[, genes_detected >= 1000]
@@ -1714,7 +944,6 @@ sc_data <- round(log_transform(1e+05*to_frac(sc_data)), 4)
 sc_data <- t(sc_data)
 
 # Add metadata:
-
 sc_meta <- fread('../../single_cell_data/qian_2020/CRC_metadata.csv', key = 'Cell')[
 	rownames(sc_data),
 	.(
@@ -1734,22 +963,17 @@ fwrite(sc_data, '../data_and_figures/qian_crc_2020.csv')
 # Lung:
 
 sc_data <- readMM('../../single_cell_data/qian_2020/LC_counts/matrix.mtx')
-
 barcodes <- fread('../../single_cell_data/qian_2020/LC_counts/barcodes.tsv', header = FALSE)$V1
 
-# The genes table has 2 columns, but they are identical!
+# The genes table has 2 columns, but they are identical
 genes <- fread('../../single_cell_data/qian_2020/LC_counts/genes.tsv', header = FALSE)$V1
 
 # Update gene names:
-
 gn <- alias2SymbolTable(genes)
-
-# There are no interesting genes among the repeats, so ditch them:
 sc_data <- sc_data[!is.na(gn) & gn %in% names(table(gn))[table(gn) == 1], ]
 genes <- gn[!is.na(gn) & gn %in% names(table(gn))[table(gn) == 1]]
 
 # Take cells with at least 1000 genes detected:
-
 genes_detected <- col_nnz(sc_data)
 barcodes <- barcodes[genes_detected >= 1000]
 sc_data <- sc_data[, genes_detected >= 1000]
@@ -1764,10 +988,10 @@ sc_data <- t(sc_data)
 
 # Add metadata:
 
-# The designation of 'core', 'middle' and 'edge' is missing from some of these tumours: for 6 and 7, TumorSite takes only the values "N" and "U", which I'm assuming
-# from the numbers (comparing them with supplementary table 2 from Qian et al.) that these are the normal and tumour cells, respectively.  But I don't know why they
-# haven't given the more precise tumour site information, when the supplementary table (and files in ArrayExpress) suggest they did take samples from core, middle
-# and edge.
+# The designation of 'core', 'middle' and 'edge' is missing from some of these tumours: for 6 and 7, TumorSite takes only the values "N" and "U". I'm
+# assuming from the numbers (comparing them with supplementary table 2 from Qian et al.) that these are the normal and tumour cells, respectively.
+# But I don't know why they haven't given the more precise tumour site information, when the supplementary table (and files in ArrayExpress) suggest
+# they did take samples from core, middle and edge.
 
 sc_meta <- fread('../../single_cell_data/qian_2020/LC_metadata.csv', key = 'Cell')[
 	rownames(sc_data),
@@ -1789,22 +1013,17 @@ fwrite(sc_data, '../data_and_figures/qian_lung_2020.csv')
 # Ovarian:
 
 sc_data <- readMM('../../single_cell_data/qian_2020/OvC_counts/matrix.mtx')
-
 barcodes <- fread('../../single_cell_data/qian_2020/OvC_counts/barcodes.tsv', header = FALSE)$V1
 
-# The genes table has 2 columns, but they are identical!
+# The genes table has 2 columns, but they are identical
 genes <- fread('../../single_cell_data/qian_2020/OvC_counts/genes.tsv', header = FALSE)$V1
 
 # Update gene names:
-
 gn <- alias2SymbolTable(genes)
-
-# There are no interesting genes among the repeats, so ditch them:
 sc_data <- sc_data[!is.na(gn) & gn %in% names(table(gn))[table(gn) == 1], ]
 genes <- gn[!is.na(gn) & gn %in% names(table(gn))[table(gn) == 1]]
 
 # Take cells with at least 1000 genes detected:
-
 genes_detected <- col_nnz(sc_data)
 barcodes <- barcodes[genes_detected >= 1000]
 sc_data <- sc_data[, genes_detected >= 1000]
@@ -1819,10 +1038,10 @@ sc_data <- t(sc_data)
 
 # Add metadata:
 
-# There is a mismatch between the metadata and supplementary table 2 from the paper - the metadata says patient 11 has one tumour and one normal sample from each of
-# omentum and peritoneum; the supplementary table says both normals are from the omentum, while there are two tumour samples from the peritoneum.  I'll assume the
-# metadata is correct, because it's less likely to have been affected by e.g. copy-paste issues, and anyway it would make much more sense to take tumour and normal
-# from each of the two sites.
+# There is a mismatch between the metadata and supplementary table 2 from the paper - the metadata says patient 11 has one tumour and one normal
+# sample from each of omentum and peritoneum; the supplementary table says both normals are from the omentum, while there are two tumour samples from
+# the peritoneum.  I'll assume the metadata is correct, because it's less likely to have been affected by e.g. copy-paste issues, and anyway it would
+# make much more sense to take tumour and normal from each of the two sites.
 
 sc_meta <- fread('../../single_cell_data/qian_2020/OvC_metadata.csv', key = 'Cell')[
 	rownames(sc_data),
@@ -1893,11 +1112,7 @@ sc_data <- t(sc_data)
 
 sc_meta <- fread('../../single_cell_data/kim_luad_2020/GSE131907_Lung_Cancer_cell_annotation.txt', key = 'Index')
 
-sample_origin_data <- readxl::read_xlsx(
-	'../../single_cell_data/kim_luad_2020/41467_2020_16164_MOESM4_ESM.xlsx',
-	skip = 2,
-	n_max = 58
-) %>% as.data.table
+sample_origin_data <- as.data.table(readxl::read_xlsx('../../single_cell_data/kim_luad_2020/41467_2020_16164_MOESM4_ESM.xlsx', skip = 2, n_max = 58))
 setkey(sample_origin_data, Samples)
 
 sc_meta <- sc_meta[

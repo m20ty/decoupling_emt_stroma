@@ -1,7 +1,5 @@
-# bsub -q tirosh -R rusage[mem=128000] -o sc_deconv_comp.o -e sc_deconv_comp.e Rscript sc_deconv_comp.R
-
 library(data.table) # 1.12.8
-library(ggplot2) # This is version 3.3.1 on my laptop's WSL setup but 3.3.0 on WEXAC.
+library(ggplot2) # 3.3.0
 library(cowplot) # 1.0.0
 library(magrittr) # 1.5
 library(limma) # 3.42.2
@@ -164,19 +162,7 @@ sc_cancer_caf_args <- list(
 
 
 
-# sample_sizes <- list(
-#     brca = 1000,
-#     coadread = 800,
-#     hnsc = 400,
-#     lihc = 150,
-#     luad = 1000,
-# 	lusc = 100,
-#     ov = 1500,
-#     paad = 1500
-# )
-
 deconv_data <- readRDS('../data_and_figures/deconv_data.rds')
-# deconv_plots <- readRDS('../data_and_figures/deconv_plots.rds')
 
 cell_type_markers <- fread('../../cell_type_markers.csv')
 subtypes_data <- fread('../../TCGA_data/tcga_subtypes_data.csv', key = 'id')
@@ -184,7 +170,7 @@ ccle <- fread('../../CCLE_cancer_type_Av.csv', key = 'gene_id')
 
 ct_to_keep <- c('brca_luminal_a', 'brca_luminal_b', 'brca_basal_like', 'brca_her2_enriched', 'coad', 'hnsc_mesenchymal_basal', 'hnsc_classical',
 	'luad_proximal_inflammatory', 'luad_proximal_proliferative', 'luad_terminal_respiratory_unit', 'lusc_classical', 'lusc_secretory',
-	'ov_differentiated', 'ov_immunoreactive', 'ov_proliferative', 'paad', 'read')
+	'ov_differentiated', 'ov_immunoreactive', 'ov_proliferative', 'paad_basal_moffitt', 'paad_classical_moffitt', 'read')
 
 tcga_sc_map <- c(
 	brca_luminal_a = 'brca',
@@ -194,19 +180,16 @@ tcga_sc_map <- c(
 	coad = 'coadread',
 	hnsc_mesenchymal_basal = 'hnsc',
 	hnsc_classical = 'hnsc',
-	# hnsc_atypical = 'hnsc',
-	# lihc = 'lihc',
 	luad_proximal_inflammatory = 'luad',
 	luad_proximal_proliferative = 'luad',
 	luad_terminal_respiratory_unit = 'luad',
-	# lusc_basal = 'lusc',
 	lusc_classical = 'lusc',
-	# lusc_primitive = 'lusc',
 	lusc_secretory = 'lusc',
 	ov_differentiated = 'ov',
 	ov_immunoreactive = 'ov',
 	ov_proliferative = 'ov',
-	paad = 'paad',
+	paad_basal_moffitt = 'paad',
+	paad_classical_moffitt = 'paad',
 	read = 'coadread'
 )
 
@@ -218,34 +201,27 @@ deconv_titles <- list(
     coad = 'COAD',
     hnsc_mesenchymal_basal = 'HNSC - Malignant-Basal',
     hnsc_classical = 'HNSC - Classical',
-    # hnsc_atypical = 'HNSC - Atypical',
-    # lihc = 'LIHC',
     luad_proximal_inflammatory = 'LUAD - Squamoid',
     luad_proximal_proliferative = 'LUAD - Magnoid',
 	luad_terminal_respiratory_unit = 'LUAD - Bronchioid',
-    # lusc_basal = 'LUSC - Basal',
     lusc_classical = 'LUSC - Classical',
-    # lusc_primitive = 'LUSC - Primitive',
     lusc_secretory = 'LUSC - Secretory',
     ov_differentiated = 'OV - Differentiated',
     ov_immunoreactive = 'OV - Immunoreactive',
     ov_proliferative = 'OV - Proliferative',
-    paad = 'PAAD',
+    paad_basal_moffitt = 'PAAD - Basal',
+	paad_classical_moffitt = 'PAAD - Classical',
     read = 'READ'
 )
 
-# Re-make deconv plots to use centred CCLE and single cell data:
 deconv_plots <- sapply(
 	ct_to_keep,
-    # names(deconv_args_per_ct),
     function(ct) {
         cat(ct, '\b...')
         deconv_ct <- deconv_data[[ct]]
         deconv_plot_ct <- deconvolve_emt_caf_plots(
             data = deconv_ct,
-            # Include the following only if you want epithelial scores (takes much longer):
-            # expression_data = expression_data,
-            heatmap_axis_title = '', # Change heat_map() function so I can put NULL here
+            heatmap_axis_title = '',
             heatmap_legend_title = 'Coexpression',
             heatmap_colours = rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)),
 			heatmap_colour_limits = c(-0.6, 0.6),
@@ -268,9 +244,6 @@ deconv_plots <- sapply(
             extra_axis_title = NULL,
             extra_legend_title = 'scRNA-seq',
             extra_legend_direction = 'vertical',
-            # bar_legend_width = NULL,
-            # bar_legend_height = NULL,
-			# bar_legend_width = unit(10, 'pt'),
 			bar_legend_height = unit(10, 'pt'),
 			plot_title = deconv_titles[ct]
         )
@@ -280,36 +253,6 @@ deconv_plots <- sapply(
     simplify = FALSE,
     USE.NAMES = TRUE
 )
-
-# Add data for single cell comparison colour bar:
-# sc_comp_diff <- sapply(
-# 	names(deconv_data),
-# 	function(ct) {
-#
-# 		cat(paste0(ct, '\n'))
-#
-# 		sc_data <- eval(sc_metadata[[tcga_sc_map[ct]]]$read_quote)[, c('id', 'cell_type', deconv_data[[ct]]$genes_filtered), with = FALSE]
-# 		sc_data <- melt(sc_data, id.vars = c('id', 'cell_type'), variable.name = 'gene', value.name = 'expression_level')
-#
-# 		# Centre genes:
-# 		gene_averages <- sc_data[
-# 			,
-# 			.(ave_exp = mean(c(mean(expression_level[cell_type == 'cancer']), mean(expression_level[cell_type == 'caf'])))),
-# 			by = .(symbol = gene)
-# 		]
-# 		sc_data[, expression_level := expression_level - gene_averages[symbol == unique(gene), ave_exp], by = gene]
-#
-# 		# Centre cells:
-# 		sc_data[, expression_level := expression_level - mean(expression_level), by = id]
-#
-# 		sc_data[, .(d = mean(expression_level[cell_type == 'cancer']) - mean(expression_level[cell_type == 'caf'])), by = gene][, setNames(d, gene)]
-#
-# 	},
-# 	simplify = FALSE,
-# 	USE.NAMES = TRUE
-# )
-#
-# for(ct in names(deconv_data)) {deconv_data[[ct]]$extra_data_score <- sc_comp_diff[[ct]]}
 
 
 
@@ -328,15 +271,6 @@ sc_tcga_deconv_comp <- sapply(
 		sc_deconv_comp <- sapply(
 			c('cancer', 'caf'),
 			function(x) {
-
-				# plot_data <- copy(sc_data[cell_type == x])[
-				# 	,
-				# 	complexity := apply(.SD, 1, function(x) sum(x > 0)),
-				# 	.SDcols = -c('id', 'patient', 'cell_type')
-				# ][
-				# 	,
-				# 	.SD[sample(1:.N, sample_sizes[[tcga_sc_map[ct]]], prob = complexity)]
-				# ][, complexity := NULL][, c('id', with(deconv_data[[ct]], genes_filtered[genes_filtered %in% names(sc_data)])), with = FALSE]
 
 				plot_data <- sc_data[
 					cell_type == x,
@@ -406,7 +340,6 @@ sc_tcga_deconv_comp <- sapply(
 								sequential_hcl(25, h = 190, c = 70, l = c(70, 99), power = 0.8),
 								sequential_hcl(25, h = 60, c = 100, l = c(80, 99), power = 0.8, rev = TRUE)
 							),
-							# colours = rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)),
 							limits = switch((expr_var == 'expression_level_cc_rm') + 1, c(-4, 4), c(-2, 2)),
 							breaks = switch((expr_var == 'expression_level_cc_rm') + 1, c(-4, -2, 0, 2, 4), c(-2, -1, 0, 1, 2)),
 							labels = switch(
@@ -414,149 +347,6 @@ sc_tcga_deconv_comp <- sapply(
 								c('-4' = '\u2264 -4', '-2' = '-2', '0' = '0', '2' = '2', '4' = '\u2265 4'),
 								c('-2' = '\u2264 -2', '-1' = '-1', '0' = '0', '1' = '1', '2' = '\u2265 2')
 							),
-							# limits = c(-4, 4),
-							# breaks = c(-4, -2, 0, 2, 4),
-							# labels = c('-4' = '\u2264 -4', '-2' = '-2', '0' = '0', '2' = '2', '4' = '\u2265 4'),
-							oob = squish
-						) +
-						theme(
-							axis.text = element_blank(),
-							axis.title.x = element_blank(),
-							axis.ticks = element_blank(),
-							axis.ticks.length = unit(0, 'pt'),
-							plot.margin = unit(c(5.5, 5.5, 1.25, 0), 'pt')
-							# plot.margin = switch((x == 'cancer') + 1, unit(c(1.25, 5.5, 5.5, 5.5), 'pt'), unit(c(5.5, 5.5, 1.25, 5.5), 'pt'))
-						) +
-						labs(y = mapvalues(x, c('cancer', 'caf'), c('Cancer', 'CAF'), warn_missing = FALSE), fill = 'Relative\nexpression\nlevel')
-				},
-				simplify = FALSE,
-				USE.NAMES = TRUE
-			),
-			simplify = FALSE,
-			USE.NAMES = TRUE
-		)
-
-		# Make versions where we filter out genes with low expression in the single cell data:
-
-		deconv_filtered <- deconv_data[[ct]]
-
-		filtered_genes <- sc_data[
-			,
-			sapply(.SD[cell_type == 'cancer'], sc_cancer_caf_args[[tcga_sc_map[ct]]]$genes_filter_fun) |
-				sapply(.SD[cell_type == 'caf'], sc_cancer_caf_args[[tcga_sc_map[ct]]]$genes_filter_fun),
-			.SDcols = with(deconv_data[[ct]], genes_filtered[genes_filtered %in% names(sc_data)])
-		]
-		filtered_genes <- names(filtered_genes)[filtered_genes]
-
-		ordered_filtered_genes <- with(deconv_filtered, genes_filtered[ordering][genes_filtered[ordering] %in% filtered_genes])
-
-		deconv_filtered$ordering <- order(filtered_genes)[order(order(ordered_filtered_genes))]
-		deconv_filtered$genes_filtered <- filtered_genes
-		deconv_filtered$cor_mat <- deconv_filtered$cor_mat[filtered_genes, filtered_genes]
-		deconv_filtered$cor_with_purity <- sapply(deconv_filtered$cor_with_purity, function(x) x[filtered_genes], simplify = FALSE, USE.NAMES = TRUE)
-		deconv_filtered$ccle_comp_diff <- deconv_filtered$ccle_comp_diff[filtered_genes]
-
-		deconv_filtered_plots <- deconvolve_emt_caf_plots(
-			data = deconv_filtered,
-			heatmap_legend_title = 'Correlation',
-			heatmap_colours = rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)),
-			heatmap_colour_limits = c(-0.6, 0.6),
-		    heatmap_legend_breaks = c(-0.6, -0.3, 0, 0.3, 0.6),
-			heatmap_annotations_side = 'left',
-			heatmap_annotations_nudge = 0.3,
-			purity_colours = rev(colorRampPalette(brewer.pal(11, "PuOr"))(50)),
-			purity_colour_limits = c(-0.3, 0.3),
-			purity_legend_breaks = c(-0.3, 0, 0.3),
-			purity_legend_title = 'Correlation with purity\n',
-			purity_legend_direction = 'horizontal',
-			purity_axis_title = NULL,
-			ccle_colours = rev(colorRampPalette(brewer.pal(11, 'PiYG')[c(1:3, 6, 9:11)])(50)),
-			ccle_fun = function(x) {runmean(x - mean(x), 30)/max(abs(runmean(x - mean(x), 30)))},
-			ccle_legend_breaks = c(-1, 0, 1),
-			ccle_legend_title = 'Tumours vs. cell lines\n',
-			ccle_legend_direction = 'horizontal',
-			ccle_axis_title = NULL,
-			bar_legend_justification = 'left',
-			bar_legend_width = unit(10, 'pt'),
-			bar_legend_height = unit(10, 'pt'),
-			plot_title = deconv_titles[[ct]]
-		)
-
-		plot_data <- sc_deconv_comp_data[gene %in% deconv_filtered$genes_filtered]
-
-		# Re-centre genes and cells w.r.t. the filtered gene list:
-		gene_averages <- plot_data[
-			,
-			.(ave_exp = mean(c(mean(expression_level[cell_type == 'cancer']), mean(expression_level[cell_type == 'caf'])))),
-			by = .(symbol = gene)
-		]
-		plot_data[, expression_level := expression_level - gene_averages[symbol == unique(gene), ave_exp], by = gene]
-        plot_data[, expression_level_cc := expression_level - mean(expression_level), by = id]
-
-		# Re-do running average per cell:
-		# EDIT: is this working?  If we're using the genes from deconv_data[[ct]], surely it's not the filtered list?
-		plot_data[
-			,
-			expression_level_cc_rm := setNames(
-				runmean(setNames(expression_level_cc, gene)[with(deconv_filtered, genes_filtered[ordering])], 30),
-				with(deconv_filtered, genes_filtered[ordering])
-			)[as.character(gene)], # Melting made gene a factor, and this reordering doesn't work unless we coerce it to character
-			by = id
-		]
-
-		plot_data <- sapply(
-			c('cancer', 'caf'),
-			function(x) {
-				plot_data[
-					cell_type == x,
-					.(
-						id = factor(id, levels = sc_deconv_comp[[x]]$ordered_cell_ids),
-						gene = factor(gene, levels = with(deconv_filtered, genes_filtered[ordering])),
-						expression_level = expression_level,
-						expression_level_cc = expression_level_cc,
-						expression_level_cc_rm = expression_level_cc_rm
-					)
-				]
-			},
-			simplify = FALSE,
-			USE.NAMES = TRUE
-		)
-
-		sc_heatmaps_filtered <- sapply(
-			c('expression_level', 'expression_level_cc', 'expression_level_cc_rm'),
-			function(expr_var) sapply(
-				c('cancer', 'caf'),
-				function(x) {
-					ggplot(
-						plot_data[[x]],
-						# plot_data[cell_type == x],
-						aes(
-							x = gene,
-							y = id,
-							# x = factor(gene, levels = with(deconv_filtered, genes_filtered[ordering])),
-							# y = factor(id, levels = sc_deconv_comp[[x]]$ordered_cell_ids),
-							fill = get(expr_var)
-						)
-					) +
-						geom_raster() +
-						scale_x_discrete(expand = c(0, 0)) +
-						scale_y_discrete(expand = c(0, 0)) +
-						scale_fill_gradientn(
-							colours = c(
-								sequential_hcl(25, h = 190, c = 70, l = c(70, 99), power = 0.8),
-								sequential_hcl(25, h = 60, c = 100, l = c(80, 99), power = 0.8, rev = TRUE)
-							),
-							# colours = rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)),
-							limits = switch((expr_var == 'expression_level_cc_rm') + 1, c(-4, 4), c(-2, 2)),
-							breaks = switch((expr_var == 'expression_level_cc_rm') + 1, c(-4, -2, 0, 2, 4), c(-2, -1, 0, 1, 2)),
-							labels = switch(
-								(expr_var == 'expression_level_cc_rm') + 1,
-								c('-4' = '\u2264 -4', '-2' = '-2', '0' = '0', '2' = '2', '4' = '\u2265 4'),
-								c('-2' = '\u2264 -2', '-1' = '-1', '0' = '0', '1' = '1', '2' = '\u2265 2')
-							),
-							# limits = c(-4, 4),
-							# breaks = c(-4, -2, 0, 2, 4),
-							# labels = c('-4' = '\u2264 -4', '-2' = '-2', '0' = '0', '2' = '2', '4' = '\u2265 4'),
 							oob = squish
 						) +
 						theme(
@@ -577,11 +367,7 @@ sc_tcga_deconv_comp <- sapply(
 
 		list(
 			sc_deconv_comp_data = sc_deconv_comp_data,
-			filtered_deconv_data = deconv_filtered,
-			filtered_deconv_figures = deconv_filtered_plots$plots,
 			sc_heatmaps_unfiltered = sc_heatmaps,
-			sc_heatmaps_filtered = sc_heatmaps_filtered,
-			sc_heatmaps_filtered_data = plot_data,
 			gene_averages_cancer_caf = gene_averages_cancer_caf,
 			gene_averages_for_centring = gene_averages,
 			ordered_cell_ids = sapply(sc_deconv_comp, `[[`, 'ordered_cell_ids', simplify = FALSE, USE.NAMES = TRUE)
@@ -591,243 +377,6 @@ sc_tcga_deconv_comp <- sapply(
 	simplify = FALSE,
 	USE.NAMES = TRUE
 )
-
-for(expr_var in c('expression_level', 'expression_level_cc', 'expression_level_cc_rm')) {
-
-	cairo_pdf(paste0('../data_and_figures/sc_deconv_comp', gsub('expression_level', '', expr_var), '.pdf'), width = 6, height = 9, onefile = TRUE)
-
-	for(ct in names(sc_tcga_deconv_comp)) {
-
-		plot_grid(
-			plot_grid(
-				plotlist = c(
-					list(blank_plot() + theme(plot.margin = unit(c(5.5, 5.5, 5.5, 5.5), 'pt')) + labs(title = deconv_titles[[ct]])),
-					lapply(
-						deconv_plots[[ct]]$plots[c('purity_bar', 'ccle_bar', 'heatmap')],
-						function(x) x + theme(legend.position = 'none', plot.title = element_blank())
-					),
-					lapply(sc_tcga_deconv_comp[[ct]]$sc_heatmaps_unfiltered[[expr_var]], function(x) x + theme(legend.position = 'none'))
-				),
-				nrow = 6,
-				ncol = 1,
-				align = 'v',
-				rel_heights = c(1, 1, 1, 15, 5, 5)
-			),
-			plot_grid(
-				plotlist = c(
-					list(
-						blank_plot(),
-						get_legend(
-							deconv_plots[[1]]$plots$purity_bar +
-								theme(
-									legend.justification = c(0, 1),
-									legend.direction = 'vertical',
-									legend.key.width = NULL,
-									legend.key.height = NULL
-								) +
-								labs(fill = 'Correlation\nwith purity')
-						),
-						get_legend(
-							deconv_plots[[1]]$plots$ccle_bar +
-								theme(
-									legend.justification = c(0, 1),
-									legend.direction = 'vertical',
-									legend.key.width = NULL,
-									legend.key.height = NULL
-								) +
-								labs(fill = 'Tumours vs.\ncell lines')
-						),
-						get_legend(deconv_plots[[1]]$plots$heatmap + theme(legend.justification = c(0, 1))),
-						get_legend(sc_tcga_deconv_comp[[1]]$sc_heatmaps_unfiltered[[expr_var]][[1]] + theme(legend.justification = c(0, 1)))
-					)
-				),
-				nrow = 5,
-				ncol = 1,
-				rel_heights = c(1, 5, 5, 7, 10)
-			),
-			nrow = 1,
-			ncol = 2,
-			rel_widths = c(5, 1)
-		) %>% print
-
-	}
-
-	dev.off()
-
-}
-
-for(expr_var in c('expression_level', 'expression_level_cc', 'expression_level_cc_rm')) {
-
-	cairo_pdf(
-		paste0('../data_and_figures/sc_deconv_comp_filtered', gsub('expression_level', '', expr_var), '.pdf'),
-		width = 6,
-		height = 9,
-		onefile = TRUE
-	)
-
-	for(ct in names(sc_tcga_deconv_comp)) {
-
-		plot_grid(
-			plot_grid(
-				plotlist = c(
-					list(blank_plot() + theme(plot.margin = unit(c(5.5, 5.5, 5.5, 5.5), 'pt')) + labs(title = deconv_titles[[ct]])),
-					lapply(
-						c(
-							sc_tcga_deconv_comp[[ct]]$filtered_deconv_figures[c('purity_bar', 'ccle_bar', 'heatmap')],
-							sc_tcga_deconv_comp[[ct]]$sc_heatmaps_filtered[[expr_var]]
-						),
-						function(x) x + theme(legend.position = 'none', plot.title = element_blank())
-					)
-				),
-				nrow = 6,
-				ncol = 1,
-				align = 'v',
-				rel_heights = c(1, 1, 1, 15, 5, 5)
-			),
-			plot_grid(
-				plotlist = c(
-					list(
-						blank_plot(),
-						get_legend(
-							deconv_plots[[1]]$plots$purity_bar +
-								theme(
-									legend.justification = c(0, 1),
-									legend.direction = 'vertical',
-									legend.key.width = NULL,
-									legend.key.height = NULL
-								) +
-								labs(fill = 'Correlation\nwith purity')
-						),
-						get_legend(
-							deconv_plots[[1]]$plots$ccle_bar +
-								theme(
-									legend.justification = c(0, 1),
-									legend.direction = 'vertical',
-									legend.key.width = NULL,
-									legend.key.height = NULL
-								) +
-								labs(fill = 'Tumours vs.\ncell lines')
-						),
-						get_legend(deconv_plots[[1]]$plots$heatmap + theme(legend.justification = c(0, 1))),
-						get_legend(sc_tcga_deconv_comp[[1]]$sc_heatmaps_filtered[[expr_var]][[1]] + theme(legend.justification = c(0, 1)))
-					)
-				),
-				nrow = 5,
-				ncol = 1,
-				rel_heights = c(1, 5, 5, 7, 10)
-			),
-			nrow = 1,
-			ncol = 2,
-			rel_widths = c(5, 1)
-		) %>% print
-
-	}
-
-	dev.off()
-
-}
-
-# cairo_pdf('../data_and_figures/sc_deconv_comp_centred_temp.pdf', width = 6, height = 9, onefile = TRUE)
-#
-# for(ct in names(sc_tcga_deconv_comp)) {
-#
-# 	plot_grid(
-# 		plot_grid(
-# 			plotlist = c(
-# 				list(blank_plot() + theme(plot.margin = unit(c(5.5, 5.5, 5.5, 5.5), 'pt')) + labs(title = deconv_titles[[ct]])),
-# 				lapply(
-# 					deconv_plots[[ct]]$plots[c('purity_bar', 'ccle_bar', 'heatmap')],
-# 					function(x) x + theme(legend.position = 'none', plot.title = element_blank())
-# 				),
-# 				lapply(sc_tcga_deconv_comp[[ct]]$sc_heatmaps_unfiltered, function(x) x + theme(legend.position = 'none'))
-# 			),
-# 			nrow = 6,
-# 			ncol = 1,
-# 			align = 'v',
-# 			rel_heights = c(1, 1, 1, 15, 5, 5)
-# 		),
-# 		plot_grid(
-# 			plotlist = c(
-# 				list(
-# 					blank_plot(),
-# 					get_legend(
-# 						deconv_plots[[1]]$plots$purity_bar +
-# 							theme(legend.justification = c(0, 1), legend.direction = 'vertical', legend.key.width = NULL, legend.key.height = NULL) +
-# 							labs(fill = 'Correlation\nwith purity')
-# 					),
-# 					get_legend(
-# 						deconv_plots[[1]]$plots$ccle_bar +
-# 							theme(legend.justification = c(0, 1), legend.direction = 'vertical', legend.key.width = NULL, legend.key.height = NULL) +
-# 							labs(fill = 'Tumours vs.\ncell lines')
-# 					),
-# 					get_legend(deconv_plots[[1]]$plots$heatmap + theme(legend.justification = c(0, 1))),
-# 					get_legend(sc_tcga_deconv_comp[[1]]$sc_heatmaps_unfiltered[[1]] + theme(legend.justification = c(0, 1)))
-# 				)
-# 			),
-# 			nrow = 5,
-# 			ncol = 1,
-# 			rel_heights = c(1, 5, 5, 7, 10)
-# 		),
-# 		nrow = 1,
-# 		ncol = 2,
-# 		rel_widths = c(5, 1)
-# 	) %>% print
-#
-# }
-#
-# dev.off()
-
-# cairo_pdf('../data_and_figures/sc_deconv_comp_filtered_temp.pdf', width = 6, height = 9, onefile = TRUE)
-#
-# for(ct in names(sc_tcga_deconv_comp)) {
-#
-# 	plot_grid(
-# 		plot_grid(
-# 			plotlist = c(
-# 				list(blank_plot() + theme(plot.margin = unit(c(5.5, 5.5, 5.5, 5.5), 'pt')) + labs(title = deconv_titles[[ct]])),
-# 				lapply(
-# 					c(
-# 						sc_tcga_deconv_comp[[ct]]$filtered_deconv_figures[c('purity_bar', 'ccle_bar', 'heatmap')],
-# 						sc_tcga_deconv_comp[[ct]]$sc_heatmaps_filtered
-# 					),
-# 					function(x) x + theme(legend.position = 'none', plot.title = element_blank())
-# 				)
-# 			),
-# 			nrow = 6,
-# 			ncol = 1,
-# 			align = 'v',
-# 			rel_heights = c(1, 1, 1, 15, 5, 5)
-# 		),
-# 		plot_grid(
-# 			plotlist = c(
-# 				list(
-# 					blank_plot(),
-# 					get_legend(
-# 						deconv_plots[[1]]$plots$purity_bar +
-# 							theme(legend.justification = c(0, 1), legend.direction = 'vertical', legend.key.width = NULL, legend.key.height = NULL) +
-# 							labs(fill = 'Correlation\nwith purity')
-# 					),
-# 					get_legend(
-# 						deconv_plots[[1]]$plots$ccle_bar +
-# 							theme(legend.justification = c(0, 1), legend.direction = 'vertical', legend.key.width = NULL, legend.key.height = NULL) +
-# 							labs(fill = 'Tumours vs.\ncell lines')
-# 					),
-# 					get_legend(deconv_plots[[1]]$plots$heatmap + theme(legend.justification = c(0, 1))),
-# 					get_legend(sc_tcga_deconv_comp[[1]]$sc_heatmaps_filtered[[1]] + theme(legend.justification = c(0, 1)))
-# 				)
-# 			),
-# 			nrow = 5,
-# 			ncol = 1,
-# 			rel_heights = c(1, 5, 5, 7, 10)
-# 		),
-# 		nrow = 1,
-# 		ncol = 2,
-# 		rel_widths = c(5, 1)
-# 	) %>% print
-#
-# }
-#
-# dev.off()
 
 
 
@@ -843,7 +392,7 @@ print(
 				c('brca_luminal_b', 'brca_basal_like', 'brca_her2_enriched'),
 				function(ct) {
 
-					sc_deconv_comp_figures <- sapply( # Put deconv_plots[[ct]]$plots in the following...
+					sc_deconv_comp_figures <- sapply(
 						c(deconv_plots[[ct]]$plots, sc_tcga_deconv_comp[[ct]]$sc_heatmaps_unfiltered$expression_level_cc_rm),
 						function(x) x + theme(legend.position = 'none', plot.title = element_blank()),
 						simplify = FALSE,
@@ -1075,7 +624,7 @@ print(
 		blank_plot(),
 		plot_grid(
 			plotlist = lapply(
-				c('ov_proliferative', 'paad', 'read'),
+				c('ov_proliferative', 'paad_basal_moffitt', 'paad_classical_moffitt'),
 				function(ct) {
 
 					sc_deconv_comp_figures <- sapply(
@@ -1116,49 +665,108 @@ print(
 		),
 		blank_plot(),
 		plot_grid(
-			get_legend(
-				deconv_plots$brca_luminal_a$plots$purity_bar +
-					theme(legend.justification = c(1, 1), legend.direction = 'horizontal', legend.key.width = NULL) +
-					labs(fill = 'Correlation with purity\n')
+			plotlist = c(
+				lapply(
+					'read',
+					function(ct) {
+
+						sc_deconv_comp_figures <- sapply(
+							c(deconv_plots[[ct]]$plots, sc_tcga_deconv_comp[[ct]]$sc_heatmaps_unfiltered$expression_level_cc_rm),
+							function(x) x + theme(legend.position = 'none', plot.title = element_blank()),
+							simplify = FALSE,
+							USE.NAMES = TRUE
+						)
+						sc_deconv_comp_figures$heatmap <- sc_deconv_comp_figures$heatmap +
+							theme(plot.margin = unit(c(0, 20, 1.25, 20), 'pt'), axis.title.y = element_text()) +
+							labs(y = '\nGenes')
+						sc_deconv_comp_figures$cancer <- sc_deconv_comp_figures$cancer +
+							labs(y = paste0('Cancer\ncells\n(n = ', length(sc_tcga_deconv_comp[[ct]]$ordered_cell_ids$cancer), ')'))
+						sc_deconv_comp_figures$caf <- sc_deconv_comp_figures$caf +
+							labs(y = paste0('\nCAFs\n(n = ', length(sc_tcga_deconv_comp[[ct]]$ordered_cell_ids$caf), ')'))
+
+						plot_grid(
+							plotlist = c(
+								list(blank_plot() + theme(plot.margin = unit(c(11, 5.5, 5.5, 0), 'pt')) + labs(title = deconv_titles[[ct]])),
+								sc_deconv_comp_figures[c('purity_bar', 'ccle_bar', 'heatmap', 'cancer', 'caf')],
+								list(
+									blank_plot() +
+										scale_x_continuous(position = 'top') +
+										theme(axis.title.x = element_text(), plot.margin = unit(c(4.5, 0, 0, 0), 'pt')) +
+										labs(x = 'Genes')
+								)
+							),
+							nrow = 7,
+							ncol = 1,
+							align = 'v',
+							rel_heights = c(2, 1, 1, 15, 5, 5, 1)
+						)
+
+					}
+				),
+				list(
+					plot_grid(
+						blank_plot(),
+						get_legend(
+							deconv_plots$brca_luminal_a$plots$purity_bar +
+								guides(fill = guide_colourbar(title.position = 'right')) +
+								theme(
+									legend.justification = c(0, 1),
+									legend.direction = 'horizontal',
+									legend.key.width = NULL,
+									legend.box.margin = margin(l = 10)
+								) +
+								labs(fill = 'Correlation with purity\n')
+						),
+						get_legend(
+							deconv_plots$brca_luminal_a$plots$ccle_bar +
+								guides(fill = guide_colourbar(title.position = 'right')) +
+								theme(
+									legend.justification = c(0, 1),
+									legend.direction = 'horizontal',
+									legend.key.width = NULL,
+									legend.box.margin = margin(l = 10)
+								) +
+								labs(fill = 'Tumours vs. cell lines\n')
+						),
+						get_legend(
+							deconv_plots$brca_luminal_a$plots$heatmap +
+								guides(fill = guide_colourbar(title.position = 'right')) +
+								theme(
+									legend.justification = c(0, 1),
+									legend.direction = 'horizontal',
+									legend.key.width = unit(25, 'pt'),
+									legend.key.height = unit(10, 'pt'),
+									legend.box.margin = margin(l = 10)
+								) +
+								labs(fill = 'Correlation\n')
+						),
+						get_legend(
+							sc_tcga_deconv_comp$brca_luminal_a$sc_heatmaps_unfiltered$expression_level_cc_rm[[1]] +
+								guides(fill = guide_colourbar(title.position = 'right')) +
+								theme(
+									legend.justification = c(0, 1),
+									legend.direction = 'horizontal',
+									legend.key.width = unit(25, 'pt'),
+									legend.key.height = unit(10, 'pt'),
+									legend.box.margin = margin(l = 10)
+								) +
+								labs(fill = 'Relative expression level\n')
+						),
+						blank_plot(),
+						nrow = 6,
+						ncol = 1,
+						rel_heights = c(1, 1, 1, 1, 1, 3)
+					),
+					blank_plot() # There will be empty space in the third column, to the right of the legends
+				)
 			),
-			blank_plot(),
-			get_legend(
-				deconv_plots$brca_luminal_a$plots$heatmap +
-					guides(fill = guide_colourbar(title.position = 'right')) +
-					theme(
-						legend.justification = c(0, 1),
-						legend.direction = 'horizontal',
-						legend.key.width = unit(25, 'pt'),
-						legend.key.height = unit(10, 'pt')
-					) +
-					labs(fill = 'Correlation\n')
-			),
-			get_legend(
-				deconv_plots$brca_luminal_a$plots$ccle_bar +
-					theme(legend.justification = c(1, 1), legend.direction = 'horizontal', legend.key.width = NULL) +
-					labs(fill = 'Tumours vs. cell lines\n')
-			),
-			blank_plot(),
-			get_legend(
-				sc_tcga_deconv_comp$brca_luminal_a$sc_heatmaps_unfiltered$expression_level_cc_rm[[1]] +
-					theme(
-						legend.justification = c(0, 1),
-						legend.direction = 'horizontal',
-						legend.key.width = unit(25, 'pt'),
-						legend.key.height = unit(10, 'pt')
-					) +
-					guides(fill = guide_colourbar(title.position = 'right')) +
-					labs(fill = 'Relative expression level\n')
-			),
-			nrow = 2,
-			ncol = 3,
-			rel_widths = c(5, 1, 5)
+			nrow = 1,
+			ncol = 3
 		),
 		blank_plot(),
 		nrow = 7,
 		ncol = 1,
-		rel_heights = c(0.2, 1.8, 0.15, 1.8, 0.15, 0.35, 1.575)
-		# rel_heights = c(0.05, 1, 0.05, 1)
+		rel_heights = c(0.2, 1.8, 0.15, 1.8, 0.15, 1.8, 0.125)
 	)
 )
 
@@ -1184,7 +792,6 @@ deconv_plots_subset <- sapply(
 	names(heatmap_annotations_subset),
 	function(ct) deconvolve_emt_caf_plots(
 		data = deconv_data[[ct]],
-		# data = sc_tcga_deconv_comp[[ct]]$filtered_deconv_data,
 		heatmap_legend_title = 'Correlation',
 		heatmap_colours = rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)),
 		heatmap_colour_limits = c(-0.6, 0.6),
@@ -1303,14 +910,6 @@ plot_grid(
 								plot.margin = unit(c(5.5, 0, 1.25, 5.5), 'pt')
 							) +
 							labs(y = paste0('\nCAFs\n(n = ', length(sc_tcga_deconv_comp[[ct]]$ordered_cell_ids$caf), ')')),
-						# blank_plot() +
-						# 	labs(y = 'Cancer\ncells') +
-						# 	scale_y_continuous(position = 'right') +
-						# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
-						# blank_plot() +
-						# 	labs(y = 'CAFs') +
-						# 	scale_y_continuous(position = 'right') +
-						# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
 						blank_plot(),
 						nrow = 5,
 						ncol = 1,
@@ -1357,11 +956,6 @@ plot_grid(
 		get_legend(
 			deconv_plots_subset$brca_luminal_a$plots$heatmap +
 				guides(fill = guide_colourbar(title.position = 'right')) +
-				# scale_fill_gradientn(
-					# colours = rev(colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(50)),
-					# limits = c(-1, 1),
-					# breaks = c(-1, 0, 1)
-				# ) +
 				theme(
 					legend.justification = c(0, 1),
 					legend.direction = 'horizontal',
@@ -1406,32 +1000,19 @@ dev.off()
 
 ct_to_keep_summary <- c('blca_luminal_papillary', 'blca_basal_squamous', 'brca_luminal_a', 'brca_luminal_b', 'brca_basal_like', 'brca_her2_enriched',
     'coad', 'esca_ac', 'hnsc_mesenchymal_basal', 'hnsc_classical', 'luad_proximal_inflammatory', 'luad_proximal_proliferative',
-    'luad_terminal_respiratory_unit', 'lusc_classical', 'lusc_secretory', 'ov_differentiated', 'ov_immunoreactive', 'ov_proliferative', 'paad',
-    'read', 'stad_cin', 'stad_msi', 'ucec')
+    'luad_terminal_respiratory_unit', 'lusc_classical', 'lusc_secretory', 'ov_differentiated', 'ov_immunoreactive', 'ov_proliferative',
+	'paad_basal_moffitt', 'paad_classical_moffitt', 'read', 'stad_cin', 'stad_msi', 'ucec')
 nice_names_summary <- c('BLCA - Luminal-Papillary', 'BLCA - Basal-Squamous', 'BRCA - Luminal A', 'BRCA - Luminal B', 'BRCA - Basal-like',
     'BRCA - HER2-enriched', 'COAD', 'ESCA - Adenocarcinoma', 'HNSC - Malignant-Basal', 'HNSC - Classical', 'LUAD - Squamoid', 'LUAD - Magnoid',
-    'LUAD - Bronchioid', 'LUSC - Classical', 'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive', 'OV - Proliferative', 'PAAD', 'READ',
-    'STAD - CIN', 'STAD - MSI', 'UCEC')
+    'LUAD - Bronchioid', 'LUSC - Classical', 'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive', 'OV - Proliferative', 'PAAD - Basal',
+	'PAAD - Classical', 'READ', 'STAD - CIN', 'STAD - MSI', 'UCEC')
 
 within_between_clust_corr <- lapply(
 	ct_to_keep_summary,
     function(ct) {
-        # within_clust_corr <- with(deconv_data[[ct]], c(cor_mat[ordering, ordering][1:30, 1:30], cor_mat[rev(ordering), rev(ordering)][1:30, 1:30]))
 		within_clust_corr <- with(deconv_data[[ct]], c(cor_mat[ordering, ordering][1:20, 1:20], cor_mat[rev(ordering), rev(ordering)][1:20, 1:20]))
-		# within_clust_corr <- with(
-		# 	deconv_data[[ct]],
-		# 	c(
-		# 		cor_mat[ordering, ordering][1:(length(genes_filtered)/3), 1:(length(genes_filtered)/3)],
-		# 		cor_mat[rev(ordering), rev(ordering)][1:(length(genes_filtered)/3), 1:(length(genes_filtered)/3)]
-		# 	)
-		# )
         within_clust_corr <- mean(within_clust_corr[within_clust_corr != 1])
-        # between_clust_corr <- with(deconv_data[[ct]], mean(cor_mat[ordering, rev(ordering)][1:30, 1:30]))
 		between_clust_corr <- with(deconv_data[[ct]], mean(cor_mat[ordering, rev(ordering)][1:20, 1:20]))
-		# between_clust_corr <- with(
-		# 	deconv_data[[ct]],
-		# 	mean(cor_mat[ordering, rev(ordering)][1:(length(genes_filtered)/3), 1:(length(genes_filtered)/3)])
-		# )
         list(cancer_type = ct, wthn = within_clust_corr, btw = between_clust_corr)
     }
 ) %>% rbindlist
@@ -1449,14 +1030,7 @@ within_between_clust_corr[
 	)
 ]
 
-deconv_summary_scatterplot <- ggplot(
-    within_between_clust_corr,
-    aes(x = btw, y = wthn, shape = scrnaseq_avail)
-) +
-    # geom_point(size = 2, alpha = 0.75, colour = 'lightblue4') +
-	# geom_point(size = 2, colour = 'lightblue4', fill = 'lightblue') +
-	# scale_shape_manual(values = c('No' = 21, 'Yes' = 24)) +
-    # geom_text_repel(aes(label = cancer_type)) +
+deconv_summary_scatterplot <- ggplot(within_between_clust_corr, aes(x = btw, y = wthn, shape = scrnaseq_avail)) +
 	geom_text_repel(
         aes(label = cancer_type_nice),
         data = within_between_clust_corr[cancer_type_nice == 'HNSC - Malignant-Basal'],
@@ -1472,11 +1046,6 @@ deconv_summary_scatterplot <- ggplot(
         data = within_between_clust_corr[cancer_type_nice == 'LUAD - Magnoid'],
         nudge_x = 0.03, nudge_y = 0.02, size = 3.5
     ) +
-	# geom_text_repel(
-    #     aes(label = cancer_type_nice),
-    #     data = within_between_clust_corr[cancer_type_nice %in% c('HNSC - Classical', 'LUAD - Magnoid')],
-    #     nudge_x = 0.03, nudge_y = 0.01, size = 3.5
-    # ) +
 	geom_text_repel(
         aes(label = cancer_type_nice),
         data = within_between_clust_corr[cancer_type_nice == 'UCEC'],
@@ -1489,13 +1058,12 @@ deconv_summary_scatterplot <- ggplot(
     ) +
     geom_text_repel(
         aes(label = cancer_type_nice),
-        data = within_between_clust_corr[cancer_type_nice %in% c('READ', 'PAAD')], # 'COAD')],
+		data = within_between_clust_corr[cancer_type_nice == 'READ'],
         nudge_x = -0.02, nudge_y = -0.01, size = 3.5
     ) +
 	geom_text_repel(
         aes(label = cancer_type_nice),
         data = within_between_clust_corr[cancer_type_nice == 'BRCA - Luminal A'],
-        # nudge_x = -0.05, nudge_y = -0.01, size = 3.5
 		nudge_x = 0.01, nudge_y = -0.025, size = 3.5
     ) +
 	geom_point(size = 2, colour = 'lightblue4', fill = 'lightblue') +
@@ -1548,29 +1116,6 @@ tcga_codes_table$vp <- viewport(x = unit(0.5, 'npc'), y = unit(1, 'npc') - 0.5*s
 
 # Summary of agreement with scRNA-seq data:
 
-# sc_deconv_comp_barplot_data <- rbindlist(
-# 	lapply(
-# 		names(sc_tcga_deconv_comp),
-# 		function(ct) data.table(
-# 			cancer_type = deconv_titles[[ct]],
-# 			sc_diff = sc_tcga_deconv_comp[[ct]]$sc_deconv_comp_data[
-# 				cell_type == 'cancer',
-# 				.SD[gene %in% with(deconv_data[[ct]], head(genes_filtered[ordering], 20)), mean(expression_level_cc)] -
-# 					.SD[gene %in% with(deconv_data[[ct]], tail(genes_filtered[ordering], 20)), mean(expression_level_cc)]
-# 				# by = cell_type # No point doing it per cell type, because the centring means answer for one cell type is just minus the other
-# 			]
-# 		)
-# 	)
-# )
-#
-# sc_deconv_comp_barplot_data[, cancer_type := factor(cancer_type, levels = .SD[order(-sc_diff), cancer_type])]
-#
-# sc_deconv_comp_barplot <- ggplot(sc_deconv_comp_barplot_data, aes(x = cancer_type, y = sc_diff)) +
-# 	geom_col(colour = 'lightblue4', fill = 'lightblue3') +
-# 	theme_test() +
-# 	theme(axis.text.x = element_text(angle = 55, hjust = 1), axis.title.x = element_blank()) +
-# 	labs(y = TeX('$\\Delta$(Expression level)'))
-
 sc_deconv_comp_scatterplot_data <- rbindlist(
 	lapply(
 		names(sc_tcga_deconv_comp),
@@ -1579,13 +1124,11 @@ sc_deconv_comp_scatterplot_data <- rbindlist(
 			merge(
 				sc_tcga_deconv_comp[[ct]]$sc_deconv_comp_data[
 					gene %in% with(deconv_data[[ct]], head(genes_filtered[ordering], 20)),
-					# gene %in% with(deconv_data[[ct]], head(genes_filtered[ordering], 30)),
 					.(pemt_sig = mean(expression_level_cc)),
 					by = cell_type
 				],
 				sc_tcga_deconv_comp[[ct]]$sc_deconv_comp_data[
 					gene %in% with(deconv_data[[ct]], tail(genes_filtered[ordering], 20)),
-					# gene %in% with(deconv_data[[ct]], tail(genes_filtered[ordering], 30)),
 					.(caf_sig = mean(expression_level_cc)),
 					by = cell_type
 				]
@@ -1602,31 +1145,20 @@ sc_deconv_comp_scatterplot_data <- rbindlist(
 ]
 
 sc_deconv_comp_scatterplot <- ggplot(sc_deconv_comp_scatterplot_data, aes(x = pemt_diff, y = caf_diff)) +
-	geom_text_repel(data = sc_deconv_comp_scatterplot_data[cancer_type %in% c('PAAD', 'COAD', 'OV - Differentiated', 'BRCA - Luminal A')],
-		aes(label = cancer_type), size = 3.5, nudge_y = 0.3, nudge_x = 0.2) +
+	geom_text_repel(data = sc_deconv_comp_scatterplot_data[cancer_type %in% c('PAAD - Classical', 'BRCA - Luminal A')],
+		aes(label = cancer_type), size = 3.5, nudge_y = 0.1, nudge_x = 0.1, point.padding = 0.1) +
 	geom_text_repel(data = sc_deconv_comp_scatterplot_data[cancer_type == 'LUAD - Magnoid'],
-		aes(label = cancer_type), size = 3.5, nudge_y = 0.2, nudge_x = -0.5) +
-	geom_text_repel(data = sc_deconv_comp_scatterplot_data[cancer_type %in% c('BRCA - Luminal B', 'BRCA - HER2-enriched')],
-		aes(label = cancer_type), size = 3.5, nudge_y = -0.3, nudge_x = 0.2) +
-	geom_text_repel(data = sc_deconv_comp_scatterplot_data[cancer_type %in% c('HNSC - Malignant-Basal', 'LUAD - Bronchioid')], # LUAD - Squamoid
-		aes(label = cancer_type), size = 3.5, nudge_y = -0.3, nudge_x = -0.2) +
+		aes(label = cancer_type), size = 3.5, nudge_y = 0.6, nudge_x = 0.05) +
+	geom_text_repel(data = sc_deconv_comp_scatterplot_data[cancer_type %in% c('BRCA - Luminal B', 'COAD')],
+		aes(label = cancer_type), size = 3.5, nudge_y = -0.1, nudge_x = 0.1, point.padding = 0.1) +
+	geom_text_repel(data = sc_deconv_comp_scatterplot_data[cancer_type == 'HNSC - Malignant-Basal'],
+		aes(label = cancer_type), size = 3.5, nudge_y = -0.2, nudge_x = -0.6) +
 	geom_point(shape = 22, colour = 'lightblue4', fill = 'lightblue', size = 2) +
 	lims(x = c(0, 2), y = c(-4.5, 0)) +
-	geom_hline(yintercept = 0, colour = 'grey', size = 0.25, linetype = 'dotted') +
-	geom_vline(xintercept = 0, colour = 'grey', size = 0.25, linetype = 'dotted') +
 	theme_test() +
 	labs(x = TeX('$\\Delta$(Expression of pEMT genes)'), y = TeX('$\\Delta$(Expression of CAF genes)'))
 
-# sc_deconv_comp_scatterplot_data <- dcast(
-# 	melt(sc_deconv_comp_scatterplot_data, id.vars = c('cancer_type', 'cell_type'), variable.name = 'sig', value.name = 'expr'),
-# 	cancer_type + sig ~ cell_type,
-# 	value.var = 'expr'
-# )
-#
-# sc_deconv_comp_scatterplot <- ggplot(sc_deconv_comp_scatterplot_data, aes(x = caf, y = cancer, shape = sig)) + geom_point() + theme_test()
-
-# cairo_pdf('../data_and_figures/final_figures_resubmission/3.pdf', width = 13, height = 12.7)
-cairo_pdf('../data_and_figures/final_figures_resubmission/3_alt.pdf', width = 13, height = 12.2)
+cairo_pdf('../data_and_figures/final_figures_resubmission/3.pdf', width = 13, height = 12.2)
 
 print(
 	plot_grid(
@@ -1708,14 +1240,6 @@ print(
 									plot.margin = unit(c(5.5, 0, 1.25, 5.5), 'pt')
 								) +
 								labs(y = paste0('\nCAFs\n(n = ', length(sc_tcga_deconv_comp[[ct]]$ordered_cell_ids$caf), ')')),
-							# blank_plot() +
-							# 	labs(y = 'Cancer\ncells') +
-							# 	scale_y_continuous(position = 'right') +
-							# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
-							# blank_plot() +
-							# 	labs(y = 'CAFs') +
-							# 	scale_y_continuous(position = 'right') +
-							# 	theme(plot.margin = unit(c(5.5, 5.5, 1.25, 5.5), 'pt'), axis.title.y.right = element_text(angle = 90)),
 							blank_plot(),
 							nrow = 5,
 							ncol = 1,
@@ -1795,7 +1319,6 @@ print(
 		plot_grid(
 			tcga_codes_table,
 			sc_deconv_comp_scatterplot + theme(plot.margin = unit(c(0, 5.5, 5.5, 30), 'pt')),
-			# sc_deconv_comp_barplot + theme(plot.margin = unit(c(0, 5.5, 5.5, 30), 'pt')),
 			deconv_summary_scatterplot + theme(plot.margin = unit(c(0, 5.5, 5.5, 30), 'pt')),
 			nrow = 1,
 			ncol = 3,
@@ -1806,15 +1329,11 @@ print(
 		nrow = 6,
 		ncol = 1,
 		rel_heights = c(0.05, 1, 0.05, 0.2, 0.15, 0.85)
-		# rel_heights = c(0.05, 1, 0.05, 0.2, 0.15, 0.95)
 	) +
 		draw_label('A', x = 0, y = 0.99, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2) +
 		draw_label('B', x = 0, y = 0.395, hjust = -0.1, size = 20, fontface = 2) +
 		draw_label('C', x = 0.28, y = 0.395, size = 20, fontface = 2) +
 		draw_label('D', x = 0.67, y = 0.395, size = 20, fontface = 2)
-		# draw_label('B', x = 0, y = 0.42, hjust = -0.1, size = 20, fontface = 2) +
-		# draw_label('C', x = 0.28, y = 0.42, size = 20, fontface = 2) +
-		# draw_label('D', x = 0.67, y = 0.42, size = 20, fontface = 2)
 )
 
 dev.off()

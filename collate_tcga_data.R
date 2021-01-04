@@ -1,10 +1,10 @@
-library(data.table)
-library(stringr)
-library(readxl)
-library(plyr)
-library(stringi)
-library(org.Hs.eg.db)
-library(AnnotationDbi)
+library(data.table) # 1.12.8
+library(stringr) # 1.4.0
+library(readxl) # 1.3.1
+library(plyr) # 1.8.6
+library(stringi) # 1.5.3
+library(org.Hs.eg.db) # 3.10.0
+library(AnnotationDbi) # 1.48.0
 
 source('general_functions.R')
 source('tcga_functions.R')
@@ -133,14 +133,6 @@ setkey(meta_data, id)
 # Remove datasets_tpm to save memory:
 rm(datasets_tpm)
 
-# # Convert gene IDs:
-# new_ids <- symbol_to_hgnc_list(str_split_fixed(names(expression_data[, -'id']), '\\|', 2)[, 1], gene_names)
-#
-# #The following makes sure all the gene names are unique.  Otherwise we get 29 '?'s.
-# new_ids[new_ids == '?'] <- names(expression_data)[startsWith(names(expression_data), '?')]
-#
-# names(expression_data)[-1] <- new_ids
-
 # Write to file:
 fwrite(expression_data, '../../TCGA_data/tcga_expression_data.csv')
 fwrite(meta_data, '../../TCGA_data/tcga_meta_data.csv')
@@ -153,16 +145,12 @@ fwrite(meta_data, '../../TCGA_data/tcga_meta_data.csv')
 
 # Purity data from tcga_annotations file:
 
-# In the following, we might need a cleverer way to assign purity values to patient IDs than just automatically assigning it to the primary.  There
-# could be some patients from whom only a metastasis sample was taken, in which case any purity value should be assigned to that. I don't know if this
-# ever actually happens, though.  Maybe look at the melanoma data, since there are a lot of metastasis samples in there.
-
 tcga_purity_annotations <- fread('../../tcga_annotations.csv', showProgress = FALSE)[
     ,
     .(individual_id = individual_id, cancer_type = tumor_type, purity = purity)
 ][!is.na(purity)]
 
-# Fix empty cancer_type entries in tcga_purity_annotations (fortunately the corresponding IDs are all in meta_data):
+# Fix empty cancer_type entries in tcga_purity_annotations (corresponding IDs are all in meta_data):
 setkey(meta_data, patient_id)
 tcga_purity_annotations[cancer_type == '', cancer_type := meta_data[sample_type == 'primary'][individual_id, cancer_type]]
 
@@ -307,20 +295,6 @@ tcga_subtypes_data <- rbindlist(
             )
         ],
 
-        # I think we really shouldn't include the following COADREAD subtypes from the TCGA paper.  It ends up that there are only 3 non-normal
-        # samples common to the subtypes data and the expression data from TCGA - one is Invasive, two are MSI/CIMP and none is CIN.
-        # COADREAD_tcga = as.data.table(
-            # as.data.table(read_xls('../../TCGA_data/COADREAD/2011-11-14592C-Sup Table 1.xls', n_max = 277))[
-                # expression_subtype != 'NA',
-                # .(
-                    # individual_id = gsub('-', '\\.', patient),
-                    # # cancer_type = 'COADREAD', # This won't do - need to separate COAD and READ.  Look in data from TCGA paper, or in expression_data.
-                    # subtype_ref = 'doi:10.1038/nature11252',
-                    # subtype = expression_subtype
-                # )
-            # ]
-        # ),
-
         ESCA = as.data.table(read_xlsx('../../TCGA_data/ESCA/nature20805-s1-1.xlsx', skip = 1))[
             `Disease code` == 'ESCA' & `Histological Type` != 'NA',
             .(
@@ -340,16 +314,6 @@ tcga_subtypes_data <- rbindlist(
                 subtype = as.character(RNA)
             )
         ],
-
-        # Maybe look at doi:10.1016/j.celrep.2018.03.075 for kidney cancer subtypes.
-        # KIRC = as.data.table(read_xlsx('../../TCGA_data/KIRC/Data_file_S9_mRNA_miRNA_cluster_assignments.xlsx'))[
-            # mRNA_cluster != 'NA',
-            # .(
-                # individual_id = gsub('-', '\\.', Patient),
-                # # cancer_type = 'KIRC',
-                # subtype = mRNA_cluster
-            # )
-        # ],
 
         LIHC = as.data.table(read_xlsx('../../TCGA_data/LIHC/1-s2.0-S0092867417306396-mmc3.xlsx', skip = 1))[
             `iCluster clusters` != 'NA',
@@ -384,17 +348,6 @@ tcga_subtypes_data <- rbindlist(
                 subtype = get(names(.SD)[length(.SD)]) #We want the last column.
             )
         ],
-
-        # I'm not sure the following ovarian cancer subtypes are very relevant.
-        # OV = fread('../../TCGA_data/OV/OV-TP.samplefeatures.txt')[
-            # # !is.na(CLUS_mRNA_cNMF),
-            # !is.na(CLUS_mRNAseq_cNMF),
-            # .(
-                # individual_id = gsub('-', '\\.', tcga_participant_barcode),
-                # # cancer_type = 'OV',
-                # subtype = CLUS_mRNA_cNMF
-            # )
-        # ],
 
         OV = as.data.table(read_xls('../../TCGA_data/OV/JCI65833sd1.xls', skip = 1, sheet = 1))[
             DATASET == 'TCGA-discovery',
@@ -455,8 +408,7 @@ tcga_subtypes_data <- rbindlist(
             )
         ],
 
-        # Note the following Excel file for SKCM also contains purity data, which I haven't
-        # used.
+        # Note the following Excel file for SKCM also contains purity data, which I haven't used.
         SKCM = as.data.table(read_xlsx('../../TCGA_data/SKCM/1-s2.0-S0092867415006340-mmc2.xlsx', sheet = 'Supplemental Table S1D', skip = 1))[
             `RNASEQ-CLUSTER_CONSENHIER` != '-', # All *patient* IDs in this subset are unique.
             .(
@@ -480,23 +432,9 @@ tcga_subtypes_data <- rbindlist(
             )
         ]
 
-        # I'm not including the UCEC subtypes data because only 8 IDs match patient IDs in the expression data, and only 2 of these are non-normal.
-        # UCEC = as.data.table(read_xls('../../TCGA_data/UCEC/datafile.S1.1.KeyClinicalData.xls'))[
-            # mrna_expression_cluster != 'NA',
-            # .(
-                # individual_id = gsub('-', '\\.', bcr_patient_barcode),
-                # # cancer_type = 'UCEC',
-                # subtype_ref = 'doi:10.1038/nature12113',
-                # subtype = mrna_expression_cluster
-            # )
-        # ]
-
     )
 
 )
-
-# Investigate https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4243044/ for Thyroid carcinoma, and
-# https://www.nature.com/articles/nature21386#supplementary-information for Cervical cancer
 
 
 
@@ -572,58 +510,9 @@ tcga_subtypes_data_centred <- rbindlist(
 				]
 			)
 
-			# To take the top 2000 most variable genes (I don't think this helps):
-			# expression_data_centred <- expression_data_centred[
-				# ,
-				# c('id', expression_data_centred[, names(head(sort(sapply(.SD, var), decreasing = TRUE), 2000)), .SDcols = -'id']),
-				# with = FALSE
-			# ]
-
 			expression_data_centred[, (names(expression_data_centred[, -'id'])) := lapply(.SD, scale), .SDcols = -'id']
 
-            inferred_subtypes <- infer_subtypes(
-                # expression_data[
-                    # meta_data[ # Gets all rows with cancer types corresponding to ref
-                        # cancer_type %in% meta_data[
-                            # tcga_subtypes_data[ # The condition on individual_id avoids NAs
-                                # subtype_ref == ref & individual_id %in% meta_data$patient_id,
-                                # individual_id
-                            # ],
-                            # unique(cancer_type)
-                        # ],
-                        # .(
-                            # id = id[ # Gets IDs of primary/metastatic/recurrent samples
-                                # sample_type == switch(
-                                    # ('primary' %in% sample_type) + 1,
-                                    # switch(('metastatic' %in% sample_type) + 1, 'recurrent', 'metastatic'),
-                                    # 'primary'
-                                # )
-                            # ]
-                        # ),
-                        # by = patient_id
-                    # ][, id]
-                # ],
-                expression_data_centred,
-                subtypes_dt = subtypes_dt
-            )$inferred_subtypes_dt
-
-			# I was going to use one of the following to make "shuffled" distributions from which to choose an appropriate threshold for min_diff, but
-            # it didn't help. Maybe it would make more sense to include all differences between subtype scores, not just the minimum ones.  That would
-            # require modifications to the infer_subtypes() function.
-
-			# inferred_subtypes_control <- infer_subtypes(
-                # expression_data_centred,
-				# subtypes_dt = subtypes_dt[, .(id = id, subtype = sample(subtype))]
-            # )$inferred_subtypes_dt
-
-			# inferred_subtypes_control <- infer_subtypes(
-				# cbind(expression_data_centred[, .(id)], expression_data_centred[, lapply(.SD, sample), .SDcols = -'id']),
-				# subtypes_dt = subtypes_dt[, .(id = id, subtype = sample(subtype))]
-				# # subtypes_dt = subtypes_dt
-			# )$inferred_subtypes_dt
-
-			# Add error margin using min_diff:
-			# inferred_subtypes[min_diff < 0.1, inferred_subtype := 'unresolved']
+            inferred_subtypes <- infer_subtypes(expression_data_centred, subtypes_dt = subtypes_dt)$inferred_subtypes_dt
 
             # Make sure all the (non-normal) IDs from meta_data (for this cancer type) are in inferred_subtypes:
 

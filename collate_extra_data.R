@@ -1,8 +1,6 @@
 library(data.table)
 library(plyr)
 
-# source('functions.R')
-
 sc_metadata <- list(
 	breast_qian = quote(
 		fread('../data_and_figures/qian_breast_2020_reclassified.csv')[
@@ -69,24 +67,3 @@ extra_data <- rbindlist(
 )
 
 fwrite(extra_data, '../data_and_figures/collated_extra_data.csv')
-
-# The following was for computing the differences after centring both between cancer cells and CAFs and within cells, as we did in the
-# single-cell-deconv comparison.  But it doesn't make sense here, because we'd be centring the cells w.r.t. all genes, not only the mesenchymal genes.
-
-# cat('\tReading and preparing data\n')
-# sc_data <- eval(sc_metadata[[ref]])
-# sc_data <- melt(sc_data, id.vars = c('id', 'cell_type'), variable.name = 'gene', value.name = 'expression_level')
-
-# cat('\tCentring genes'\n)
-# gene_averages <- sc_data[
-	# ,
-	# .(ave_exp = mean(c(mean(expression_level[cell_type == 'cancer']), mean(expression_level[cell_type == 'caf'])))),
-	# by = .(symbol = gene)
-# ]
-# sc_data[, expression_level := expression_level - gene_averages[symbol == unique(gene), ave_exp], by = gene]
-
-# cat('\tCentring cells\n')
-# sc_data[, expression_level := expression_level - mean(expression_level), by = id]
-
-# cat('\tComputing differences\n')
-# sc_diff <- sc_data[, mean(expression_level[cell_type == 'cancer']) - mean(expression_level[cell_type == 'caf']), by = gene]

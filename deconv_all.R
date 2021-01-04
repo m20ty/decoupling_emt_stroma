@@ -1,5 +1,3 @@
-# bsub -q tirosh -R rusage[mem=64000] -o deconv_simplified.o -e deconv_simplified.e Rscript deconv_simplified.R
-
 library(data.table) # 1.12.8
 library(ggplot2) # This is version 3.3.1 on my laptop's WSL setup but 3.3.0 on WEXAC.
 library(magrittr) # 1.5
@@ -14,7 +12,6 @@ library(caTools) # 1.18.0
 source('general_functions.R')
 source('tcga_functions.R')
 
-# I need cell_type_markers for the gene filtering:
 cell_type_markers <- fread('../../cell_type_markers.csv')
 
 emt_markers <- fread('../../emt_markers.csv')[, gene := alias2SymbolTable(gene)][source != 'GO', sort(unique(gene))]
@@ -34,12 +31,9 @@ initial_genes <- c('SNAI1', 'SNAI2', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2')
 
 expression_data <- fread('../../TCGA_data/tcga_expression_data.csv', key = 'id')
 meta_data <- fread('../../TCGA_data/tcga_meta_data.csv', key = 'id')
-# Using different version of subtypes data, but not using inferred subtypes anyway:
 subtypes_data <- fread('../../TCGA_data/tcga_subtypes_data_centred.csv', key = 'id')
 ccle <- fread('../../CCLE_cancer_type_Av.csv', key = 'gene_id')
 extra_data <- fread('../data_and_figures/collated_extra_data.csv', key = 'gene')
-
-# I won't need the normal tissue samples, so let's take them out now:
 
 expression_data <- expression_data[meta_data[sample_type != 'normal', id]]
 meta_data <- meta_data[sample_type != 'normal']
@@ -48,15 +42,13 @@ meta_data <- meta_data[sample_type != 'normal']
 
 
 
-# I'm leaving out cancer subtypes that have fewer than 30 samples.  These are:
+# I'm leaving out cancer subtypes that have 30 or fewer samples.  These are:
 # LUSC Primitive: 27 samples
 # BLCA Luminal: 26 samples
 # BLCA Neuronal: 20 samples
 # BRCA Normal-like: 8 samples
-# I think if I raised this threshold to 40, I would only lose STAD EBV, which has exactly 30 samples,
-# and maybe splitting up PAAD into Basal and Classical would make up for this (in the GI cluster).
-# I'm also leaving out whole cancer types that have fewer than 100 samples, namely ACC, CHOL and MESO
-# (also UVM, but I'm not including melanoma any more anyway).
+# STAD EBV: 30 samples
+# I'm also leaving out whole cancer types that have fewer than 100 samples in total, namely ACC, CHOL and MESO.
 
 # Note LUAD Proximal-Inflammatory = Squamoid; Proximal-Proliferative = Magnoid; and Terminal Respiratory Unit (TRU) = Bronchioid.
 
@@ -462,7 +454,6 @@ deconv_data <- sapply(
 										meta_data = meta_data,
 										genes = emt_markers,
 										cell_type_markers = cell_type_markers,
-										# heatmap_annotations = heatmap_annotations,
 										ccle_data = ccle,
 										subtypes_data = subtypes_data,
 										subtypes_var = 'subtype',
@@ -519,9 +510,7 @@ deconv_plots <- sapply(
 			args = c(
 				list(
 					data = deconv_ct,
-					# Include the following only if you want epithelial scores (takes much longer):
-					# expression_data = expression_data,
-					heatmap_axis_title = '', # Change heat_map() function so I can put NULL here
+					heatmap_axis_title = '',
 					heatmap_legend_title = 'Coexpression',
 					heatmap_colours = rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)),
 					heatmap_annotations = heatmap_annotations,
@@ -558,7 +547,6 @@ deconv_plots <- sapply(
 
 
 saveRDS(deconv_data, '../data_and_figures/deconv_data_all.rds')
-# saveRDS(deconv_plots, '../data_and_figures/deconv_plots_all.rds')
 
 
 

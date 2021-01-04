@@ -1,4 +1,4 @@
-library(data.table)
+library(data.table) # 1.12.8
 
 source('functions.R')
 
@@ -8,7 +8,7 @@ tcga_cancer_types <- c('ACC', 'BLCA', 'BRCA', 'CESC', 'CHOL', 'COAD', 'ESCA', 'H
 clinical_datasets <- sapply(
 
     tcga_cancer_types,
-    
+
     function(ct) {
 
         cat(ct, '\b...')

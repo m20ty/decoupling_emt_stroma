@@ -1,5 +1,5 @@
 library(data.table) # 1.12.8
-library(ggplot2) # This is version 3.3.1 on my laptop's WSL setup but 3.3.0 on WEXAC.
+library(ggplot2) # 3.3.0
 library(magrittr) # 1.5
 library(Rtsne) # 0.15
 library(plyr) # 1.8.6
@@ -24,7 +24,8 @@ cohort_data <- list(
 		epsilon = 3.1
 	),
 	crc_lee_smc = list(
-		patients = c('SMC01', 'SMC02', 'SMC04', 'SMC07', 'SMC08', 'SMC09', 'SMC11', 'SMC14', 'SMC15', 'SMC16', 'SMC18', 'SMC20', 'SMC21', 'SMC23', 'SMC25'),
+		patients = c('SMC01', 'SMC02', 'SMC04', 'SMC07', 'SMC08', 'SMC09', 'SMC11', 'SMC14', 'SMC15', 'SMC16', 'SMC18', 'SMC20', 'SMC21', 'SMC23',
+					 'SMC25'),
 		read_quote = quote(fread('../data_and_figures/lee_crc_2020_smc.csv')[
 			sample_type != 'normal',
 			-c('sample_id', 'sample_type', 'cell_subtype')
@@ -49,7 +50,9 @@ cohort_data <- list(
 	),
 	luad_kim = list(
 		patients = c('P0006', 'P0008', 'P0018', 'P0019', 'P0020', 'P0025', 'P0028', 'P0030', 'P0031', 'P0034', 'P1006', 'P1028', 'P1049', 'P1058'),
-		read_quote = quote(fread('../data_and_figures/kim_luad_2020.csv')[, -c('cell_type_refined', 'cell_subtype', 'sample_site', 'sample_id', 'sample_origin')]),
+		read_quote = quote(
+			fread('../data_and_figures/kim_luad_2020.csv')[, -c('cell_type_refined', 'cell_subtype', 'sample_site', 'sample_id', 'sample_origin')]
+		),
 		seed = 9684,
 		min_cells = 50,
 		epsilon = 2.4
@@ -82,56 +85,52 @@ cohort_data <- list(
 
 
 for(cohort in names(cohort_data)) {
-	
+
 	classification_data <- fread(paste0('../data_and_figures/sc_reclassify/classification_data_', cohort, '.csv'), key = 'cell_id')
-	
+
 	sc_data <- eval(cohort_data[[cohort]]$read_quote)[patient %in% cohort_data[[cohort]]$patients]
-	
+
 	sc_data[, classification := classification_data[id, classification]]
-	
+
 	sc_data <- sc_data[classification == 'nonmalignant', -'classification']
-	
-	gene_averages <- sapply(
-		sc_data[, -c('id', 'patient', 'cell_type')],
-		function(x) {log2(mean(10*(2^x - 1)) + 1)},
-		USE.NAMES = TRUE
-	)
-	
+
+	gene_averages <- sapply(sc_data[, -c('id', 'patient', 'cell_type')], function(x) {log2(mean(10*(2^x - 1)) + 1)}, USE.NAMES = TRUE)
+
 	sc_data <- sc_data[, c('id', 'patient', 'cell_type', names(gene_averages)[gene_averages >= 4]), with = FALSE]
-	
+
 	sc_tsne <- readRDS(paste0('../data_and_figures/sc_reclassify/tsne_', cohort, '.rds'))
-	
+
 	# Check t-SNE plot for obvious problems:
 	# qplot(x, y, data = setNames(as.data.table(sc_tsne$Y), c('x', 'y')))
-	
+
 	# Choose minimum number of cells per cluster and check the k-NN distance plot:
 	# dbscan::kNNdistplot(sc_tsne$Y, k = cohort_data[[cohort]]$min_cells - 1)
 	# abline(h = cohort_data[[cohort]]$epsilon)
-	
+
 	# Run DBSCAN:
 	set.seed(cohort_data[[cohort]]$seed)
 	sc_dbscan <- fpc::dbscan(sc_tsne$Y, eps = cohort_data[[cohort]]$epsilon, MinPts = cohort_data[[cohort]]$min_cells)
-	
+
 	saveRDS(sc_dbscan, paste0('../data_and_figures/sc_reclassify/dbscan_', cohort, '.rds'))
-	
+
 	plot_data <- setNames(
 		cbind(as.data.table(sc_tsne$Y), as.character(sc_dbscan$cluster), sc_data$cell_type),
 		c('x', 'y', 'dbscan_cluster', 'cell_type')
 	)
-	
+
 	plot_data[dbscan_cluster == 0, dbscan_cluster := 'noise']
-	
+
 	# Scatter plot of t-SNE coordinates, coloured by DBSCAN cluster:
 	tsne_plot_dbscan <- ggplot(plot_data, aes(x = x, y = y, colour = dbscan_cluster)) +
 		geom_point() +
 		# scale_colour_manual(values = randomcoloR::distinctColorPalette(length(unique(sc_dbscan$cluster)))) +
 		theme_minimal()
-	
+
 	tsne_plot_author_cell_types <- ggplot(plot_data, aes(x = x, y = y, colour = cell_type)) +
 		geom_point() +
 		# scale_colour_manual(values = randomcoloR::distinctColorPalette(length(unique(sc_data$cell_type)))) +
 		theme_minimal()
-	
+
 	tsne_plot_complexity <- ggplot(
 		cbind(plot_data, complexity = apply(sc_data[, -c('id', 'patient', 'cell_type')], 1, function(x) sum(x > 0))),
 		aes(x = x, y = y, colour = complexity)
@@ -139,211 +138,54 @@ for(cohort in names(cohort_data)) {
 		geom_point() +
 		theme_minimal() +
 		labs(title = 'Complexity')
-	
+
 	ct_ave_exp_plots <- sapply(
 		cell_type_markers[cell_type !='mesenchymal', unique(cell_type)],
 		function(ct) {
-			
+
 			ave_exp <- sc_data[, rowMeans(.SD), .SDcols = cell_type_markers[cell_type == ct & gene %in% names(sc_data), unique(gene)]]
-			
+
 			tsne_plot <- ggplot(cbind(plot_data, ave_exp = ave_exp), aes(x = x, y = y, colour = ave_exp)) +
 				geom_point() +
 				theme_minimal() +
 				labs(title = ct)
-			
+
 			list(ave_exp = ave_exp, plot = tsne_plot)
-			
+
 		},
 		simplify = FALSE,
 		USE.NAMES = TRUE
 	)
-	
-	epithelial_markers <- c(
-		'CDH1',
-		'EPCAM',
-		'SFN',
-		names(sc_data)[grepl('^KRT[0-9]', names(sc_data))]
-	)
-	
+
+	epithelial_markers <- c('CDH1', 'EPCAM', 'SFN', names(sc_data)[grepl('^KRT[0-9]', names(sc_data))])
+
 	epithelial_markers <- epithelial_markers[epithelial_markers %in% names(sc_data)]
-	
+
 	ave_exp_epithelial <- sc_data[, rowMeans(.SD), .SDcols = epithelial_markers]
-	
+
 	tsne_plot_epithelial <- ggplot(cbind(plot_data, ave_exp = ave_exp_epithelial), aes(x = x, y = y, colour = ave_exp)) +
 		geom_point() +
 		theme_minimal() +
 		labs(title = 'epithelial')
-	
+
 	pdf(paste0('../data_and_figures/sc_reclassify/tsne_plots_normal_', cohort, '.pdf'))
-	
+
 	print(tsne_plot_dbscan)
 	print(tsne_plot_author_cell_types)
 	print(tsne_plot_complexity)
 	print(tsne_plot_epithelial)
 	for(x in ct_ave_exp_plots) print(x$plot)
-	
+
 	dev.off()
-	
+
 }
-
-# I don't think this worked brilliantly for all the cancer types, so there might be a lot of manual inspection to separate cell types.
-# We could alternatively try UMAP, but not sure this will work better.  (If we want to, it looks like the uwot package has an implementation
-# of UMAP that can use multiple threads.  Note we can also use multiple threads in Rtsne() using the <num_threads> argument, which defaults
-# to 1.  Setting this to a higher number didn't work in a job submitted via bsub, but might work if using WEXAC interactively.)
-
-# I think the most important thing is to use my code from the carcinosarcoma project to find differentially expressed genes, although we
-# have a lot of cluster pairs to test!  Maybe we don't need to test all of them - we could pick out the obvious clusters from the t-SNE
-# and use the DE technique on the rest.
-
-# There are some cases where two cell types appear to be in one cluster.  E.g. in the PDAC data from Peng et al., one cluster seems to
-# contain a mixture of B and T cells.  What should we do in this case?  We could analyse the cells of this cluster separately, and cluster
-# by e.g. hierarchical clustering.  We could do something similar for the CAF-like cells, maybe using PCA, or similar, where the variation
-# looks more continuous.
-
-
-
-
-
-# breast_qian:
-# b_cell = 8
-# b_plasma = 4
-# CAF = 2 and 5, although I think there may be some epithelial cells in cluster 5...  Obviously myocyte genes are expressed here too.
-# endothelial = 6
-# macrophage = 3 (although possibly cluster 3 contains one or two dendritic cells)
-# mast = 9
-# t_cell = 1, 7 and 10
-# What's left: only cluster 11, which is very small anyway so could be left out.
-# So this one worked well, and we only need to identify cluster 11 and delve further into clusters 2 and 5 to separate CAFs from
-# possible epithelial cells.  I think on these we should try hierarchical clustering as well as something like PCA.
-# UPDATE: The clustering generally agrees with the authors' classifications, except we should remove cells where we disagree about their
-# malignancy, check out cluster 11 (I think are doublets) and check the difference between the two main CAF clusters (I think one may be
-# pericytes).
-
-# crc_lee_smc:
-# b_cell = 9
-# b_plasma = 8
-# CAF = 2, though there may be myocytes in there
-# endothelial = 3
-# epithelial = 1
-# macrophage = 4 (possibly a few dendritic cells in there)
-# t_cell = 6 and 7, although signal is weaker in 7.  Also looks like one or two cells from 6 should be in 7.  Possibly some mast cells in 6.
-# What's left: only cluster 5.
-# This one also worked well.  We should identify cluster 5; try hierarchical clustering on the T cells to try to recapitulate the two
-# clusters; and run hierarchical clustering and PCA on cluster 2 to check for e.g. myocytes/myofibroblasts.
-# UPDATE: the authors' classifications generally agree with my clustering, except cells I identified as endothelial are CAFs in their
-# classification, and I'm not sure I agree with putting cluster 5 together with 4 into a "myeloid" cluster - we should check what
-# exactly cluster 5 is.  Also, some of the cells identified by DBSCAN as "noise" don't cluster well with the authors' classifications, so
-# we should check out these "noise" cells.
-
-# hnscc_puram:
-# b_cell/b_plasma = 2
-# CAF/myocyte = 1 and 7
-# endothelial = 9 and maybe 10 (check 10 more closely)
-# epithelial = 5
-# macrophage = 3
-# mast = 4
-# t_cell = 6 and 8 (these clusters possibly include some dendritic and B cells)
-# None left over!
-# We should run hierarchical clustering and PCA on the CAF cluster, and maybe also on the T and B cell clusters, and the endothelial clusters.
-# UPDATE: My clusters agree well with Itay's classifications, although what I think are normal epithelial cells are unclassified in Itay's
-# data.  So we can just leave them as unclassified (since we don't consider normal epithelial cells in our study anyway), and just use Itay's
-# classifications, after excluding cells that he thinks are malignant.
-
-# liver_ma:
-# Cluster 1 is macrophages
-# Cluster 2 looks most like CAFs, but there could also be myocytes, epithelial cells or endothelial cells in there
-# Cluster 3 is mostly T cells, with a few B or B plasma cells and maybe one epithelial cell
-# Cluster 4 looks like macrophages, although the signal is weaker than in cluster 1
-# Cluster 5 is endothelial cells
-# Cluster 6 could be CAF, myocyte or endothelial cells
-# This one didn't work so well.  Run hierarchical clustering and PCA on clusters 1, 3 and 4 together, to separate the immune cell types.
-# Then maybe do the same for the remaining clusters together, to separate CAF, endothelial, epithelial and myocyte.
-# UPDATE: my clusters broadly agree with the authors' classifications, although I think some of the cells they labelled endothelial may
-# not really be endothelial.  It might be good to take my DBSCAN clusters 5 and 6, along with the intersection of 2 with the cells
-# classified by the authors as endothelial, and test these 3 groups against each other and against the other clusters.
-
-# luad_kim:
-# b_cell = 1, 8, 11 and 19
-# b_plasma = 9 and 16
-# caf = 7
-# dc = 15
-# endothelial = 13
-# epithelial = 2 and 17
-# macrophage = 3, 10, 12 and 20
-# mast = 4
-# t_cell = 5, 6 and 14
-# What's left: just 18, which the authors classify as "myeloid", along with the macrophages and dendritic cells.
-# Apart from this, my classifications agree well with the authors', except we want to divide up "myeloid" into macrophage, dc and cluster 18;
-# identify cluster 18; and possibly join T and NK cells together and call them all T cells.  Also, there are quite a few cells that seem to
-# be in the wrong clusters: e.g. there are a few fibroblasts scattered around, including some in the endothelial cluster, and there are
-# some macrophages in the mast cell cluster.  So we might still want to define the clusters ourselves, which is still fine because they
-# mostly agree with the authors' assignments.
-
-# lung_qian:
-# b_cell = 13 and 18
-# b_plasma = 4 and 19, except for maybe one cell in 19 that looks like it should be in 10
-# CAF = 3, 14 and 15 (may be myocytes in here as well)
-# dc = 5
-# endothelial = 12
-# epithelial = 6 and 10, and maybe 16, plus maybe one cell from 19
-# macrophage = 2, 9 and 11
-# mast = 17 and 21
-# myocyte = 16, though could also be epithelial
-# t_cell = 1, 7, 20, 22
-# What's left: only cluster 8.
-# Identify cluster 8; identify the cell in 19 that should be in 10; run hierarchical clustering/PCA on the epithelial-like clusters to
-# check what exactly they are (e.g. may include myocytes); do the same for the CAF clusters, to check for myocytes/myofibroblasts.
-# UPDATE: my clusters agree with the authors' classifications, though I think we should check what is cluster 8 (the authors grouped these
-# with "myeloid" cells) and check the difference between the CAF clusters, in case there are pericytes etc.  We can also identify the
-# dendritic cells, so maybe we should separate these from the "myeloid" cluster (so separate it into DC, macrophage and cluster 8).
-# There are also some cells that the authors classify as "myeloid" that I think should be B cells.
-
-# ovarian_qian:
-# b_cell/b_plasma = 13
-# CAF = 1, 2, 4, 10, 15, 17, 18 and 20 (and possibly also 8), though there's myocyte signal and (worryingly) epithelial signal in here too...
-# endothelial = 5, 6 and 14 (should investigate why cluster 6 looks so separate from the other two)
-# epithelial = 11 and 16, although there's some myocyte signal here
-# macrophage = 3, 19 and 21, though there may be dendritic cells in here too
-# t_cell = 7 and 12 (though there may be a mast cell in 7)
-# What's left: only cluster 9.
-# Identify 9; check the T cell cluster for mast and B cells; check the differences between the endothelial clusters; check the macrophage
-# clusters for dendritic cells; check the CAF and epithelial clusters for myocytes etc.
-# UPDATE: my clusters broadly agree with the authors' classifications, though we should check cluster 9 (which the authors say are B cells)
-# and the epithelial clusters 11 and 16 (which the authors denote "Cancer" - were they definitely not normal epithelial?)  Perhaps we should
-# also try to find the difference between the two main endothelial clusters, though this isn't critical.  I don't really trust the CAF
-# assignments, because there appear to be so many CAFs, which separate into quite distinct clusters (especially cluster 8).  It might be
-# good to test all these clusters against each other and against the non-CAF clusters.
-
-# pdac_peng:
-# b_cell = 6, 11 and some of 2
-# b_plasma = 10
-# CAF = 4, 7, 12 and 13 (and maybe 14 - that one's not clear), though there is myocyte signal here, and 12 also has T cell signal
-# endothelial = 3 (although there's a bit of macrophage signal in here)
-# epithelial = 5 and 9, though there's some myocyte signal in here
-# macrophage = 1, and maybe a bit of 3 and 4, and I think some of 1 is dendritic cells
-# Cluster 2 is a mixture of T cells and B cells, with one or two mast cells
-# What's left: 8
-# Identify cluster 8; decompose cluster 2 (maybe together with 6 and 11) into T, B and mast cells; look at all the CAF-like clusters to
-# check for myocytes, T cells etc. (maybe include epithelial clusters in here); check endothelial cluster for macrophage signal...
-# UPDATE: the cells I've called B plasma are denoted T cells by the authors - maybe we should change use our own classification for these.
-# We could try to identify cluster 8 ourselves (the authors call it "endocrine", or just leave it out).  The cells I think are epithelial
-# are subdivided by the author into ductal 1, ductal 2 and acinar.  Shold we retain these classifications?  Where we principally disagree
-# is the classification of CAFs - half the ones I think are CAFs are called stellate by the authors.  We should check if this makes sense.
-# I would also like to better identify cluster 14 (which the authors call CAFs but I'm not confident).
 
 
 
 
 
 # Get MSigDB C2, C5 and H gene sets (C2 = Curated gene sets; C5 = GO gene sets):
-msigdb <- rbindlist(
-    lapply(
-        c('C2', 'C5', 'H'),
-        function(categ) {
-            as.data.table(msigdbr(category = categ))
-        }
-    )
-)
+msigdb <- rbindlist(lapply(c('C2', 'C5', 'H'), function(categ) as.data.table(msigdbr(category = categ))))
 
 # Function to test one cluster against all others, find DE genes and run GSEA:
 test_cluster <- function(
@@ -355,55 +197,46 @@ test_cluster <- function(
 	cell_id_var_name = 'cell_id',
 	seed = NULL
 ) {
-	
+
 	# Centre the matrix gene-wise (not sure this is necessary):
 	expression_mat_centred <- t(apply(expression_mat, 2, function(x) {x - mean(x)}))
-	
+
 	averages <- sapply(
 		clust_data[get(clust_var_name) != 'noise', unique(get(clust_var_name))],
 		function(clst) rowMeans(expression_mat_centred[, clust_data[get(clust_var_name) == clst, get(cell_id_var_name)]]),
 		simplify = FALSE,
 		USE.NAMES = TRUE
 	)
-	
+
 	gene_test <- lapply(
 		lapply(clust_data[get(clust_var_name) != clust, unique(get(clust_var_name))], function(ct) c(clust, ct)),
 		function(clustpair) {
-			
+
 			cat(paste0(clustpair[1], ' vs. ', clustpair[2], '...'))
-			
+
 			mat_clustpair <- sapply(
 				clustpair,
 				function(clst) expression_mat_centred[, clust_data[get(clust_var_name) == clst, get(cell_id_var_name)]],
 				simplify = FALSE,
 				USE.NAMES = TRUE
 			)
-			
+
 			out <- list(
 				clust_pair = clustpair,
 				test_results = data.table(gene_id = rownames(expression_mat_centred))[
 					,
-					.(
-						pval = try_default(
-							t.test(
-								mat_clustpair[[1]][gene_id, ],
-								mat_clustpair[[2]][gene_id, ]
-							)$p.value,
-							default = 1,
-							quiet = TRUE
-						)
-					),
+					.(pval = try_default(t.test(mat_clustpair[[1]][gene_id, ], mat_clustpair[[2]][gene_id, ])$p.value, default = 1, quiet = TRUE)),
 					by = gene_id
 				]
 			)
-			
+
 			cat('Done!\n')
-			
+
 			out
-			
+
 		}
 	)
-	
+
 	gene_test_results <- lapply(
 		gene_test,
 		function(x) {
@@ -412,60 +245,37 @@ test_cluster <- function(
 			list(other_clst = x$clust_pair[2], data = data)
 		}
 	)
-	
-	gene_test_results <- setNames(
-		lapply(gene_test_results, `[[`, 'data'),
-		sapply(gene_test_results, `[[`, 'other_clst')
-	)
-	
+
+	gene_test_results <- setNames(lapply(gene_test_results, `[[`, 'data'), sapply(gene_test_results, `[[`, 'other_clst'))
+
 	table_list <- lapply(gene_test_results, function(dt) dt[p.adjust(pval, method ='BH') < 0.05])
 	for(dt in table_list) {setkey(dt, gene_id)}
-	
+
 	degenes <- data.table(gene = Reduce(intersect, lapply(table_list, `[[`, 'gene_id')))
-	# degenes <- data.table(gene = intersect(table_list[[1]]$gene_id, table_list[[2]]$gene_id))
-	degenes[
-		,
-		rel_exp := apply(
-			as.data.table(lapply(table_list, function(dt) dt[gene, rel_exp])),
-			# cbind(table_list[[1]][gene, rel_exp], table_list[[2]][gene, rel_exp]),
-			1,
-			mean
-		)
-	]
-	
-	# Run GSEA (note GSEA involves random permutations, I think in correcting for multiple hypothesis tests, so we need to set a seed):
-	
+	degenes[, rel_exp := apply(as.data.table(lapply(table_list, function(dt) dt[gene, rel_exp])), 1, mean)]
+
+	# Run GSEA:
+
 	if(!is.null(seed)) set.seed(seed)
-	
+
 	degenes_gsea <- sapply(
 		unique(msigdb_table$gs_cat),
 		function(categ) {
 			cbind(
 				gs_cat = categ,
 				as.data.table(
-					GSEA(
-						degenes[
-							order(-rel_exp),
-							setNames(rel_exp, gene)
-						],
-						TERM2GENE = msigdb_table[gs_cat == categ, .(gs_name, human_gene_symbol)]
-					)
+					GSEA(degenes[order(-rel_exp), setNames(rel_exp, gene)], TERM2GENE = msigdb_table[gs_cat == categ, .(gs_name, human_gene_symbol)])
 				)
 			)
 		},
 		simplify = FALSE,
 		USE.NAMES = TRUE
 	)
-	
-	gsea_table <- rbindlist(
-		lapply(
-			degenes_gsea,
-			function(dt) dt[, Reduce(intersect, lapply(degenes_gsea, names)), with = FALSE]
-		)
-	)
-	
+
+	gsea_table <- rbindlist(lapply(degenes_gsea, function(dt) dt[, Reduce(intersect, lapply(degenes_gsea, names)), with = FALSE]))
+
 	list(test_results = gene_test_results, degenes = degenes, gsea_table = gsea_table)
-	
+
 }
 
 
@@ -549,121 +359,7 @@ de_between_caf_candidate <- lapply(
 
 sapply(1:2, function(i) de_between_caf_candidate[[i]]$degenes[order(-rel_exp), head(gene, 50)])
 
-# So it looks like caf_candidate_2 (DBSCAN cluster 5) could be pericytes, since RGS5 comes up prominently in this cluster.
-
-# In conclusion, perhaps we want to exclude DBSCAN clusters 5 and 11, along with cells which the authors believe are malignant, and otherwise
-# use the authors' classifications.
-
-# cor_mat <- lapply(
-	# 1:2,
-	# function(i) {
-		# cor(
-			# t(
-				# apply(
-					# set_rownames(
-						# as.matrix(sc_data[cell_type_data[cluster == paste0('caf_candidate_', i), cell_id], -c('id', 'patient', 'cell_type')]),
-						# cell_type_data[cluster == paste0('caf_candidate_', i), cell_id]
-					# ),
-					# 2,
-					# function(x) x - mean(x)
-				# )
-			# )
-		# )
-	# }
-# )
-
-# caf_candidate_hclust <- lapply(cor_mat, function(x) hclust(as.dist(1 - x)))
-
-# caf_candidate_heatmap <- lapply(
-	# 1:2,
-	# function(i) {
-		# heat_map(
-			# cor_mat[[i]],
-			# caf_candidate_hclust[[i]]$order,
-			# axis_text_x = '',
-			# axis_text_y = '',
-			# colour_limits = c(-0.4, 0.4),
-			# plot_margin = c(0, 5.5, 5.5, 5.5)
-		# )
-	# }
-# )
-
-# caf_candidate_dendro <- lapply(caf_candidate_hclust, dendro)
-
-# pdf('../data_and_figures/sc_reclassify/breast_qian_caf_hclust.pdf')
-
-# for(i in 1:2) {
-	# plot_grid(
-		# plot_grid(
-			# caf_candidate_dendro[[i]],
-			# caf_candidate_heatmap[[i]] + theme(legend.position = 'none'),
-			# nrow = 2,
-			# ncol = 1,
-			# rel_heights = c(1, 5),
-			# align = 'v'
-		# ),
-		# plot_grid(
-			# blank_plot(),
-			# get_legend(caf_candidate_heatmap[[i]]),
-			# nrow= 2,
-			# ncol = 1,
-			# rel_heights = c(1, 5)
-		# ),
-		# nrow = 1,
-		# ncol = 2,
-		# rel_widths = c(5, 1)
-	# ) %>% print
-# }
-
-# dev.off()
-
-# There's not much signal, but I see some vague clusters.
-
-# caf_candidate_clust_data <- rbindlist(
-	# list(
-		# data.table(cell_id = labels(as.dendrogram(caf_candidate_hclust[[1]])[[1]]), cluster = 1),
-		# data.table(cell_id = labels(as.dendrogram(caf_candidate_hclust[[1]])[[2]]), cluster = 2),
-		# data.table(cell_id = labels(as.dendrogram(caf_candidate_hclust[[2]])[[1]][[1]]), cluster = 3),
-		# data.table(cell_id = labels(as.dendrogram(caf_candidate_hclust[[2]])[[1]][[2]]), cluster = 4),
-		# data.table(cell_id = labels(as.dendrogram(caf_candidate_hclust[[2]])[[2]]), cluster = 5)
-	# )
-# )
-
-# caf_candidate_seeds <- c(5855, 9302, 1354, 3298, 9032)
-
-# caf_candidate_de <- lapply(
-	# 1:5,
-	# function(i) test_cluster(
-		# set_rownames(
-			# as.matrix(sc_data[caf_candidate_clust_data$cell_id, -c('id', 'patient', 'cell_type')]),
-			# caf_candidate_clust_data$cell_id
-		# ),
-		# caf_candidate_clust_data,
-		# i,
-		# msigdb,
-		# seed = caf_candidate_seeds[i]
-	# )
-# )
-
-# From earlier:
-
-# epithelial_markers <- c(
-	# 'CDH1',
-	# 'EPCAM',
-	# 'SFN',
-	# names(sc_data)[grepl('^KRT[0-9]', names(sc_data))]
-# )
-
-# epithelial_markers <- epithelial_markers[epithelial_markers %in% names(sc_data)]
-
-# sapply(1:5, function(i) caf_candidate_de[[i]]$degenes[order(-rel_exp), head(gene, 50)])
-
-# sapply(
-	# caf_candidate_de,
-	# function(x) sapply(epithelial_markers, function(y) which(y == x$degenes[order(-rel_exp), gene]))
-# )
-
-# CAF candidate cluster 3 looks like the more epithelial one.
+# It looks like caf_candidate_2 (DBSCAN cluster 5) could be pericytes, since RGS5 comes up prominently in this cluster.
 
 
 
@@ -709,7 +405,7 @@ de_5 <- test_cluster(
 
 de_5$degenes[order(-rel_exp), head(gene, 100)]
 
-# Looks like something immune, similar to cluster 11 in breast_qian, though I'm not sure.  Very few gene sets come up in GSEA.
+# Looks like something immune, similar to cluster 11 in breast_qian.  Very few gene sets come up in GSEA.
 
 # Check that clusters 2 and 3 definitely are CAFs and endothelial cells, respectively:
 
@@ -750,11 +446,6 @@ de_between_caf_endothelial <- lapply(
 )
 
 sapply(1:2, function(i) de_between_caf_endothelial[[i]]$degenes[order(-rel_exp), head(gene, 50)])
-
-# I'm pretty sure the cells I marked as endothelial are not CAFs.  But they could also not be endothelial - I don't see CDH5 here, which
-# I thought was probably the top endothelial cell marker.  I also see PECAM1 at the top of the "between" list for the endothelial cluster,
-# which I have read can be used as a pericyte marker, but is also more endothelial-related (stands for Platelet and Endothelial Cell
-# Adhesion Molecule 1).
 
 noise_seeds <- c(7172, 7693)
 
@@ -802,14 +493,10 @@ de_noise_2_caf_endothelial <- test_cluster(
 
 de_noise_2_caf_endothelial$degenes[order(-rel_exp), head(gene, 50)]
 
-# So I think noise_2 could be pericytes - RGS5 is top of both lists, and I see PECAM1 as well.
+# I think noise_2 could be pericytes - RGS5 is top of both lists, and I see PECAM1 as well.
 
-# noise_1 indeed looks like B cells, since the top genes consist of several immunoglobulins, but also the B plasma marker expression is
-# fairly high in these cells.
-
-# In conclusion, I'm not sure what to do with cluster 5, but noise_1 can be included in the B cell cluster (which agrees with the authors'
-# classifications), and clusters 3 and noise_2 should be renamed endothelial/pericyte.  Apart from this, after excluding cells that the
-# authors believe are malignant, I can use the authors' classifications.
+# noise_1 indeed looks like B cells, since the top genes consist of several immunoglobulins, but also the B plasma marker expression is fairly high in
+# these cells.
 
 
 
@@ -829,11 +516,7 @@ sc_dbscan <- readRDS(paste0('../data_and_figures/sc_reclassify/dbscan_', cohort,
 # Initial cell type definitions:
 cell_type_data <- data.table(
 	cell_id = sc_data$id,
-	cluster = mapvalues(
-		sc_dbscan$cluster,
-		c(0, 5, 6),
-		c('noise', 'endothelial_1', 'endothelial_2')
-	)
+	cluster = mapvalues(sc_dbscan$cluster, c(0, 5, 6), c('noise', 'endothelial_1', 'endothelial_2'))
 )
 
 cell_type_data[cluster == 2 & sc_data$cell_type != 'fibroblast', cluster := 'endothelial_3']
@@ -854,7 +537,7 @@ de_caf <- test_cluster(
 
 de_caf$degenes[order(-rel_exp), head(gene, 100)]
 
-# Looks very myofibroblast-like.  Could they be myocytes?
+# Looks like myofibroblasts.
 
 endothelial_seeds <- c(6327, 3648, 1966, 7305, 2122, 3678)
 
@@ -863,7 +546,12 @@ de_endothelial <- lapply(
 	function(i) {
 		test_cluster(
 			set_rownames(
-				as.matrix(sc_data[cell_type_data[!(cluster %in% c('noise', paste0('endothelial', (1:3)[1:3 != i]))), cell_id], -c('id', 'patient', 'cell_type')]),
+				as.matrix(
+					sc_data[
+						cell_type_data[!(cluster %in% c('noise', paste0('endothelial', (1:3)[1:3 != i]))), cell_id],
+						-c('id', 'patient', 'cell_type')
+					]
+				),
 				cell_type_data[!(cluster %in% c('noise', paste0('endothelial', (1:3)[1:3 != i]))), cell_id]
 			),
 			cell_type_data[!(cluster %in% c('noise', paste0('endothelial', (1:3)[1:3 != i])))],
@@ -893,9 +581,6 @@ de_between_endothelial <- lapply(
 )
 
 sapply(1:3, function(i) de_between_endothelial[[i]]$degenes[order(-rel_exp), head(gene, 50)])
-
-# I don't really know what to make of this, except that endothelial_2 looks more myocyte-like, which was already evident from the
-# average cell type marker t-SNE plots.  This cluster also has high complexity - is this relevant?
 
 
 
@@ -981,7 +666,7 @@ de_8 <- test_cluster(
 
 de_8$degenes[order(-rel_exp), head(gene, 100)]
 
-# Again, something immune that I can't identify...
+# Immune-like cluster that I can't identify
 
 caf_seeds <- c(4573, 2106, 7294, 5951, 9657, 4862)
 
@@ -990,7 +675,12 @@ de_caf <- lapply(
 	function(i) {
 		test_cluster(
 			set_rownames(
-				as.matrix(sc_data[cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:3)[1:3 != i])), cell_id], -c('id', 'patient', 'cell_type')]),
+				as.matrix(
+					sc_data[
+						cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:3)[1:3 != i])), cell_id],
+						-c('id', 'patient', 'cell_type')
+					]
+				),
 				cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:3)[1:3 != i])), cell_id]
 			),
 			cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:3)[1:3 != i]))],
@@ -1021,12 +711,7 @@ de_between_caf <- lapply(
 
 sapply(1:3, function(i) de_between_caf[[i]]$degenes[order(-rel_exp), head(gene, 50)])
 
-# It looks like caf_3 may be pericytes, because RGS5 comes up in both the general and between-caf-cluster tests (also PDGFRB appears
-# in the between test).  Otherwise, the between test doesn't show much useful.  The general test suggests that caf_2 and caf_3 look
-# more myocyte-like, so maybe caf_2 consists of myofibroblasts.  They all look fibroblast-like, though.
-
-# In conclusion, we should check further what is cluster 8, possibly exclude caf_3 because it looks a bit like pericytes, and maybe
-# reclassify as B cells those "myeloid" cells that appear in my B cell clusters.
+# caf_3 may be pericytes, because RGS5 comes up in both the general and between-caf-cluster tests (also PDGFRB appears in the between test).
 
 
 
@@ -1069,7 +754,7 @@ de_9 <- test_cluster(
 
 de_9$degenes[order(-rel_exp), head(gene, 100)]
 
-# Unidentified immune cluster...
+# Unidentified immune cluster
 
 caf_seeds <- c(4105, 530, 4113, 6442, 6390, 8160, 6406, 9617, 9597, 9388, 1284, 9511)
 
@@ -1078,7 +763,12 @@ de_caf <- lapply(
 	function(i) {
 		test_cluster(
 			set_rownames(
-				as.matrix(sc_data[cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:6)[1:6 != i])), cell_id], -c('id', 'patient', 'cell_type')]),
+				as.matrix(
+					sc_data[
+						cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:6)[1:6 != i])), cell_id],
+						-c('id', 'patient', 'cell_type')
+					]
+				),
 				cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:6)[1:6 != i])), cell_id]
 			),
 			cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:6)[1:6 != i]))],
@@ -1109,9 +799,7 @@ de_between_caf <- lapply(
 
 sapply(1:6, function(i) de_between_caf[[i]]$degenes[order(-rel_exp), head(gene, 50)])
 
-# I would guess caf_6 (DBSCAN cluster 8) is pericytes or similar; caf_1, caf_4 and caf_5 all look like CAFs, with some perhaps a little
-# more myocyte-like than others.  But caf_2 and caf_3 are harder to identify.  In caf_3 I see CZMA and GZMK, and in caf_2 I see a lot of
-# ribosomal proteins - this cluster has somewhat low complexity, but not drastically.
+# caf_6 (DBSCAN cluster 8) looks like pericytes or similar; caf_1, caf_4 and caf_5 all look like CAFs.  caf_2 and caf_3 are harder to identify.
 
 endothelial_seeds <- c(5697, 6179, 2029, 9568)
 
@@ -1120,7 +808,12 @@ de_endothelial <- lapply(
 	function(i) {
 		test_cluster(
 			set_rownames(
-				as.matrix(sc_data[cell_type_data[cluster != 'noise' & !(cluster %in% paste0('endothelial_', (1:2)[1:2 != i])), cell_id], -c('id', 'patient', 'cell_type')]),
+				as.matrix(
+					sc_data[
+						cell_type_data[cluster != 'noise' & !(cluster %in% paste0('endothelial_', (1:2)[1:2 != i])), cell_id],
+						-c('id', 'patient', 'cell_type')
+					]
+				),
 				cell_type_data[cluster != 'noise' & !(cluster %in% paste0('endothelial_', (1:2)[1:2 != i])), cell_id]
 			),
 			cell_type_data[cluster != 'noise' & !(cluster %in% paste0('endothelial_', (1:2)[1:2 != i]))],
@@ -1151,8 +844,7 @@ de_between_endothelial <- lapply(
 
 sapply(1:2, function(i) de_between_endothelial[[i]]$degenes[order(-rel_exp), head(gene, 50)])
 
-# I don't see any differences between the endothelial clusters that mean anything to me, so I think it's fine to leave them
-# all as endothelial cells.
+# No clear differences between the endothelial clusters.
 
 
 
@@ -1199,7 +891,7 @@ de_8 <- test_cluster(
 
 de_8$degenes[order(-rel_exp), head(gene, 100)]
 
-# No idea what this is, but the authors call these cells "endocrine", which fits with the GSEA analysis.
+# The authors call these cells "endocrine", which fits with the GSEA analysis.
 
 caf_seeds <- c(1160, 1583, 2746, 9909, 7037, 2347, 9093, 7311, 9648, 7849)
 
@@ -1208,7 +900,12 @@ de_caf <- lapply(
 	function(i) {
 		test_cluster(
 			set_rownames(
-				as.matrix(sc_data[cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:5)[1:5 != i])), cell_id], -c('id', 'patient', 'cell_type')]),
+				as.matrix(
+					sc_data[
+						cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:5)[1:5 != i])), cell_id],
+						-c('id', 'patient', 'cell_type')
+					]
+				),
 				cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:5)[1:5 != i])), cell_id]
 			),
 			cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:5)[1:5 != i]))],
@@ -1239,13 +936,8 @@ de_between_caf <- lapply(
 
 sapply(1:5, function(i) de_between_caf[[i]]$degenes[order(-rel_exp), head(gene, 50)])
 
-# caf_1 and caf_3 (DBSCAN clusters 4 and 12) both have RGS5 among their DE genes, so I would guess they could be pericytes. The authors
-# call them stellate cells, which makes sense - I think pancreatic stellate cells are myofibroblast-like cells similar to hepatic
-# stellate cells, which are defined as pericytes (found in a particular space in liver tissue).  The other three clusters do indeed
-# look like CAFs - caf_5 (DBSCAN cluster 14) does look a bit different, as I expected (since it's very separate in the t-SNE plot), but
-# it still looks like CAFs, so I would guess it's just a very distinct subtype of CAFs.
-
-# In conclusion, I think we can use the authors' classifications after redefining cluster 10 as B plasma cells.
+# caf_1 and caf_3 (DBSCAN clusters 4 and 12) both have RGS5 among their DE genes. The authors call them stellate cells, which makes sense.  The other
+# three clusters all look like CAFs.
 
 
 
@@ -1265,14 +957,14 @@ sc_data[, classification := classification_data[id, classification]]
 sc_dbscan <- readRDS(paste0('../data_and_figures/sc_reclassify/dbscan_breast_qian.rds'))
 sc_data[classification == 'nonmalignant', dbscan_cluster := sc_dbscan$cluster]
 
-# We want to make strict and lenient classifications for CAFs (the former excluding cluster 5 and the latter including it), so duplicate
-# the classification column:
+# We want to make strict and lenient classifications for CAFs (the former excluding cluster 5 and the latter including it), so duplicate the
+# classification column:
 sc_data[, classification_lenient := classification]
 
 setcolorder(sc_data, c('id', 'patient', 'cell_type', 'classification', 'classification_lenient', 'dbscan_cluster'))
 
 # Here I'm excluding the nonmalignant cells that the authors classified as malignant along with the cells in cluster 11 (possible doublets)
-# and cluster 5 (possible pericytes).  Should we retain cluster 5 and use it in the analysis?
+# and cluster 5 (possible pericytes).
 sc_data[classification == 'nonmalignant' & (cell_type == 'Cancer' | dbscan_cluster %in% c(5, 11)), classification := 'ambiguous']
 
 # Similar for the lenient classification column but retaining cluster 5:
@@ -1383,13 +1075,13 @@ classification_data <- fread(paste0('../data_and_figures/sc_reclassify/classific
 sc_data[, classification := classification_data[id, classification]]
 setcolorder(sc_data, c('id', 'patient', 'cell_type', 'classification'))
 
-# Exclude unclassified cells and cells that I believe are nonmalignant but Itay has labelled malignant:
+# Exclude unclassified cells and cells that I believe are nonmalignant but that were labelled malignant in the original publication:
 sc_data[classification == 'nonmalignant' & cell_type %in% c('', 'cancer'), classification := 'ambiguous']
 
-# Use Itay's classifications for the remaining nonmalignant cells:
+# Use classifications from the publication for the remaining nonmalignant cells:
 sc_data[classification == 'nonmalignant', classification := mapvalues(cell_type, 'fibroblast', 'caf')]
 
-# Exclude cells that I marked as malignant but which Itay classified as nonmalignant cell types:
+# Exclude cells that I marked as malignant but which are classified as nonmalignant cell types in the publication:
 sc_data[classification == 'malignant' & cell_type != 'cancer', classification := 'ambiguous']
 
 # Change "malignant" to "cancer":
@@ -1465,8 +1157,8 @@ sc_data[dbscan_cluster == 15, classification := 'dendritic']
 # Remove the unidentified immune-like cluster:
 sc_data[dbscan_cluster == 18, classification := 'ambiguous']
 
-# Use my classifications for the remaining nonmalignant cells that aren't in the T cell or noise clusters - these classifications are
-# nearly the same as the authors', but the authors' put quite a few cells in the wrong clusters:
+# Use my classifications for the remaining nonmalignant cells that aren't in the T cell or noise clusters - these classifications are nearly the same
+# as the authors', but there is enough disagreement to justify using my own definitions:
 sc_data[
 	classification == 'nonmalignant' & !(dbscan_cluster %in% c(0, 5, 6, 14)),
 	classification := mapvalues(
@@ -1492,8 +1184,7 @@ sc_data[
 	)
 ]
 
-# Exclude cells that I marked as malignant but which the authors classified as non-epithelial cell types (they didn't make any commitment
-# to malignancy - there are only "Epithelial cells" and nothing like "Cancer cells"):
+# Exclude cells that I marked as malignant but which the authors classified as non-epithelial cell types:
 sc_data[classification == 'malignant' & cell_type != 'Epithelial cells', classification := 'ambiguous']
 
 # Change "malignant" to "cancer":
@@ -1587,7 +1278,7 @@ sc_data[, classification_lenient := classification]
 setcolorder(sc_data, c('id', 'patient', 'cell_type', 'classification', 'classification_lenient', 'dbscan_cluster'))
 
 # Exclude nonmalignant cells classified by the authors as 'Cancer', along with cluster 9 (unidenfitied immune cells), cluster 8 (looks
-# more like pericytes than CAFs) and clusters 15 and 17 (classified as fibroblasts by the authors but I'm not convinced).
+# more like pericytes than CAFs) and clusters 15 and 17 (classified as fibroblasts by the authors but appear ambiguous in my analysis):
 sc_data[classification == 'nonmalignant' & (cell_type == 'Cancer' | dbscan_cluster %in% c(9, 8, 15, 17)), classification := 'ambiguous']
 
 # Similar for the lenient classification, but change clusters 8, 15 and 17 to CAF:

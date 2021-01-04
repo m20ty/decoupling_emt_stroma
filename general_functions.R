@@ -7,8 +7,7 @@ taill <- function(x, m = 6L, n = 6L) {x[(nrow(x) - m + 1):nrow(x), 1:n]}
 tailr <- function(x, m = 6L, n = 6L) {x[(nrow(x) - m + 1):nrow(x), (ncol(x) - n + 1):ncol(x)]}
 
 tdt <- function(dt, new_id = 'id') {
-    #Transpose a data table, keeping the entries of the first column for new column names
-    #and choosing a name for the new ID variable.
+    # Transpose a data table, keeping the entries of the first column for new column names and choosing a name for the new ID variable.
     out <- cbind(names(dt)[-1], transpose(dt[, -1]))
     names(out) <- c(new_id, as.character(dt[[1]]))
     out
@@ -79,17 +78,16 @@ heat_map <- function(
 
     # Note this function outputs a ggplot2 object, which you can change as with any other such object, e.g. g <- g + ...
 
+    plot_data <- melt(as.data.table(mat, keep.rownames = 'id1'), id.vars = 'id1', variable.name = 'id2', value.name = 'value')
     if(!is.null(ordering)) {
-        g <- ggplot(melt(mat[ordering, ordering]), aes(x = Var1, y = Var2))
-    } else {
-        g <- ggplot(melt(mat), aes(x = Var1, y = Var2))
+        plot_data[, c('id1', 'id2') := .(factor(id1, levels = rownames(mat)[ordering]), factor(id2, levels = colnames(mat)[ordering]))]
     }
 
-    g <- g +
+    g <- ggplot(plot_data, aes(x = id1, y = id2)) +
         geom_raster(aes(fill = value)) +
         scale_fill_gradientn(
             colours = colours,
-            limits = colour_limits, #With the default colours, this makes zero appear as white.
+            limits = colour_limits, # With the default colours, this makes zero appear as white.
             oob = oob,
             breaks = legend_breaks,
             labels = legend_labels
@@ -98,12 +96,10 @@ heat_map <- function(
             axis.ticks = element_blank(),
             axis.ticks.length = unit(0, 'pt'),
             axis.text = element_text(size = axis_text_size),
-            axis.text.y = element_text(vjust = 0.5), #vjust makes labels in centre of rows
-            axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), #likewise columns
+            axis.text.y = element_text(vjust = 0.5), # vjust makes labels in centre of rows
+            axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), # likewise columns
             plot.margin = unit(plot_margin, 'pt'),
-            # The following eliminates the grey from the background.  This shouldn't be
-            # necessary but sometimes the grey is still visible without this.
-            panel.background = element_blank(),
+            panel.background = element_blank(), # Eliminates the grey from the background (sometimes the grey is still visible without this)
             ...
         ) +
         scale_y_discrete(breaks = axis_text_y, expand = c(0, 0)) +
@@ -115,12 +111,6 @@ heat_map <- function(
     if(axis_title_y == '') {g <- g + theme(axis.title.y = element_blank())}
     if(axis_title_x == '') {g <- g + theme(axis.title.x = element_blank())}
     if(plot_title == '') {g <- g + theme(plot.title = element_blank())}
-
-    # if(!is.null(axis_labs)) {
-    #     axis_text <- colnames(mat)
-    #     axis_text[!(axis_text %in% axis_labs)] <- ''
-    #     g <- g + scale_y_discrete(breaks = axis_text)
-    # }
 
     g
 
@@ -216,12 +206,12 @@ heat_map_labels_repel <- function(
     nudge = 0.35,
     axis_title = NULL,
     axis_title_size = 11, # Use 14 if you want it to look like a plot title
-    title_edge_margin = 0, # In pts,
+    title_edge_margin = 0, # In pts
     force = 0.25,
     ...
 ) {
 
-    #The '...' parameter is for additional arguments to ggrepel::geom_text_repel().
+    # The '...' parameter is for additional arguments to ggrepel::geom_text_repel().
 
     # nudge = 0.25 pushes the labels a quarter of the way up/down/across the plot area.  This is roughly appropriate because I'm using vjust to align
     # the labels along one edge, so a certain space will be occupied by the segments - a quarter of the space for the segments should be about right.
@@ -256,9 +246,9 @@ heat_map_labels_repel <- function(
             ) +
             scale_x_continuous(
                 limits = c(1, length(labels_vec)),
-                #First limit must be 1 or else first label will be 1 from left edge
+                # First limit must be 1 or else first label will be 1 from left edge
                 expand = c(0, 0.5),
-                #Expand 2nd component must be 0.5 to push lines into the middle of the columns
+                # Expand 2nd component must be 0.5 to push lines into the middle of the columns
                 breaks = NULL,
                 labels = NULL,
                 name = axis_title
@@ -379,7 +369,7 @@ heat_map_bar <- function(
     ) +
         geom_raster(aes(fill = value)) +
         scale_fill_gradientn(
-            #colours = rev(colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(50)),
+            # colours = rev(colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(50)),
             colours = colours,
             limits = colour_limits,
 			labels = legend_labels,
@@ -405,8 +395,6 @@ heat_map_bar <- function(
 
 
 
-# Add a way to remove the key in the following, and maybe customise the key title.
-
 col_side_colours <- function(category_vec, ordering = NULL, plot_margin = NULL, key = TRUE) {
 
     if(!is.null(ordering)) {
@@ -429,12 +417,6 @@ col_side_colours <- function(category_vec, ordering = NULL, plot_margin = NULL, 
         theme(axis.text = element_blank(), axis.ticks = element_blank(), axis.title = element_blank(), panel.background = element_blank()) +
         scale_y_discrete(expand = c(0, 0)) +
         scale_x_discrete(expand = c(0, 0))
-
-    # if(key) {
-    #   g <- g + labs(fill = 'category')
-    # } else {
-    #   g <- g + labs(fill = NULL)
-    # }
 
     # Optionally tweak margins.  Particularly useful for combined plots.
     if(!is.null(plot_margin)) {g <- g + theme(plot.margin = unit(plot_margin, 'pt'))}
@@ -496,9 +478,7 @@ score_top_cols_by_cor <- function(x, initial = c('SNAI1', 'SNAI2', 'TWIST1', 'VI
 
     # In the following, <threshold> is used to specify what counts as a "high correlation" - any correlation above this threshold is deemed "high".
     # This is used in scoring the genes for correlation with the initial genes - specifically, we use the number of "high" correlations with the
-    # initial genes.  I tried, using HNSC data, replacing the number of "high" correlations with simply the average correlation with the initial
-    # genes.  The gene set I got was more or less the same, though it seemed to be missing some genes that I think are important, like FAP and ACTA2.
-    # So I'll stick with the first method, though perhaps I could make the averaging method available as an argument of the function.
+    # initial genes.
 
     above_threshold <- rbindlist(
         lapply(
@@ -580,10 +560,7 @@ cov_mat_ellipse <- function(centre, data, level = 0.95, npoints = 100) {
 
     t(
         eigen_decomp$vectors %*% matrix(
-            c(
-                cos(angle_range)*sqrt(qchisq(level, 2)*eigen_decomp$values[1]),
-                sin(angle_range)*sqrt(qchisq(level, 2)*eigen_decomp$values[2])
-            ),
+            c(cos(angle_range)*sqrt(qchisq(level, 2)*eigen_decomp$values[1]), sin(angle_range)*sqrt(qchisq(level, 2)*eigen_decomp$values[2])),
             nrow = 2,
             ncol = npoints,
             byrow = TRUE
@@ -687,7 +664,7 @@ adjust_threshold_bh <- function(pvals, threshold = 0.05) {
 
 
 
-# The following is a simplified version of Julie's old scrabble::score() function.
+# The following is a simplified version of the old scrabble::score() function.
 
 signature_score <- function(
     mat,

@@ -1,12 +1,5 @@
-# bsub -q new-all.q -n 4 -R "rusage[mem=32000]" -o sc_infercna_clust_save_log.o -e sc_infercna_clust_save_log.e Rscript sc_infercna_clust_save.R
-
-cat(Sys.time(), '\n')
-
-# The following is just to check the R version:
-cat(R.Version()$version.string, '\n')
-
 library(data.table) # 1.12.8
-library(ggplot2) # This is version 3.3.1 on my laptop's WSL setup but 3.3.0 on WEXAC.
+library(ggplot2) # 3.3.0
 library(magrittr) # 1.5
 library(infercna) # 1.0.0
 library(stringr) # 1.4.0
@@ -88,7 +81,9 @@ cohort_data <- list(
 		)
 	),
 	lung_lambrechts_luad = list(
-		read_quote = quote(fread('../data_and_figures/lambrechts_nsclc_2018.csv')[disease == 'LUAD', -c('cell_type', 'cluster', 'disease', 'annotation')]),
+		read_quote = quote(
+			fread('../data_and_figures/lambrechts_nsclc_2018.csv')[disease == 'LUAD', -c('cell_type', 'cluster', 'disease', 'annotation')]
+		),
 		ref_cell_clusters = list(
 			b_cell = 2,
 			b_plasma = c(7, 14),
@@ -181,7 +176,7 @@ cohort_data <- list(
 			b_t_cell = 3,
 			macrophage_dc = c(2, 6, 11, 12, 13)
 		),
-		ref_cell_clusters_normal = list( # Epithelial cells seem quite patient-specific, so I'll leave them out
+		ref_cell_clusters_normal = list(
 			b_plasma = 8,
 			endothelial_fibroblast_myocyte = 20,
 			macrophage_dc = c(3:6, 13, 15, 19),
@@ -208,7 +203,7 @@ cohort_data <- list(
 			endothelial = 7,
 			macrophage_dc = c(1, 4)
 		),
-		ref_cell_clusters_normal = list( # Not sure this is informative enough
+		ref_cell_clusters_normal = list(
 			b_plasma = 4,
 			macrophage_t = 1
 		)
@@ -224,9 +219,7 @@ cohort_data <- list(
 	),
 	ovarian_izar_ss2 = list(
 		read_quote = quote(fread('../data_and_figures/izar_ovarian_2020_ss2.csv')[, -c('cell_type', 'cluster')]),
-		ref_cell_clusters = list( # This was really not successful - I can only identify macrophages, and there aren't many of them.
-			macrophage = 3
-		)
+		ref_cell_clusters = list(macrophage = 3)
 	),
 	ovarian_qian = list(
 		read_quote = quote(fread('../data_and_figures/qian_ovarian_2020.csv')[, -c('site', 'cell_type')]),
@@ -236,8 +229,6 @@ cohort_data <- list(
 			endothelial = 3,
 			macrophage = c(2, 13, 18)
 		),
-		# In the following, I'm not sure about the epithelial and fibroblast clusters, because they're both from the same patient, and there's a somewhat
-		# intermediate cluster between them which makes them together look like EMT.
 		ref_cell_clusters_normal = list(
 			endothelial = 7,
 			epithelial = 2,
@@ -265,8 +256,6 @@ cohort_data <- list(
 			macrophage_mast = c(2, 14),
 			t_cell = 4
 		),
-		# The following wasn't very successful, because there's no clear B or T cell signal, and I don't really trust the clusters that look epithelial,
-		# because they also express various other cell type markers (there could also be e.g. acinar cells), and they're quite patient-specific.
 		ref_cell_clusters_normal = list(
 			endothelial = c(2, 4, 9, 11),
 			fibroblast = 5,
@@ -280,140 +269,140 @@ cohort_data <- list(
 
 
 for(cohort in names(cohort_data)) {
-	
+
 	cat(paste0(cohort, ':\n'))
-	
+
 	cat('\tReading in data\n')
-	
+
 	sc_data <- eval(cohort_data[[cohort]]$read_quote)
-	
+
 	if(
 		'sample_type' %in% colnames(sc_data) &
 			'ref_cell_clusters_normal' %in% names(cohort_data[[cohort]]) &
 			paste0('dbscan_normal_', cohort, '.rds') %in% dir('../data_and_figures')
 	) { # Use each of tumour and normal cells as reference
-		
+
 		# First, using cells from tumour sample as reference:
-		
+
 		cat('\tInferred CNAs with tumour cells as reference\n')
-		
+
 		sc_dbscan <- readRDS(paste0('../data_and_figures/dbscan_', cohort, '.rds'))
-		
+
 		ref_cells <- sapply(
 			cohort_data[[cohort]]$ref_cell_clusters,
 			function(x) sc_data[sample_type != 'normal'][sc_dbscan$cluster %in% x, id],
 			simplify = FALSE,
 			USE.NAMES = TRUE
 		)
-		
+
 		cat('\t\tReading in inferred CNA matrices\n')
-		
+
 		inferred_cna <- readRDS(paste0('../data_and_figures/inferred_cna_', cohort, '.rds'))
-		
+
 		cat('\t\tRunning clustering and saving hclust objects\n')
-		
+
 		clust_objects <- sapply(
 			names(inferred_cna),
 			function(p) {
-				
+
 				cell_ids <- colnames(inferred_cna[[p]])[!(colnames(inferred_cna[[p]]) %in% unlist(ref_cells))]
-				
+
 				if(length(cell_ids) < 2) {
 					warning('Not enough non-reference cells in this tumour!')
 					return(NULL)
 				}
-				
+
 				hclust(dist(t(inferred_cna[[p]][, cell_ids])))
-				
+
 			},
 			simplify = FALSE,
 			USE.NAMES = TRUE
 		)
-		
+
 		saveRDS(clust_objects, paste0('../data_and_figures/cna_clust_', cohort, '.rds'))
-		
+
 		cat('\t\tDone!\n')
-		
+
 		# Next using the adjacent normal samples as reference:
-		
+
 		cat('\tInferred CNAs with normal cells as reference\n')
-		
+
 		sc_dbscan <- readRDS(paste0('../data_and_figures/dbscan_normal_', cohort, '.rds'))
-		
+
 		ref_cells <- sapply(
 			cohort_data[[cohort]]$ref_cell_clusters_normal,
 			function(x) sc_data[sample_type == 'normal'][sc_dbscan$cluster %in% x, id],
 			simplify = FALSE,
 			USE.NAMES = TRUE
 		)
-		
+
 		cat('\t\tReading in inferred CNA matrices\n')
-		
+
 		inferred_cna <- readRDS(paste0('../data_and_figures/inferred_cna_normalref_', cohort, '.rds'))
-		
+
 		cat('\t\tRunning clustering and saving hclust objects\n')
-		
+
 		clust_objects <- sapply(
 			names(inferred_cna),
 			function(p) {
-				
+
 				cell_ids <- colnames(inferred_cna[[p]])[!(colnames(inferred_cna[[p]]) %in% unlist(ref_cells))]
-				
+
 				if(length(cell_ids) < 2) {
 					warning('Not enough non-reference cells in this tumour!')
 					return(NULL)
 				}
-				
+
 				hclust(dist(t(inferred_cna[[p]][, cell_ids])))
-				
+
 			},
 			simplify = FALSE,
 			USE.NAMES = TRUE
 		)
-		
+
 		saveRDS(clust_objects, paste0('../data_and_figures/cna_clust_normalref_', cohort, '.rds'))
-		
+
 		cat('\t\tDone!\n')
-		
+
 	} else { # Here we only use tumour cells as reference
-		
+
 		sc_dbscan <- readRDS(paste0('../data_and_figures/dbscan_', cohort, '.rds'))
-		
+
 		ref_cells <- sapply(
 			cohort_data[[cohort]]$ref_cell_clusters,
 			function(x) sc_data$id[sc_dbscan$cluster %in% x],
 			simplify = FALSE,
 			USE.NAMES = TRUE
 		)
-		
+
 		cat('\t\tReading in inferred CNA matrices\n')
-		
+
 		inferred_cna <- readRDS(paste0('../data_and_figures/inferred_cna_', cohort, '.rds'))
-		
+
 		cat('\t\tRunning clustering and saving hclust objects\n')
-		
+
 		clust_objects <- sapply(
 			names(inferred_cna),
 			function(p) {
-				
+
 				cell_ids <- colnames(inferred_cna[[p]])[!(colnames(inferred_cna[[p]]) %in% unlist(ref_cells))]
-				
+
 				if(length(cell_ids) < 2) {
 					warning('Not enough non-reference cells in this tumour!')
 					return(NULL)
 				}
-				
+
 				hclust(dist(t(inferred_cna[[p]][, cell_ids])))
-				
+
 			},
 			simplify = FALSE,
 			USE.NAMES = TRUE
 		)
-		
+
 		saveRDS(clust_objects, paste0('../data_and_figures/cna_clust_', cohort, '.rds'))
-		
+
 		cat('\tDone!\n')
-		
+
 	}
-	
+
 }

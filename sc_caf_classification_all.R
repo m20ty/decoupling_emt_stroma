@@ -1,5 +1,5 @@
 library(data.table) # 1.12.8
-library(ggplot2) # This is version 3.3.1 on my laptop's WSL setup but 3.3.0 on WEXAC.
+library(ggplot2) # 3.3.0
 library(magrittr) # 1.5
 library(plyr) # 1.8.6
 library(cowplot) # 1.0.0
@@ -29,55 +29,46 @@ test_cluster <- function(
 	cell_id_var_name = 'cell_id',
 	seed = NULL
 ) {
-	
-	# Centre the matrix gene-wise (not sure this is necessary):
+
+	# Centre the matrix gene-wise:
 	expression_mat_centred <- t(apply(expression_mat, 2, function(x) {x - mean(x)}))
-	
+
 	averages <- sapply(
 		clust_data[get(clust_var_name) != 'noise', unique(get(clust_var_name))],
 		function(clst) rowMeans(expression_mat_centred[, clust_data[get(clust_var_name) == clst, get(cell_id_var_name)]]),
 		simplify = FALSE,
 		USE.NAMES = TRUE
 	)
-	
+
 	gene_test <- lapply(
 		lapply(clust_data[get(clust_var_name) != clust, unique(get(clust_var_name))], function(ct) c(clust, ct)),
 		function(clustpair) {
-			
+
 			cat(paste0(clustpair[1], ' vs. ', clustpair[2], '...'))
-			
+
 			mat_clustpair <- sapply(
 				clustpair,
 				function(clst) expression_mat_centred[, clust_data[get(clust_var_name) == clst, get(cell_id_var_name)]],
 				simplify = FALSE,
 				USE.NAMES = TRUE
 			)
-			
+
 			out <- list(
 				clust_pair = clustpair,
 				test_results = data.table(gene_id = rownames(expression_mat_centred))[
 					,
-					.(
-						pval = try_default(
-							t.test(
-								mat_clustpair[[1]][gene_id, ],
-								mat_clustpair[[2]][gene_id, ]
-							)$p.value,
-							default = 1,
-							quiet = TRUE
-						)
-					),
+					.(pval = try_default(t.test(mat_clustpair[[1]][gene_id, ], mat_clustpair[[2]][gene_id, ])$p.value, default = 1, quiet = TRUE)),
 					by = gene_id
 				]
 			)
-			
+
 			cat('Done!\n')
-			
+
 			out
-			
+
 		}
 	)
-	
+
 	gene_test_results <- lapply(
 		gene_test,
 		function(x) {
@@ -86,60 +77,40 @@ test_cluster <- function(
 			list(other_clst = x$clust_pair[2], data = data)
 		}
 	)
-	
+
 	gene_test_results <- setNames(
 		lapply(gene_test_results, `[[`, 'data'),
 		sapply(gene_test_results, `[[`, 'other_clst')
 	)
-	
+
 	table_list <- lapply(gene_test_results, function(dt) dt[p.adjust(pval, method ='BH') < 0.05])
 	for(dt in table_list) {setkey(dt, gene_id)}
-	
+
 	degenes <- data.table(gene = Reduce(intersect, lapply(table_list, `[[`, 'gene_id')))
-	# degenes <- data.table(gene = intersect(table_list[[1]]$gene_id, table_list[[2]]$gene_id))
-	degenes[
-		,
-		rel_exp := apply(
-			as.data.table(lapply(table_list, function(dt) dt[gene, rel_exp])),
-			# cbind(table_list[[1]][gene, rel_exp], table_list[[2]][gene, rel_exp]),
-			1,
-			mean
-		)
-	]
-	
-	# Run GSEA (note GSEA involves random permutations, I think in correcting for multiple hypothesis tests, so we need to set a seed):
-	
+	degenes[, rel_exp := apply(as.data.table(lapply(table_list, function(dt) dt[gene, rel_exp])), 1, mean)]
+
+	# Run GSEA:
+
 	if(!is.null(seed)) set.seed(seed)
-	
+
 	degenes_gsea <- sapply(
 		unique(msigdb_table$gs_cat),
 		function(categ) {
 			cbind(
 				gs_cat = categ,
 				as.data.table(
-					GSEA(
-						degenes[
-							order(-rel_exp),
-							setNames(rel_exp, gene)
-						],
-						TERM2GENE = msigdb_table[gs_cat == categ, .(gs_name, human_gene_symbol)]
-					)
+					GSEA(degenes[order(-rel_exp), setNames(rel_exp, gene)], TERM2GENE = msigdb_table[gs_cat == categ, .(gs_name, human_gene_symbol)])
 				)
 			)
 		},
 		simplify = FALSE,
 		USE.NAMES = TRUE
 	)
-	
-	gsea_table <- rbindlist(
-		lapply(
-			degenes_gsea,
-			function(dt) dt[, Reduce(intersect, lapply(degenes_gsea, names)), with = FALSE]
-		)
-	)
-	
+
+	gsea_table <- rbindlist(lapply(degenes_gsea, function(dt) dt[, Reduce(intersect, lapply(degenes_gsea, names)), with = FALSE]))
+
 	list(test_results = gene_test_results, degenes = degenes, gsea_table = gsea_table)
-	
+
 }
 
 cell_type_labels <- c(
@@ -238,9 +209,6 @@ plot_data[
 
 tsne_data$breast_qian <- plot_data
 
-# The following is out of date because I updated gene names in the single cell data:
-# de_between_caf_top_50 <- readRDS('../data_and_figures/sc_reclassify/files_for_rmd/breast_qian_de_between_caf_top_50.rds')
-
 # Difference between the CAF clusters (taken from the sc_data_cell_type_classification.R file):
 
 seeds <- c(6365, 878)
@@ -262,7 +230,10 @@ de_between_caf <- lapply(
 	}
 )
 
-de_between_caf_top_50 <- set_colnames(sapply(1:2, function(i) de_between_caf[[i]]$degenes[order(-rel_exp), head(gene, 50)]), c('CAF', 'Potential CAF'))
+de_between_caf_top_50 <- set_colnames(
+    sapply(1:2, function(i) de_between_caf[[i]]$degenes[order(-rel_exp), head(gene, 50)]),
+    c('CAF', 'Potential CAF')
+)
 
 de_data <- rbindlist(
 	lapply(
@@ -365,8 +336,6 @@ plot_data[
 ]
 
 tsne_data$crc_lee_smc <- plot_data
-
-# de_between_caf_endothelial_top_50 <- readRDS('../data_and_figures/sc_reclassify/files_for_rmd/crc_lee_smc_de_between_caf_endothelial_top_50.rds')
 
 seeds <- c(2881, 9041)
 setkey(sc_data, id)
@@ -516,8 +485,6 @@ de_between_top_50 <- set_colnames(
 	sapply(1:2, function(i) de_between[[i]]$degenes[order(-rel_exp), head(gene, 50)]),
 	c('CAF', 'Potential CAF')
 )
-
-# This actually makes it pretty obvious that the potential CAFs are endothelial, though I guess they could be doublets.
 
 de_data <- rbindlist(
 	lapply(
@@ -985,7 +952,12 @@ de_heatmaps$lung_qian <- ggplot(
 	labs(fill = 'Relative\nexpression')
 
 de_heatmaps$ovarian_qian <- ggplot(
-	melt(heatmap_data$ovarian_qian, id.vars = c('id', 'cell_type', 'mean_caf', 'mean_caf_1', 'mean_caf_2'), variable.name = 'gene', value.name = 'expression_level'),
+	melt(
+        heatmap_data$ovarian_qian,
+        id.vars = c('id', 'cell_type', 'mean_caf', 'mean_caf_1', 'mean_caf_2'),
+        variable.name = 'gene',
+        value.name = 'expression_level'
+    ),
 	aes(x = factor(id, levels = unique(id)), y = factor(gene, levels = unique(gene)), fill = expression_level)
 ) +
 	geom_raster() +
@@ -998,8 +970,10 @@ de_heatmaps$ovarian_qian <- ggplot(
 	geom_vline(xintercept = heatmap_data$ovarian_qian[cell_type == 'caf', .N + 0.5]) +
 	geom_vline(xintercept = heatmap_data$ovarian_qian[cell_type %in% c('caf', 'caf_1'), .N + 0.5]) +
 	scale_x_discrete(
-		labels = c('CAFs', 'Potential\nCAF 1', 'Potential\nCAF 2'),
-		breaks = heatmap_data$ovarian_qian$id[heatmap_data$ovarian_qian[, .(N = .N), by = cell_type][, c(N[1]/2, N[1] + N[2]/2, N[1] + N[2] + N[3]/2)]],
+		labels = c('CAFs', ' Potential\nCAF 1', ' Potential\nCAF 2'),
+		breaks = heatmap_data$ovarian_qian$id[
+            heatmap_data$ovarian_qian[, .(N = .N), by = cell_type][, c(N[1]/2, N[1] + N[2]/2 - 100, N[1] + N[2] + N[3]/2 + 100)]
+        ],
 		expand = c(0, 0)
 	) +
 	scale_y_discrete(expand = c(0, 0)) +
@@ -1022,7 +996,7 @@ de_heatmaps$ovarian_qian <- ggplot(
 
 
 
-pdf('../data_and_figures/final_figures_resubmission/S3.pdf', width = 14, height = 20)
+pdf('../data_and_figures/final_figures_resubmission/S3_alt.pdf', width = 14, height = 20)
 plot_grid(
 	plotlist = unlist(
 		lapply(
@@ -1034,7 +1008,8 @@ plot_grid(
 							title = mapvalues(
 								cohort,
 								c('breast_qian', 'crc_lee_smc', 'liver_ma', 'lung_qian', 'ovarian_qian'),
-								c('Breast - Qian et al.', 'Colorectal - Lee et al. - SMC cohort', 'Liver - Ma et al.', 'Lung - Qian et al.', 'Ovarian - Qian et al.'),
+								c('Breast - Qian et al.', 'Colorectal - Lee et al. - SMC cohort', 'Liver - Ma et al.', 'Lung - Qian et al.',
+                                  'Ovarian - Qian et al.'),
 								warn_missing = FALSE
 							)
 						) +
@@ -1044,10 +1019,16 @@ plot_grid(
 					plot_grid(
 						plot_grid(
 							plotlist = c(
-								lapply(tsne_plots[[cohort]], function(g) g + theme(plot.margin = unit(c(5.5, 40, 5.5, 5.5), 'pt'), legend.position = 'none')),
+								lapply(
+                                    tsne_plots[[cohort]],
+                                    function(g) g + theme(plot.margin = unit(c(5.5, 40, 5.5, 5.5), 'pt'), legend.position = 'none')
+                                ),
 								list(
 									get_legend(
-										ggplot(tsne_data[[cohort]][, .(x = 0, y = 0, clust = unique(c(cluster, cell_type)))], aes(x = x, y = y, colour = clust)) +
+										ggplot(
+                                            tsne_data[[cohort]][, .(x = 0, y = 0, clust = unique(c(cluster, cell_type)))],
+                                            aes(x = x, y = y, colour = clust)
+                                        ) +
 											geom_point() +
 											scale_colour_manual(labels = cell_type_labels, values = cell_type_colours) +
 											theme_minimal() +
@@ -1060,14 +1041,7 @@ plot_grid(
 							ncol = 3,
 							rel_widths = c(6.75, 6.75, 2.5)
 						),
-						plot_grid(
-							de_annotations[[cohort]],
-							de_heatmaps[[cohort]],
-							nrow = 1,
-							ncol = 2,
-							align = 'h',
-							rel_widths = c(2, 7)
-						),
+						plot_grid(de_annotations[[cohort]], de_heatmaps[[cohort]], nrow = 1, ncol = 2, align = 'h', rel_widths = c(2, 7)),
 						nrow = 1,
 						ncol = 2,
 						rel_widths = c(16, 9)
@@ -1079,7 +1053,6 @@ plot_grid(
 	),
 	nrow = 10,
 	ncol = 1,
-	# align = 'h',
 	rel_heights = c(1, 4, 1, 4, 1, 4, 1, 4, 1, 4)
 )
 dev.off()

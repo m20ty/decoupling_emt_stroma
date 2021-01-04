@@ -1,5 +1,5 @@
 library(data.table) # 1.12.8
-library(ggplot2) # This is version 3.3.1 on my laptop's WSL setup but 3.3.0 on WEXAC.
+library(ggplot2) # 3.3.0
 library(magrittr) # 1.5
 library(plyr) # 1.8.6
 library(cowplot) # 1.0.0
@@ -29,55 +29,46 @@ test_cluster <- function(
 	cell_id_var_name = 'cell_id',
 	seed = NULL
 ) {
-	
-	# Centre the matrix gene-wise (not sure this is necessary):
+
+	# Centre the matrix gene-wise:
 	expression_mat_centred <- t(apply(expression_mat, 2, function(x) {x - mean(x)}))
-	
+
 	averages <- sapply(
 		clust_data[get(clust_var_name) != 'noise', unique(get(clust_var_name))],
 		function(clst) rowMeans(expression_mat_centred[, clust_data[get(clust_var_name) == clst, get(cell_id_var_name)]]),
 		simplify = FALSE,
 		USE.NAMES = TRUE
 	)
-	
+
 	gene_test <- lapply(
 		lapply(clust_data[get(clust_var_name) != clust, unique(get(clust_var_name))], function(ct) c(clust, ct)),
 		function(clustpair) {
-			
+
 			cat(paste0(clustpair[1], ' vs. ', clustpair[2], '...'))
-			
+
 			mat_clustpair <- sapply(
 				clustpair,
 				function(clst) expression_mat_centred[, clust_data[get(clust_var_name) == clst, get(cell_id_var_name)]],
 				simplify = FALSE,
 				USE.NAMES = TRUE
 			)
-			
+
 			out <- list(
 				clust_pair = clustpair,
 				test_results = data.table(gene_id = rownames(expression_mat_centred))[
 					,
-					.(
-						pval = try_default(
-							t.test(
-								mat_clustpair[[1]][gene_id, ],
-								mat_clustpair[[2]][gene_id, ]
-							)$p.value,
-							default = 1,
-							quiet = TRUE
-						)
-					),
+					.(pval = try_default(t.test(mat_clustpair[[1]][gene_id, ], mat_clustpair[[2]][gene_id, ])$p.value, default = 1, quiet = TRUE)),
 					by = gene_id
 				]
 			)
-			
+
 			cat('Done!\n')
-			
+
 			out
-			
+
 		}
 	)
-	
+
 	gene_test_results <- lapply(
 		gene_test,
 		function(x) {
@@ -86,60 +77,37 @@ test_cluster <- function(
 			list(other_clst = x$clust_pair[2], data = data)
 		}
 	)
-	
-	gene_test_results <- setNames(
-		lapply(gene_test_results, `[[`, 'data'),
-		sapply(gene_test_results, `[[`, 'other_clst')
-	)
-	
+
+	gene_test_results <- setNames(lapply(gene_test_results, `[[`, 'data'), sapply(gene_test_results, `[[`, 'other_clst'))
+
 	table_list <- lapply(gene_test_results, function(dt) dt[p.adjust(pval, method ='BH') < 0.05])
 	for(dt in table_list) {setkey(dt, gene_id)}
-	
+
 	degenes <- data.table(gene = Reduce(intersect, lapply(table_list, `[[`, 'gene_id')))
-	# degenes <- data.table(gene = intersect(table_list[[1]]$gene_id, table_list[[2]]$gene_id))
-	degenes[
-		,
-		rel_exp := apply(
-			as.data.table(lapply(table_list, function(dt) dt[gene, rel_exp])),
-			# cbind(table_list[[1]][gene, rel_exp], table_list[[2]][gene, rel_exp]),
-			1,
-			mean
-		)
-	]
-	
-	# Run GSEA (note GSEA involves random permutations, I think in correcting for multiple hypothesis tests, so we need to set a seed):
-	
+	degenes[, rel_exp := apply(as.data.table(lapply(table_list, function(dt) dt[gene, rel_exp])), 1, mean)]
+
+	# Run GSEA:
+
 	if(!is.null(seed)) set.seed(seed)
-	
+
 	degenes_gsea <- sapply(
 		unique(msigdb_table$gs_cat),
 		function(categ) {
 			cbind(
 				gs_cat = categ,
 				as.data.table(
-					GSEA(
-						degenes[
-							order(-rel_exp),
-							setNames(rel_exp, gene)
-						],
-						TERM2GENE = msigdb_table[gs_cat == categ, .(gs_name, human_gene_symbol)]
-					)
+					GSEA(degenes[order(-rel_exp), setNames(rel_exp, gene)], TERM2GENE = msigdb_table[gs_cat == categ, .(gs_name, human_gene_symbol)])
 				)
 			)
 		},
 		simplify = FALSE,
 		USE.NAMES = TRUE
 	)
-	
-	gsea_table <- rbindlist(
-		lapply(
-			degenes_gsea,
-			function(dt) dt[, Reduce(intersect, lapply(degenes_gsea, names)), with = FALSE]
-		)
-	)
-	
+
+	gsea_table <- rbindlist(lapply(degenes_gsea, function(dt) dt[, Reduce(intersect, lapply(degenes_gsea, names)), with = FALSE]))
+
 	list(test_results = gene_test_results, degenes = degenes, gsea_table = gsea_table)
-	
+
 }
 
 cell_type_labels <- c(
@@ -269,8 +237,7 @@ de_data[
 
 de_data[
 	,
-	diff_exp := mean(as.numeric(.SD[, de_between_caf_top_50[, 1], with = FALSE])) -
-		mean(as.numeric(.SD[, de_between_caf_top_50[, 2], with = FALSE])),
+	diff_exp := mean(as.numeric(.SD[, de_between_caf_top_50[, 1], with = FALSE])) - mean(as.numeric(.SD[, de_between_caf_top_50[, 2], with = FALSE])),
 	by = id
 ]
 
@@ -555,8 +522,6 @@ de_between_top_50 <- set_colnames(
 	c('CAF', 'Potential CAF')
 )
 
-# This actually makes it pretty obvious that the potential CAFs are endothelial, though I guess they could be doublets.
-
 de_data <- rbindlist(
 	lapply(
 		c('caf', 'caf_potential'),
@@ -586,8 +551,7 @@ de_data[
 
 de_data[
 	,
-	diff_exp := mean(as.numeric(.SD[, de_between_top_50[, 1], with = FALSE])) -
-		mean(as.numeric(.SD[, de_between_top_50[, 2], with = FALSE])),
+	diff_exp := mean(as.numeric(.SD[, de_between_top_50[, 1], with = FALSE])) - mean(as.numeric(.SD[, de_between_top_50[, 2], with = FALSE])),
 	by = id
 ]
 
@@ -719,21 +683,14 @@ de_between <- lapply(
 	}
 )
 
-de_between_top_50 <- set_colnames(
-	sapply(1:2, function(i) de_between[[i]]$degenes[order(-rel_exp), head(gene, 50)]),
-	c('CAF', 'Potential CAF')
-)
+de_between_top_50 <- set_colnames(sapply(1:2, function(i) de_between[[i]]$degenes[order(-rel_exp), head(gene, 50)]), c('CAF', 'Potential CAF'))
 
 de_data <- rbindlist(
 	lapply(
 		c('caf', 'caf_potential'),
 		function(ct) {
 			dt <- cbind(
-				sc_data[
-					id %in% plot_data[cluster == ct, cell_id],
-					c('id', de_between_top_50[, 1], rev(de_between_top_50[, 2])),
-					with = FALSE
-				],
+				sc_data[id %in% plot_data[cluster == ct, cell_id], c('id', de_between_top_50[, 1], rev(de_between_top_50[, 2])), with = FALSE],
 				cell_type = ct
 			)
 			setcolorder(dt, c('id', 'cell_type'))
@@ -753,8 +710,7 @@ de_data[
 
 de_data[
 	,
-	diff_exp := mean(as.numeric(.SD[, de_between_top_50[, 1], with = FALSE])) -
-		mean(as.numeric(.SD[, de_between_top_50[, 2], with = FALSE])),
+	diff_exp := mean(as.numeric(.SD[, de_between_top_50[, 1], with = FALSE])) - mean(as.numeric(.SD[, de_between_top_50[, 2], with = FALSE])),
 	by = id
 ]
 
@@ -907,14 +863,7 @@ de_data <- rbindlist(
 	lapply(
 		c('caf', 'caf_1', 'caf_2'),
 		function(ct) {
-			dt <- cbind(
-				sc_data[
-					id %in% plot_data[cluster == ct, cell_id],
-					unique(c('id', nondupl_genes)),
-					with = FALSE
-				],
-				cell_type = ct
-			)
+			dt <- cbind(sc_data[id %in% plot_data[cluster == ct, cell_id], unique(c('id', nondupl_genes)), with = FALSE], cell_type = ct)
 			setcolorder(dt, c('id', 'cell_type'))
 			dt
 		}

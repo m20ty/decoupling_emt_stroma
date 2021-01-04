@@ -1,12 +1,5 @@
-# bsub -q tirosh -n 4 -R "rusage[mem=32000]" -o sc_infercna_kim_log.o -e sc_infercna_kim_log.e Rscript sc_infercna_kim.R
-
-cat(Sys.time(), '\n')
-
-# The following is just to check the R version:
-cat(R.Version()$version.string, '\n')
-
 library(data.table) # 1.12.8
-library(ggplot2) # This is version 3.3.1 on my laptop's WSL setup but 3.3.0 on WEXAC.
+library(ggplot2) # 3.3.0
 library(magrittr) # 1.5
 library(infercna) # 1.0.0
 library(stringr) # 1.4.0
@@ -30,15 +23,20 @@ source('general_functions.R')
 
 cohort_data <-list(
 	luad_kim = list(
-		read_quote = quote(fread('../data_and_figures/kim_luad_2020.csv')[, -c('cell_type', 'cell_type_refined', 'cell_subtype', 'sample_site', 'sample_id', 'sample_origin')]),
+		read_quote = quote(
+            fread('../data_and_figures/kim_luad_2020.csv')[
+                ,
+                -c('cell_type', 'cell_type_refined', 'cell_subtype', 'sample_site', 'sample_id', 'sample_origin')
+            ]
+        ),
 		ref_cell_clusters = list(
-			b_cell = c(7, 8, 11), # 17 could also be B cells, but they also have T cell signal, so could be doublets
+			b_cell = c(7, 8, 11),
 			b_plasma = 13,
 			dc = 23,
 			endothelial = 21,
 			macrophage = c(1, 19),
 			mast = 5,
-			t_cell = 6 # As above, 17 could be T cells, and possibly also 22, but signal in 22 is weak
+			t_cell = 6
 		)
 	)
 )
@@ -62,11 +60,7 @@ ref_cells <- sapply(
 
 cat('\tFiltering genes\n')
 
-gene_averages <- sapply(
-	sc_data[, -c('id', 'patient')],
-	function(x) {log2(mean(10*(2^x - 1)) + 1)},
-	USE.NAMES = TRUE
-)
+gene_averages <- sapply(sc_data[, -c('id', 'patient')], function(x) {log2(mean(10*(2^x - 1)) + 1)}, USE.NAMES = TRUE)
 
 sc_data <- sc_data[, c('id', 'patient', names(gene_averages)[gene_averages >= 4]), with = FALSE]
 
@@ -105,25 +99,19 @@ x_text_breaks <- round(.chromosomeBreaks(rownames(inferred_cna[[1]]), halfway = 
 clust_plots <- sapply(
 	names(inferred_cna),
 	function(p) {
-		
+
 		cell_ids <- colnames(inferred_cna[[p]])[!(colnames(inferred_cna[[p]]) %in% unlist(ref_cells))]
-		
-		# The following was necessary for the liver HCC data from Ma et al., in which patient H18 had no non-reference cells
-		# according to my classification by t-SNE.
+
+		# The following was necessary for the liver HCC data from Ma et al., in which patient H18 had no non-reference cells according to my
+        # classification by t-SNE.
 		if(length(cell_ids) < 2) {
 			warning('Not enough non-reference cells in this tumour!')
 			return(NULL)
 		}
-		
+
 		cell_clust <- hclust(dist(t(inferred_cna[[p]][, cell_ids])))
-		
-		cna_heatmap <- ggplot(
-			reshape2::melt(
-				inferred_cna[[p]][, cell_ids],
-				varnames = c('gene', 'cell'),
-				value.name = 'cna_score'
-			)
-		) +
+
+		cna_heatmap <- ggplot(reshape2::melt(inferred_cna[[p]][, cell_ids], varnames = c('gene', 'cell'), value.name = 'cna_score')) +
 			geom_raster(
 				aes(
 					x = factor(gene, levels = rownames(inferred_cna[[p]])),
@@ -146,22 +134,15 @@ clust_plots <- sapply(
 				panel.border = element_rect(colour = 'black', size = 0.5, fill = NA)
 			) +
 			labs(x = 'Chromosome', y = 'Cells', fill = 'Inferred CNA', title = p)
-		
-		# We don't need to return cell_ids, because these are stored in cell_clust$labels anyway.
-		
+
 		list(cell_clust = cell_clust, heatmap = cna_heatmap)
-		
+
 	},
 	simplify = FALSE,
 	USE.NAMES = TRUE
 )
 
-# for(x in clust_plots) saveRDS(x$cell_clust, paste0('../data_and_figures/cna_clust_', cohort, '.rds'))
-
-saveRDS(
-	sapply(clust_plots, `[[`, 'cell_clust', simplify = FALSE, USE.NAMES = TRUE),
-	paste0('../data_and_figures/cna_clust_', cohort, '.rds')
-)
+saveRDS(sapply(clust_plots, `[[`, 'cell_clust', simplify = FALSE, USE.NAMES = TRUE), paste0('../data_and_figures/cna_clust_', cohort, '.rds'))
 
 pdf(paste0('../data_and_figures/cna_plots_', cohort, '.pdf'))
 for(x in clust_plots) print(x$heatmap)

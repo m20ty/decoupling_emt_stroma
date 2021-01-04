@@ -1,13 +1,11 @@
-# bsub -q tirosh -R rusage[mem=128000] -o sc_alt_norm_thresholds.o -e sc_alt_norm_thresholds.e Rscript sc_alt_norm_thresholds.R
-
 library(data.table) # 1.12.8
-library(ggplot2) # This is version 3.3.1 on my laptop's WSL setup but 3.3.0 on WEXAC.
+library(ggplot2) # 3.3.0
 library(Matrix) # 1.2.18
 library(stringr) # 1.4.0
 library(plyr) # 1.8.6
 library(limma) # 3.42.2
 library(magrittr) # 1.5
-library(cowplot)
+library(cowplot) # 1.0.0
 
 source('general_functions.R')
 source('sparse_matrix_functions.R')
@@ -58,13 +56,6 @@ density_plots$gene_ave$breast_qian$tpm <- ggplot(data.frame(x = gene_ave_tpm_den
 	annotate('text', x = 9, y = 0.3, label = paste('Genes above\nthreshold:', sum(gene_ave_tpm > 4.5))) +
 	theme_minimal()
 
-# plot(density(rowMeans(sc_data)), xlim = c(0, 1))
-# abline(v = 0.07, col = 'blue', lty = 'dashed')
-# plot(density(log2(colMeans(10*(2^tpm_data[, -c('id', 'patient', 'cell_type')] - 1)) + 1)))
-# abline(v = 4.5, , col = 'blue', lty = 'dashed')
-# sum(rowMeans(sc_data) > 0.07)
-# sum(log2(colMeans(10*(2^tpm_data[, -c('id', 'patient', 'cell_type')] - 1)) + 1) > 4)
-
 exp_level_scran_density <- density(as.numeric(sc_data))
 exp_level_tpm_density <- density(unlist(tpm_data[, -c('id', 'patient', 'cell_type')]))
 exp_level_scran_pass <- sum(
@@ -114,21 +105,6 @@ density_plots$exp_level$breast_qian$tpm <- ggplot(
 		label = paste0('Genes above\nthreshold in at\nleast 1% of\ncancer cells:\n', exp_level_tpm_pass)
 	) +
 	theme_minimal()
-
-# plot(density(as.matrix(sc_data)), ylim = c(0, 0.2))
-# abline(v = 3.5, col = 'blue', lty = 'dashed')
-# plot(density(as.matrix(tpm_data[, -c('id', 'patient', 'cell_type')])), ylim = c(0, 0.2))
-# abline(v = 7, col = 'blue', lty = 'dashed')
-# sum(
-	# tapply(
-		# sc_data[, sc_meta[cell_type == 'cancer', id]]@x,
-		# sc_data[, sc_meta[cell_type == 'cancer', id]]@i,
-		# function(g) {sum(g >= 3.5) >= sc_meta[cell_type == 'cancer', .N/100]}
-	# )
-# )
-# sum(sapply(tpm_data[cell_type == 'cancer', -c('id', 'patient', 'cell_type')], function(x) {sum(x >= 7) >= length(x)/100}))
-
-# rm(tpm_data)
 
 
 

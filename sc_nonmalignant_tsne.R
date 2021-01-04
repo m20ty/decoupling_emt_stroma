@@ -1,10 +1,5 @@
-# bsub -q new-short -R "rusage[mem=64000]" -o sc_nonmalignant_tsne_log.o -e sc_nonmalignant_tsne_log.e Rscript sc_nonmalignant_tsne.R
-
-Sys.time()
-cat(R.Version()$version.string, '\n')
-
 library(data.table) # 1.12.8
-library(ggplot2) # This is version 3.3.1 on my laptop's WSL setup but 3.3.0 on WEXAC.
+library(ggplot2) # 3.3.0
 library(magrittr) # 1.5
 library(Rtsne) # 0.15
 
@@ -21,7 +16,8 @@ cohort_data <- list(
 		seed = 2159
 	),
 	crc_lee_smc = list(
-		patients = c('SMC01', 'SMC02', 'SMC04', 'SMC07', 'SMC08', 'SMC09', 'SMC11', 'SMC14', 'SMC15', 'SMC16', 'SMC18', 'SMC20', 'SMC21', 'SMC23', 'SMC25'),
+		patients = c('SMC01', 'SMC02', 'SMC04', 'SMC07', 'SMC08', 'SMC09', 'SMC11', 'SMC14', 'SMC15', 'SMC16', 'SMC18', 'SMC20', 'SMC21', 'SMC23',
+					 'SMC25'),
 		read_quote = quote(fread('../data_and_figures/lee_crc_2020_smc.csv')[
 			sample_type != 'normal',
 			-c('sample_id', 'sample_type', 'cell_type', 'cell_subtype')
@@ -40,7 +36,12 @@ cohort_data <- list(
 	),
 	luad_kim = list(
 		patients = c('P0006', 'P0008', 'P0018', 'P0019', 'P0020', 'P0025', 'P0028', 'P0030', 'P0031', 'P0034', 'P1006', 'P1028', 'P1049', 'P1058'),
-		read_quote = quote(fread('../data_and_figures/kim_luad_2020.csv')[, -c('cell_type', 'cell_type_refined', 'cell_subtype', 'sample_site', 'sample_id', 'sample_origin')]),
+		read_quote = quote(
+			fread('../data_and_figures/kim_luad_2020.csv')[
+				,
+				-c('cell_type', 'cell_type_refined', 'cell_subtype', 'sample_site', 'sample_id', 'sample_origin')
+			]
+		),
 		seed = 6367
 	),
 	lung_qian = list(
@@ -65,24 +66,21 @@ cohort_data <- list(
 
 
 for(cohort in names(cohort_data)) {
-	
+
 	classification_data <- rbindlist(
 		lapply(
 			cohort_data[[cohort]]$patients,
 			function(p) unique(
-				fread(paste0('../data_and_figures/sc_find_malignant/', cohort, '/', p, '_data.csv'))[
-					,
-					.(cell_id, classification_final)
-				]
+				fread(paste0('../data_and_figures/sc_find_malignant/', cohort, '/', p, '_data.csv'))[, .(cell_id, classification_final)]
 			)
 		)
 	)
-	
+
 	classification_data[
 		,
 		classification := switch(
 			(length(classification_final) == 1) + 1,
-			switch( # In this case the cell must have been reference, but could have been classified as ambiguous or malignant in a subset of patients.
+			switch( # In this case the cell must have been reference, but could have been classified as ambiguous or malignant in some patients.
 				('ambiguous' %in% classification_final | 'malignant' %in% classification_final) + 1,
 				'nonmalignant',
 				'ambiguous'
@@ -95,31 +93,27 @@ for(cohort in names(cohort_data)) {
 		),
 		by = cell_id
 	]
-	
+
 	classification_data <- unique(classification_data[, .(cell_id, classification)])
-	
+
 	setkey(classification_data, cell_id)
-	
+
 	fwrite(classification_data, paste0('../data_and_figures/sc_reclassify/classification_data_', cohort, '.csv'))
-	
+
 	sc_data <- eval(cohort_data[[cohort]]$read_quote)[patient %in% cohort_data[[cohort]]$patients]
-	
+
 	sc_data[, classification := classification_data[id, classification]]
 	
 	sc_data <- sc_data[classification == 'nonmalignant', -'classification']
-	
-	gene_averages <- sapply(
-		sc_data[, -c('id', 'patient')],
-		function(x) {log2(mean(10*(2^x - 1)) + 1)},
-		USE.NAMES = TRUE
-	)
-	
+
+	gene_averages <- sapply(sc_data[, -c('id', 'patient')], function(x) {log2(mean(10*(2^x - 1)) + 1)}, USE.NAMES = TRUE)
+
 	sc_data <- sc_data[, c('id', 'patient', names(gene_averages)[gene_averages >= 4]), with = FALSE]
-	
+
 	# Run t-SNE:
 	set.seed(cohort_data[[cohort]]$seed)
 	sc_tsne <- Rtsne(as.matrix(sc_data[, lapply(.SD, function(x) {x - mean(x)}), .SDcols = -c('id', 'patient')]))
-	
+
 	saveRDS(sc_tsne, paste0('../data_and_figures/sc_reclassify/tsne_', cohort, '.rds'))
-	
+
 }

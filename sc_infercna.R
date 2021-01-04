@@ -1,41 +1,10 @@
-# bsub -q new-all.q -n 4 -R "rusage[mem=32000]" -o sc_infercna_log.o -e sc_infercna_log.e Rscript sc_infercna.R
-
-cat(Sys.time(), '\n')
-
-# The following is just to check the R version:
-cat(R.Version()$version.string, '\n')
-
 library(data.table) # 1.12.8
-library(ggplot2) # This is version 3.3.1 on my laptop's WSL setup but 3.3.0 on WEXAC.
+library(ggplot2) # 3.3.0
 library(magrittr) # 1.5
 library(infercna) # 1.0.0
 library(stringr) # 1.4.0
 
 source('general_functions.R')
-
-# Check all the single cell datasets are there:
-
-# all(
-	# c(
-		# 'chung_breast_cancer_2017.csv',
-		# 'karaayvaz_tnbc_2018.csv',
-		# 'qian_breast_2020.csv',
-		# 'lee_crc_2020_kul3.csv',
-		# 'lee_crc_2020_smc.csv',
-		# 'qian_crc_2020.csv',
-		# 'puram_hnscc_2017.csv',
-		# 'ma_liver_2019.csv',
-		# 'lambrechts_nsclc_2018.csv',
-		# 'qian_lung_2020.csv',
-		# 'song_nsclc_2019.csv',
-		# 'kim_luad_2020.csv',
-		# 'izar_ovarian_2020_ss2.csv',
-		# 'izar_ovarian_2020_10x.csv',
-		# 'qian_ovarian_2020.csv',
-		# 'elyada_pdac_2019.csv',
-		# 'peng_pdac_2019.csv'
-	# ) %in% dir('../data_and_figures')
-# )
 
 # Function from infercna:
 .chromosomeBreaks = function(genes = NULL, halfway = F, hide = NULL) {
@@ -180,18 +149,21 @@ cohort_data <- list(
 			t_cell = 6
 		)
 	),
-	# The following dataset does have normal samples (saved separately), but I don't remember if they're matched, and anyway I added this
-	# dataset to the analysis after doing all the others and deciding that there's no benefit to using matched normal as reference.
 	luad_kim = list(
-		read_quote = quote(fread('../data_and_figures/kim_luad_2020.csv')[, -c('cell_type', 'cell_type_refined', 'cell_subtype', 'sample_site', 'sample_id', 'sample_origin')]),
+		read_quote = quote(
+            fread('../data_and_figures/kim_luad_2020.csv')[
+                ,
+                -c('cell_type', 'cell_type_refined', 'cell_subtype', 'sample_site', 'sample_id', 'sample_origin')
+            ]
+        ),
 		ref_cell_clusters = list(
-			b_cell = c(7, 8, 11), # 17 could also be B cells, but they also have T cell signal, so could be doublets
+			b_cell = c(7, 8, 11),
 			b_plasma = 13,
 			dc = 23,
 			endothelial = 21,
 			macrophage = c(1, 19),
 			mast = 5,
-			t_cell = 6 # As above, 17 could be T cells, and possibly also 22, but signal in 22 is weak
+			t_cell = 6
 		)
 	),
 	lung_lambrechts = list(
@@ -217,7 +189,9 @@ cohort_data <- list(
 		)
 	),
 	lung_lambrechts_luad = list(
-		read_quote = quote(fread('../data_and_figures/lambrechts_nsclc_2018.csv')[disease == 'LUAD', -c('cell_type', 'cluster', 'disease', 'annotation')]),
+		read_quote = quote(
+            fread('../data_and_figures/lambrechts_nsclc_2018.csv')[disease == 'LUAD', -c('cell_type', 'cluster', 'disease', 'annotation')]
+        ),
 		ref_cell_clusters = list(
 			b_cell = 2,
 			b_plasma = c(7, 14),
@@ -234,7 +208,6 @@ cohort_data <- list(
 			t_cell = 2
 		)
 	),
-	# There are only 122 normal LUSC cells in the Lambrechts dataset, so we only use tumour cells as reference for this dataset.
 	lung_lambrechts_lusc = list(
 		read_quote = quote(fread('../data_and_figures/lambrechts_nsclc_2018.csv')[
 			sample_type != 'normal' & disease == 'LUSC',
@@ -310,7 +283,7 @@ cohort_data <- list(
 			b_t_cell = 3,
 			macrophage_dc = c(2, 6, 11, 12, 13)
 		),
-		ref_cell_clusters_normal = list( # Epithelial cells seem quite patient-specific, so I'll leave them out
+		ref_cell_clusters_normal = list(
 			b_plasma = 8,
 			endothelial_fibroblast_myocyte = 20,
 			macrophage_dc = c(3:6, 13, 15, 19),
@@ -337,7 +310,7 @@ cohort_data <- list(
 			endothelial = 7,
 			macrophage_dc = c(1, 4)
 		),
-		ref_cell_clusters_normal = list( # Not sure this is informative enough
+		ref_cell_clusters_normal = list(
 			b_plasma = 4,
 			macrophage_t = 1
 		)
@@ -353,9 +326,7 @@ cohort_data <- list(
 	),
 	ovarian_izar_ss2 = list(
 		read_quote = quote(fread('../data_and_figures/izar_ovarian_2020_ss2.csv')[, -c('cell_type', 'cluster')]),
-		ref_cell_clusters = list( # This was really not successful - I can only identify macrophages, and there aren't many of them.
-			macrophage = 3
-		)
+		ref_cell_clusters = list(macrophage = 3)
 	),
 	ovarian_qian = list(
 		read_quote = quote(fread('../data_and_figures/qian_ovarian_2020.csv')[, -c('site', 'cell_type')]),
@@ -365,8 +336,6 @@ cohort_data <- list(
 			endothelial = 3,
 			macrophage = c(2, 13, 18)
 		),
-		# In the following, I'm not sure about the epithelial and fibroblast clusters, because they're both from the same patient, and there's a somewhat
-		# intermediate cluster between them which makes them together look like EMT.
 		ref_cell_clusters_normal = list(
 			endothelial = 7,
 			epithelial = 2,
@@ -394,8 +363,6 @@ cohort_data <- list(
 			macrophage_mast = c(2, 14),
 			t_cell = 4
 		),
-		# The following wasn't very successful, because there's no clear B or T cell signal, and I don't really trust the clusters that look epithelial,
-		# because they also express various other cell type markers (there could also be e.g. acinar cells), and they're quite patient-specific.
 		ref_cell_clusters_normal = list(
 			endothelial = c(2, 4, 9, 11),
 			fibroblast = 5,
@@ -409,48 +376,48 @@ cohort_data <- list(
 
 
 for(cohort in names(cohort_data)) {
-	
+
 	cat(paste0(cohort, ':\n'))
-	
+
 	cat('\tReading in data\n')
-	
+
 	sc_data <- eval(cohort_data[[cohort]]$read_quote)
-	
+
 	if(
 		'sample_type' %in% colnames(sc_data) &
 			'ref_cell_clusters_normal' %in% names(cohort_data[[cohort]]) &
 			paste0('dbscan_normal_', cohort, '.rds') %in% dir('../data_and_figures')
 	) { # Use each of tumour and normal cells as reference
-		
+
 		# First, using cells from tumour sample as reference:
-		
+
 		cat('\tInferring CNAs using tumour cells as reference\n')
-		
+
 		sc_dbscan <- readRDS(paste0('../data_and_figures/dbscan_', cohort, '.rds'))
-		
+
 		ref_cells <- sapply(
 			cohort_data[[cohort]]$ref_cell_clusters,
 			function(x) sc_data[sample_type != 'normal'][sc_dbscan$cluster %in% x, id],
 			simplify = FALSE,
 			USE.NAMES = TRUE
 		)
-		
+
 		# Take genes with log average TPM at least 4:
-		
+
 		cat('\t\tFiltering genes\n')
-		
+
 		gene_averages <- sapply(
 			sc_data[sample_type != 'normal', -c('id', 'patient', 'sample_type')],
 			function(x) {log2(mean(10*(2^x - 1)) + 1)},
 			USE.NAMES = TRUE
 		)
-		
+
 		sc_data_subset <- sc_data[sample_type != 'normal', c('id', 'patient', names(gene_averages)[gene_averages >= 4]), with = FALSE]
-		
+
 		# Running infercna() function:
-		
+
 		cat('\t\tInferring CNAs\n')
-		
+
 		inferred_cna <- sapply(
 			as.character(unique(sc_data_subset$patient)),
 			function(p) {
@@ -468,37 +435,31 @@ for(cohort in names(cohort_data)) {
 			simplify = FALSE,
 			USE.NAMES = TRUE
 		)
-		
+
 		cat('\t\tSaving CNA matrices\n')
-		
+
 		saveRDS(inferred_cna, paste0('../data_and_figures/inferred_cna_', cohort, '.rds'))
-		
+
 		cat('\t\tMaking plots\n')
-		
+
 		# The genes should be the same in all of the inferred_cna matrices:
 		x_line_breaks <- .chromosomeBreaks(rownames(inferred_cna[[1]]))
 		x_text_breaks <- round(.chromosomeBreaks(rownames(inferred_cna[[1]]), halfway = TRUE, hide = c('13', '18', '21', 'Y')))
-		
+
 		clust_plots <- sapply(
 			names(inferred_cna),
 			function(p) {
-				
+
 				cell_ids <- colnames(inferred_cna[[p]])[!(colnames(inferred_cna[[p]]) %in% unlist(ref_cells))]
-				
+
 				if(length(cell_ids) < 2) {
 					warning('Not enough non-reference cells in this tumour!')
 					return(NULL)
 				}
-				
+
 				cell_clust <- hclust(dist(t(inferred_cna[[p]][, cell_ids])))
-				
-				cna_heatmap <- ggplot(
-					reshape2::melt(
-						inferred_cna[[p]][, cell_ids],
-						varnames = c('gene', 'cell'),
-						value.name = 'cna_score'
-					)
-				) +
+
+				cna_heatmap <- ggplot(reshape2::melt(inferred_cna[[p]][, cell_ids], varnames = c('gene', 'cell'), value.name = 'cna_score')) +
 					geom_raster(
 						aes(
 							x = factor(gene, levels = rownames(inferred_cna[[p]])),
@@ -521,58 +482,47 @@ for(cohort in names(cohort_data)) {
 						panel.border = element_rect(colour = 'black', size = 0.5, fill = NA)
 					) +
 					labs(x = 'Chromosome', y = 'Cells', fill = 'Inferred CNA', title = p)
-				
-				# We don't need to return cell_ids, because these are stored in cell_clust$labels anyway.
-				
+
 				list(cell_clust = cell_clust, heatmap = cna_heatmap)
-				
+
 			},
 			simplify = FALSE,
 			USE.NAMES = TRUE
 		)
-		
-		# for(x in clust_plots) saveRDS(x$cell_clust, paste0('../data_and_figures/cna_clust_', cohort, '.rds'))
-		
-		saveRDS(
-			sapply(clust_plots, `[[`, 'cell_clust', simplify = FALSE, USE.NAMES = TRUE),
-			paste0('../data_and_figures/cna_clust_', cohort, '.rds')
-		)
-		
+
+		saveRDS(sapply(clust_plots, `[[`, 'cell_clust', simplify = FALSE, USE.NAMES = TRUE), paste0('../data_and_figures/cna_clust_', cohort, '.rds'))
+
 		pdf(paste0('../data_and_figures/cna_plots_', cohort, '.pdf'))
 		for(x in clust_plots) print(x$heatmap)
 		dev.off()
-		
+
 		cat('\t\tDone!\n')
-		
+
 		# Next using the adjacent normal samples as reference:
-		
+
 		cat('\tInferring CNAs using normal cells as reference\n')
-		
+
 		sc_dbscan <- readRDS(paste0('../data_and_figures/dbscan_normal_', cohort, '.rds'))
-		
+
 		ref_cells <- sapply(
 			cohort_data[[cohort]]$ref_cell_clusters_normal,
 			function(x) sc_data[sample_type == 'normal'][sc_dbscan$cluster %in% x, id],
 			simplify = FALSE,
 			USE.NAMES = TRUE
 		)
-		
+
 		# Take genes with log average TPM at least 4:
-		
+
 		cat('\t\tFiltering genes\n')
-		
-		gene_averages <- sapply(
-			sc_data[, -c('id', 'patient', 'sample_type')],
-			function(x) {log2(mean(10*(2^x - 1)) + 1)},
-			USE.NAMES = TRUE
-		)
-		
+
+		gene_averages <- sapply(sc_data[, -c('id', 'patient', 'sample_type')], function(x) {log2(mean(10*(2^x - 1)) + 1)}, USE.NAMES = TRUE)
+
 		sc_data_subset <- sc_data[, c('id', 'patient', names(gene_averages)[gene_averages >= 4]), with = FALSE]
-		
+
 		# Running infercna() function:
-		
+
 		cat('\t\tInferring CNAs\n')
-		
+
 		inferred_cna <- sapply(
 			as.character(unique(sc_data_subset$patient)),
 			function(p) {
@@ -590,37 +540,31 @@ for(cohort in names(cohort_data)) {
 			simplify = FALSE,
 			USE.NAMES = TRUE
 		)
-		
+
 		cat('\t\tSaving CNA matrices\n')
-		
+
 		saveRDS(inferred_cna, paste0('../data_and_figures/inferred_cna_normalref_', cohort, '.rds'))
-		
+
 		cat('\t\tMaking plots\n')
-		
+
 		# The genes should be the same in all of the inferred_cna matrices:
 		x_line_breaks <- .chromosomeBreaks(rownames(inferred_cna[[1]]))
 		x_text_breaks <- round(.chromosomeBreaks(rownames(inferred_cna[[1]]), halfway = TRUE, hide = c('13', '18', '21', 'Y')))
-		
+
 		clust_plots <- sapply(
 			names(inferred_cna),
 			function(p) {
-				
+
 				cell_ids <- colnames(inferred_cna[[p]])[!(colnames(inferred_cna[[p]]) %in% unlist(ref_cells))]
-				
+
 				if(length(cell_ids) < 2) {
 					warning('Not enough non-reference cells in this tumour!')
 					return(NULL)
 				}
-				
+
 				cell_clust <- hclust(dist(t(inferred_cna[[p]][, cell_ids])))
-				
-				cna_heatmap <- ggplot(
-					reshape2::melt(
-						inferred_cna[[p]][, cell_ids],
-						varnames = c('gene', 'cell'),
-						value.name = 'cna_score'
-					)
-				) +
+
+				cna_heatmap <- ggplot(reshape2::melt(inferred_cna[[p]][, cell_ids], varnames = c('gene', 'cell'), value.name = 'cna_score')) +
 					geom_raster(
 						aes(
 							x = factor(gene, levels = rownames(inferred_cna[[p]])),
@@ -643,39 +587,35 @@ for(cohort in names(cohort_data)) {
 						panel.border = element_rect(colour = 'black', size = 0.5, fill = NA)
 					) +
 					labs(x = 'Chromosome', y = 'Cells', fill = 'Inferred CNA', title = p)
-				
-				# We don't need to return cell_ids, because these are stored in cell_clust$labels anyway.
-				
+
 				list(cell_clust = cell_clust, heatmap = cna_heatmap)
-				
+
 			},
 			simplify = FALSE,
 			USE.NAMES = TRUE
 		)
-		
-		# for(x in clust_plots) saveRDS(x$cell_clust, paste0('../data_and_figures/cna_clust_normalref_', cohort, '.rds'))
-		
+
 		saveRDS(
 			sapply(clust_plots, `[[`, 'cell_clust', simplify = FALSE, USE.NAMES = TRUE),
 			paste0('../data_and_figures/cna_clust_normalref_', cohort, '.rds')
 		)
-		
+
 		pdf(paste0('../data_and_figures/cna_plots_normalref_', cohort, '.pdf'))
 		for(x in clust_plots) print(x$heatmap)
 		dev.off()
-		
+
 		cat('\t\tDone!\n')
-		
+
 	} else { # Here we only use tumour cells as reference
-		
+
 		which_avail <- c(
 			'sample_type' %in% colnames(sc_data),
 			'ref_cell_clusters_normal' %in% names(cohort_data[[cohort]]),
 			paste0('dbscan_normal_', cohort, '.rds') %in% dir('../data_and_figures')
 		)
-		
+
 		if(any(which_avail)) {
-			
+
 			warning_message <- paste0(
 				paste(
 					c("column 'sample_type'", "data 'ref_cell_clusters_normal'", paste0("file 'dbscan_normal_", cohort, ".rds'"))[which_avail],
@@ -688,38 +628,34 @@ for(cohort in names(cohort_data)) {
 				),
 				' unavailable. CNAs will be computed without using normal samples.'
 			)
-			
+
 			warning_message <- gsub('^[a-z]', toupper(str_extract(warning_message, '^[a-z]')), warning_message)
-			
+
 			warning(warning_message)
-			
+
 		}
-		
+
 		sc_dbscan <- readRDS(paste0('../data_and_figures/dbscan_', cohort, '.rds'))
-		
+
 		ref_cells <- sapply(
 			cohort_data[[cohort]]$ref_cell_clusters,
 			function(x) sc_data$id[sc_dbscan$cluster %in% x],
 			simplify = FALSE,
 			USE.NAMES = TRUE
 		)
-		
+
 		# Take genes with log average TPM at least 4:
-		
+
 		cat('\tFiltering genes\n')
-		
-		gene_averages <- sapply(
-			sc_data[, -c('id', 'patient')],
-			function(x) {log2(mean(10*(2^x - 1)) + 1)},
-			USE.NAMES = TRUE
-		)
-		
+
+		gene_averages <- sapply(sc_data[, -c('id', 'patient')], function(x) {log2(mean(10*(2^x - 1)) + 1)}, USE.NAMES = TRUE)
+
 		sc_data <- sc_data[, c('id', 'patient', names(gene_averages)[gene_averages >= 4]), with = FALSE]
-		
+
 		# Running infercna() function:
-		
+
 		cat('\tInferring CNAs\n')
-		
+
 		inferred_cna <- sapply(
 			as.character(unique(sc_data$patient)),
 			function(p) {
@@ -737,39 +673,33 @@ for(cohort in names(cohort_data)) {
 			simplify = FALSE,
 			USE.NAMES = TRUE
 		)
-		
+
 		cat('\tSaving CNA matrices\n')
-		
+
 		saveRDS(inferred_cna, paste0('../data_and_figures/inferred_cna_', cohort, '.rds'))
-		
+
 		cat('\tMaking plots\n')
-		
+
 		# The genes should be the same in all of the inferred_cna matrices:
 		x_line_breaks <- .chromosomeBreaks(rownames(inferred_cna[[1]]))
 		x_text_breaks <- round(.chromosomeBreaks(rownames(inferred_cna[[1]]), halfway = TRUE, hide = c('13', '18', '21', 'Y')))
-		
+
 		clust_plots <- sapply(
 			names(inferred_cna),
 			function(p) {
-				
+
 				cell_ids <- colnames(inferred_cna[[p]])[!(colnames(inferred_cna[[p]]) %in% unlist(ref_cells))]
-				
+
 				# The following was necessary for the liver HCC data from Ma et al., in which patient H18 had no non-reference cells
 				# according to my classification by t-SNE.
 				if(length(cell_ids) < 2) {
 					warning('Not enough non-reference cells in this tumour!')
 					return(NULL)
 				}
-				
+
 				cell_clust <- hclust(dist(t(inferred_cna[[p]][, cell_ids])))
-				
-				cna_heatmap <- ggplot(
-					reshape2::melt(
-						inferred_cna[[p]][, cell_ids],
-						varnames = c('gene', 'cell'),
-						value.name = 'cna_score'
-					)
-				) +
+
+				cna_heatmap <- ggplot(reshape2::melt(inferred_cna[[p]][, cell_ids], varnames = c('gene', 'cell'), value.name = 'cna_score')) +
 					geom_raster(
 						aes(
 							x = factor(gene, levels = rownames(inferred_cna[[p]])),
@@ -792,34 +722,25 @@ for(cohort in names(cohort_data)) {
 						panel.border = element_rect(colour = 'black', size = 0.5, fill = NA)
 					) +
 					labs(x = 'Chromosome', y = 'Cells', fill = 'Inferred CNA', title = p)
-				
-				# We don't need to return cell_ids, because these are stored in cell_clust$labels anyway.
-				
+
 				list(cell_clust = cell_clust, heatmap = cna_heatmap)
-				
+
 			},
 			simplify = FALSE,
 			USE.NAMES = TRUE
 		)
-		
-		# for(x in clust_plots) saveRDS(x$cell_clust, paste0('../data_and_figures/cna_clust_', cohort, '.rds'))
-		
+
 		saveRDS(
 			sapply(clust_plots, `[[`, 'cell_clust', simplify = FALSE, USE.NAMES = TRUE),
 			paste0('../data_and_figures/cna_clust_', cohort, '.rds')
 		)
-		
+
 		pdf(paste0('../data_and_figures/cna_plots_', cohort, '.pdf'))
 		for(x in clust_plots) print(x$heatmap)
 		dev.off()
-		
+
 		cat('\tDone!\n')
-		
+
 	}
-	
+
 }
-
-# gene quantile, cell quantile, gene quantile for cells, cell quantile for genes
-# - First two for cells to include in average profile
-
-# Scatterplots: use density, and maybe log10 scale.

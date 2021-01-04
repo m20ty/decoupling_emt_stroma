@@ -15,6 +15,8 @@ library(gridExtra) # 2.3
 library(gtable) # 0.3.0
 library(scales) # 1.1.1
 library(grDevices) # 3.6.3
+library(colorspace) # 1.4.1
+library(cluster) # 2.1.0
 library(msigdbr) # 7.1.1
 library(clusterProfiler) # 3.14.3
 
@@ -30,9 +32,6 @@ meta_data <- meta_data[sample_type != 'normal']
 deconv_data <- readRDS('../data_and_figures/deconv_data.rds')
 deconv_plots <- readRDS('../data_and_figures/deconv_plots.rds')
 
-# Cancer types I will leave out: cesc, esca_escc, hnsc_atypical, kich, lusc_basal, stad_ebv (this last one has only 30 samples).
-# I'm leaving out kich because the "CAF" end doesn't look like CAFs.
-
 
 
 
@@ -45,12 +44,13 @@ deconv_plots <- readRDS('../data_and_figures/deconv_plots.rds')
 ct_to_keep <- c('blca_luminal_infiltrated', 'blca_luminal_papillary', 'blca_basal_squamous', 'brca_luminal_a', 'brca_luminal_b', 'brca_basal_like',
     'brca_her2_enriched', 'coad', 'esca_ac', 'esca_escc', 'hnsc_atypical', 'hnsc_classical', 'hnsc_mesenchymal_basal', 'kirp', 'lihc',
     'luad_proximal_inflammatory', 'luad_proximal_proliferative', 'luad_terminal_respiratory_unit', 'lusc_basal', 'lusc_classical', 'lusc_secretory',
-    'ov_differentiated', 'ov_immunoreactive', 'ov_mesenchymal', 'ov_proliferative', 'paad', 'prad', 'read', 'stad_cin', 'stad_gs', 'stad_msi', 'ucec')
+    'ov_differentiated', 'ov_immunoreactive', 'ov_mesenchymal', 'ov_proliferative', 'paad_basal_moffitt', 'paad_classical_moffitt', 'prad', 'read',
+    'stad_cin', 'stad_gs', 'stad_msi', 'ucec')
 nice_names_for_figure <- c('BLCA - Luminal-Infiltrated', 'BLCA - Luminal-Papillary', 'BLCA - Basal-Squamous', 'BRCA - Luminal A', 'BRCA - Luminal B',
     'BRCA - Basal-like', 'BRCA - HER2-enriched', 'COAD', 'ESCA - Adenocarcinoma', 'ESCA - Squamous', 'HNSC - Atypical', 'HNSC - Classical',
     'HNSC - Malignant-Basal', 'KIRP', 'LIHC', 'LUAD - Squamoid', 'LUAD - Magnoid', 'LUAD - Bronchioid', 'LUSC - Basal', 'LUSC - Classical',
-    'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive', 'OV - Mesenchymal', 'OV - Proliferative', 'PAAD', 'PRAD', 'READ', 'STAD - CIN',
-    'STAD - GS', 'STAD - MSI', 'UCEC')
+    'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive', 'OV - Mesenchymal', 'OV - Proliferative', 'PAAD - Basal', 'PAAD - Classical',
+    'PRAD', 'READ', 'STAD - CIN', 'STAD - GS', 'STAD - MSI', 'UCEC')
 
 sc_metadata <- list(
 	brca = quote(
@@ -107,7 +107,8 @@ tcga_sc_map <- c(
 	ov_immunoreactive = 'ov',
     ov_mesenchymal = 'ov',
 	ov_proliferative = 'ov',
-	paad = 'paad',
+	paad_basal_moffitt = 'paad',
+    paad_classical_moffitt = 'paad',
 	read = 'coadread'
 )
 
@@ -238,11 +239,11 @@ barplot_annotations <- ggplot(barplot_annotations_data, aes(x = cancer_type, y =
 ct_to_keep <- c('blca_luminal_infiltrated', 'blca_luminal_papillary', 'blca_basal_squamous', 'brca_luminal_a', 'brca_luminal_b', 'brca_basal_like',
     'brca_her2_enriched', 'coad', 'esca_ac', 'hnsc_mesenchymal_basal', 'hnsc_classical', 'kirp', 'lihc', 'luad_proximal_inflammatory',
     'luad_proximal_proliferative', 'luad_terminal_respiratory_unit', 'lusc_classical', 'lusc_secretory', 'ov_differentiated', 'ov_immunoreactive',
-    'ov_mesenchymal', 'ov_proliferative', 'paad', 'prad', 'read', 'stad_cin', 'stad_gs', 'stad_msi', 'ucec')
+    'ov_mesenchymal', 'ov_proliferative', 'paad_basal_moffitt', 'paad_classical_moffitt', 'prad', 'read', 'stad_cin', 'stad_gs', 'stad_msi', 'ucec')
 nice_names_for_figure <- c('BLCA - Luminal-Infiltrated', 'BLCA - Luminal-Papillary', 'BLCA - Basal-Squamous', 'BRCA - Luminal A', 'BRCA - Luminal B',
     'BRCA - Basal-like', 'BRCA - HER2-enriched', 'COAD', 'ESCA - Adenocarcinoma', 'HNSC - Malignant-Basal', 'HNSC - Classical', 'KIRP', 'LIHC',
     'LUAD - Squamoid', 'LUAD - Magnoid', 'LUAD - Bronchioid', 'LUSC - Classical', 'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive',
-    'OV - Mesenchymal', 'OV - Proliferative', 'PAAD', 'PRAD', 'READ', 'STAD - CIN', 'STAD - GS', 'STAD - MSI', 'UCEC')
+    'OV - Mesenchymal', 'OV - Proliferative', 'PAAD - Basal', 'PAAD - Classical', 'PRAD', 'READ', 'STAD - CIN', 'STAD - GS', 'STAD - MSI', 'UCEC')
 
 cell_type_lms <- sapply(
     deconv_data[ct_to_keep],
@@ -343,12 +344,12 @@ dev.off()
 # Remove cancer types that didn't pass the diagnostics check, namely BLCA Luminal-Infiltrated, KIRP, KIHC, PRAD, STAD GS and OV Mesenchymal:
 ct_to_keep <- c('blca_luminal_papillary', 'blca_basal_squamous', 'brca_luminal_a', 'brca_luminal_b', 'brca_basal_like', 'brca_her2_enriched',
     'coad', 'esca_ac', 'hnsc_mesenchymal_basal', 'hnsc_classical', 'luad_proximal_inflammatory', 'luad_proximal_proliferative',
-    'luad_terminal_respiratory_unit', 'lusc_classical', 'lusc_secretory', 'ov_differentiated', 'ov_immunoreactive', 'ov_proliferative', 'paad',
-    'read', 'stad_cin', 'stad_msi', 'ucec')
+    'luad_terminal_respiratory_unit', 'lusc_classical', 'lusc_secretory', 'ov_differentiated', 'ov_immunoreactive', 'ov_proliferative',
+    'paad_basal_moffitt', 'paad_classical_moffitt', 'read', 'stad_cin', 'stad_msi', 'ucec')
 nice_names_for_figure <- c('BLCA - Luminal-Papillary', 'BLCA - Basal-Squamous', 'BRCA - Luminal A', 'BRCA - Luminal B', 'BRCA - Basal-like',
     'BRCA - HER2-enriched', 'COAD', 'ESCA - Adenocarcinoma', 'HNSC - Malignant-Basal', 'HNSC - Classical', 'LUAD - Squamoid', 'LUAD - Magnoid',
-    'LUAD - Bronchioid', 'LUSC - Classical', 'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive', 'OV - Proliferative', 'PAAD', 'READ',
-    'STAD - CIN', 'STAD - MSI', 'UCEC')
+    'LUAD - Bronchioid', 'LUSC - Classical', 'LUSC - Secretory', 'OV - Differentiated', 'OV - Immunoreactive', 'OV - Proliferative', 'PAAD - Basal',
+    'PAAD - Classical', 'READ', 'STAD - CIN', 'STAD - MSI', 'UCEC')
 
 
 
@@ -429,66 +430,8 @@ ct_gw_heatmap <- ggplot(ct_gw_heatmap_data, aes(x = ct1, y = ct2, fill = corr)) 
     ) +
     labs(fill = 'Correlation')
 
-cairo_pdf('../data_and_figures/ct_clust.pdf', width = 8, height = 7, onefile = TRUE)
-
-plot_grid(
-    plot_grid(
-        blank_plot(),
-        dendro(ct_hclust, 'bottom') + theme(plot.margin = unit(c(5.5, 0, 0, 0), 'pt')),
-        blank_plot(),
-        get_y_axis(ct_hclust_heatmap),
-        ct_hclust_heatmap + theme(
-            legend.position = 'none',
-            plot.margin = unit(c(0, 0, 0, 0), 'pt'),
-            axis.text.x = element_blank(),
-            axis.text.y = element_blank()
-        ),
-        dendro(ct_hclust, 'left') + theme(plot.margin = unit(c(5.5, 0, 0, 0), 'pt')),
-        blank_plot(),
-        get_x_axis(ct_hclust_heatmap),
-        blank_plot(),
-        nrow = 3,
-        ncol = 3,
-        rel_heights = c(0.6, 4.2, 1.2),
-        rel_widths = c(1.5, 4, 0.5)
-    ),
-    get_legend(ct_hclust_heatmap),
-    nrow = 1,
-    ncol = 2,
-    rel_widths = c(7, 1)
-) %>% print
-
-plot_grid(
-    plot_grid(
-        blank_plot(),
-        dendro(ct_gw[[1]], 'bottom') + theme(plot.margin = unit(c(5.5, 0, 0, 0), 'pt')),
-        blank_plot(),
-        get_y_axis(ct_gw_heatmap),
-        ct_gw_heatmap + theme(
-            legend.position = 'none',
-            plot.margin = unit(c(0, 0, 0, 0), 'pt'),
-            axis.text.x = element_blank(),
-            axis.text.y = element_blank()
-        ),
-        dendro(ct_gw[[1]], 'left') + theme(plot.margin = unit(c(5.5, 0, 0, 0), 'pt')),
-        blank_plot(),
-        get_x_axis(ct_gw_heatmap),
-        blank_plot(),
-        nrow = 3,
-        ncol = 3,
-        rel_heights = c(0.6, 4.2, 1.2),
-        rel_widths = c(1.5, 4, 0.5)
-    ),
-    get_legend(ct_gw_heatmap),
-    nrow = 1,
-    ncol = 2,
-    rel_widths = c(7, 1)
-) %>% print
-
-dev.off()
-
-ct_hclust_cut <- cutree(ct_hclust, 3)
-ct_clust <- data.table(cancer_type = names(ct_hclust_cut), cluster = ct_hclust_cut)[, memb_strength := silhouette_vals(1 - ct_cor, ct_hclust)]
+ct_gw_cut <- cutree(ct_gw[[1]], 3)
+ct_clust <- data.table(cancer_type = names(ct_gw_cut), cluster = ct_gw_cut)[, memb_strength := silhouette(ct_gw_cut, 1 - ct_cor)[, 'sil_width']]
 
 # Make the names of the cluster match "1", "2", "3" in a consistent order:
 setkey(ct_clust, cancer_type)
@@ -499,7 +442,7 @@ ct_clust[, cluster_manual := mapvalues(cluster, 1:3, ct_clust_map)]
 ct_clust[
     ,
     cluster_final := switch(
-        (memb_strength > 0.05) + 1,
+        (memb_strength > 0.2) + 1,
         'Intermediate',
         mapvalues(
             cluster_manual,
@@ -514,7 +457,8 @@ ct_clust[
 clust_memb_data <- ct_clust[
     ,
     .(
-        cancer_type = factor(cancer_type, levels = ct_hclust$labels[ct_hclust$order]),
+        cancer_type = factor(cancer_type, levels = ct_gw[[1]]$labels[ct_gw[[1]]$order]),
+        memb_strength = memb_strength,
         cluster = factor(
             cluster_final,
             levels = c('Cluster 1 - Gynaecological', 'Cluster 2 - Squamous-like', 'Cluster 3 - Gastro-intestinal', 'Intermediate')
@@ -538,14 +482,39 @@ clust_memb <- ggplot(clust_memb_data, aes(x = cancer_type, y = 0, fill = cluster
     guides(fill = guide_legend(label.position = 'left')) +
     labs(fill = NULL)
 
+silvals <- ggplot(clust_memb_data, aes(x = cancer_type, y = 0, fill = memb_strength)) +
+    geom_raster() +
+    scale_y_continuous(expand = c(0, 0)) +
+    scale_x_discrete(expand = c(0, 0)) +
+    scale_fill_gradientn(
+        colours = c(
+            sequential_hcl(25, h = 190, c = 70, l = c(90, 99), power = 0.7),
+            sequential_hcl(25, h = 60, c = 100, l = c(90, 99), power = 0.7, rev = TRUE)
+        ),
+        limits = c(0, 0.4),
+        breaks = c(0, 0.2, 0.4),
+        labels = c('0' = '0', '0.2' = '0.2', '0.4' = '0.4'),
+        oob = squish
+    ) +
+    theme(axis.ticks = element_blank(), axis.ticks.length = unit(0, 'pt'), axis.text = element_blank(), axis.title = element_blank()) +
+    guides(
+        fill = guide_colourbar(
+            direction = 'horizontal',
+            title = 'Silhouette',
+            title.position = 'top',
+            barwidth = unit(50, 'pt'),
+            barheight = unit(8, 'pt')
+        )
+    )
+
 score_diff_table <- data.table(symbol = names(head(sort(apply(rank_mat, 1, quantile, 0.25)), 100)))[
     ,
     (paste0('score_diff_', 1:3)) := lapply(
         1:3,
         function(i) {
             cts <- list(
-                in_i = ct_clust[cluster_manual == i & memb_strength > 0.05, cancer_type],
-                not_i = ct_clust[cluster_manual != i & memb_strength > 0.05, cancer_type]
+                in_i = ct_clust[cluster_manual == i & memb_strength > 0.2, cancer_type],
+                not_i = ct_clust[cluster_manual != i & memb_strength > 0.2, cancer_type]
             )
             scores_data_transformed[symbol, rowMeans(.SD[, cts$in_i, with = FALSE]) - rowMeans(.SD[, cts$not_i, with = FALSE])]
         }
@@ -556,7 +525,7 @@ ct_clust_distinct_genes <- score_diff_table[order(which_max, -which_max_score), 
 
 scores_heatmap_data <- scores_data_transformed[
     unique(unlist(ct_clust_distinct_genes$gene)),
-    c('gene', ct_clust[memb_strength > 0.05, cancer_type]),
+    c('gene', ct_clust[memb_strength > 0.2, cancer_type]),
     with = FALSE
 ]
 names(scores_heatmap_data) <- mapvalues(names(scores_heatmap_data), ct_to_keep, nice_names_for_figure, warn_missing = FALSE)
@@ -564,9 +533,9 @@ names(scores_heatmap_data) <- mapvalues(names(scores_heatmap_data), ct_to_keep, 
 scores_heatmap <- deconv_heatmap(
     scores_heatmap_data,
     order_genes_fun = 'seriate',
-    order_genes_method = 'GW_ward',
+    order_genes_method = 'OLO_ward',
     order_analyses_fun = 'seriate',
-    order_analyses_method = 'GW_ward',
+    order_analyses_method = 'OLO_ward',
     colour_limits = c(-1, 1),
     legend_breaks = c(-1, 0, 1),
     legend_labels = c('-1' = '-1', '0' = '0', '1' = '1'),
@@ -578,7 +547,7 @@ scores_heatmap <- deconv_heatmap(
 scores_heatmap <- c(
     list(
         heatmap = scores_heatmap$heatmap +
-            geom_vline(xintercept = c(8.5, 13.5), size = 0.8) +
+            geom_vline(xintercept = c(8.5, 14.5), size = 0.8) +
             theme(
                 panel.border = element_rect(fill = NA, size = 0.8),
                 axis.text.x = element_text(
@@ -620,7 +589,7 @@ htmp_emt_caf$heatmap + theme(
         colour = mapvalues(
             ct_clust[
                 with(htmp_emt_caf, mapvalues(analyses[ordering_analyses], nice_names_for_figure, ct_to_keep)),
-                .(new_clust = switch((memb_strength > 0.05) + 1, 0L, cluster_manual)),
+                .(new_clust = switch((memb_strength > 0.2) + 1, 0L, cluster_manual)),
                 by = cancer_type
             ]$new_clust,
             0:3,
@@ -638,8 +607,6 @@ dev.off()
 # significant.  The fold change is replaced by average EMT-CAF score.
 
 scores_volcano_plot_data <- scores_data_transformed[, .(ave_score = rowMeans(.SD), signif_val = t.test(as.numeric(.SD))$p.value), by = gene]
-
-pdf('../data_and_figures/scores_volcano.pdf', width = 5, height = 5)
 
 # ggplot(scores_volcano_plot_data[signif_val < 1], aes(x = ave_score, y = -log10(signif_val))) +
 #     geom_vline(xintercept = 0, linetype = 'dashed', colour = 'grey', size = 0.25) +
@@ -667,7 +634,7 @@ scores_volcano_plot <- ggplot(scores_volcano_plot_data[signif_val < 1], aes(x = 
     ) +
     geom_text_repel(
         aes(label = gene),
-        data = scores_volcano_plot_data[gene %in% c('ITGA11', 'OLFML2B', 'ASPN', 'LUM', 'ACTA2', 'TAGLN', 'POSTN')],
+        data = scores_volcano_plot_data[gene %in% c('ITGA11', 'OLFML2B', 'LUM', 'ACTA2', 'TAGLN', 'POSTN')],
         nudge_x = 0.18,
         size = 3,
         point.padding = 0.2,
@@ -675,7 +642,16 @@ scores_volcano_plot <- ggplot(scores_volcano_plot_data[signif_val < 1], aes(x = 
     ) +
     geom_text_repel(
         aes(label = gene),
-        data = scores_volcano_plot_data[gene %in% c('SPARC', 'COL1A2', 'COL3A1', 'FAP', 'COL1A1', 'THY1', 'VCAN', 'MMP2', 'ECM2', 'PDGFRB')],
+        data = scores_volcano_plot_data[gene == 'MMP2'],
+        nudge_x = 0.18,
+        nudge_y = 0.3,
+        size = 3,
+        point.padding = 0.2,
+        segment.size = 0.3
+    ) +
+    geom_text_repel(
+        aes(label = gene),
+        data = scores_volcano_plot_data[gene %in% c('ASPN', 'SPARC', 'COL1A2', 'COL3A1', 'FAP', 'COL1A1', 'THY1', 'VCAN', 'ECM2')],
         nudge_x = -0.18,
         size = 3,
         point.padding = 0.2,
@@ -683,15 +659,15 @@ scores_volcano_plot <- ggplot(scores_volcano_plot_data[signif_val < 1], aes(x = 
     ) +
     geom_text_repel(
         aes(label = gene),
-        data = scores_volcano_plot_data[gene %in% c('LUZP1', 'LAMC1', 'LAMC2', 'LAMA3', 'ITGA2', 'VCL')],
-        nudge_x = 0.12,
+        data = scores_volcano_plot_data[gene %in% c('LUZP1', 'LAMC1', 'LAMC2', 'LAMA3', 'ITGA2', 'CD44')],
+        nudge_x = 0.15,
         size = 3,
         point.padding = 0.2,
         segment.size = 0.3
     ) +
     geom_text_repel(
         aes(label = gene),
-        data = scores_volcano_plot_data[gene %in% c('MCM7', 'CD59')],
+        data = scores_volcano_plot_data[gene == 'MCM7'],
         nudge_x = -0.1,
         size = 3,
         point.padding = 0.2,
@@ -699,7 +675,7 @@ scores_volcano_plot <- ggplot(scores_volcano_plot_data[signif_val < 1], aes(x = 
     ) +
     geom_text_repel(
         aes(label = gene),
-        data = scores_volcano_plot_data[gene %in% c('MSN', 'PVR', 'ITGB1', 'CD44')],
+        data = scores_volcano_plot_data[gene %in% c('VCL', 'MSN', 'PVR', 'ITGB1')],
         nudge_x = -0.15,
         size = 3,
         point.padding = 0.2,
@@ -748,18 +724,16 @@ scores_volcano_plot <- ggplot(scores_volcano_plot_data[signif_val < 1], aes(x = 
     theme(plot.margin = unit(c(5.5, 20, 20, 5.5), 'pt')) +
     labs(x = 'Average pEMT-CAF score', y = TeX('Significance (-log_{10}(p))'))
 
-dev.off()
-
 
 
 
 
 top_dendro <- dendro(ct_hclust, 'bottom') + theme(plot.margin = unit(c(20, 0, 0, 0), 'pt'))
 right_dendro <- dendro(ct_hclust, 'left') + theme(plot.margin = unit(c(0, 20, 0, 0), 'pt'))
-corr_heatmap <- ct_hclust_heatmap +
+corr_heatmap <- ct_gw_heatmap +
     geom_rect(xmin = 1.5, xmax = 9.5, ymin = 1.5, ymax = 9.5, size = 0.8, colour = brewer.pal(3, 'Dark2')[1], fill = NA) + # Gynaecological
-    geom_rect(xmin = 16.5, xmax = 21.5, ymin = 16.5, ymax = 21.5, size = 0.8, colour = brewer.pal(3, 'Dark2')[2], fill = NA) + # Squamous-like
-    geom_rect(xmin = 9.5, xmax = 14.5, ymin = 9.5, ymax = 14.5, size = 0.8, colour = brewer.pal(3, 'Dark2')[3], fill = NA) + # Gastro-Intestinal
+    geom_rect(xmin = 17.5, xmax = 23.5, ymin = 17.5, ymax = 23.5, size = 0.8, colour = brewer.pal(3, 'Dark2')[2], fill = NA) + # Squamous-like
+    geom_rect(xmin = 11.5, xmax = 16.5, ymin = 11.5, ymax = 16.5, size = 0.8, colour = brewer.pal(3, 'Dark2')[3], fill = NA) + # Gastro-Intestinal
     theme(
         axis.text.x = element_blank(),
         axis.text.y = element_blank(),
@@ -777,13 +751,15 @@ aligned_volcano_heatmap <- align_plots(
 )
 aligned_top_dendro_heatmap <- align_plots(
     top_dendro,
+    silvals + theme(legend.position = 'none', plot.margin = unit(c(0, 0, 3, 0), 'pt')),
     clust_memb + theme(legend.position = 'none', plot.margin = unit(c(0, 0, 3, 0), 'pt')),
     aligned_volcano_heatmap[[2]],
     align = 'v'
 )
 aligned_right_dendro_heatmap <- align_plots(
-    aligned_top_dendro_heatmap[[3]],
+    aligned_top_dendro_heatmap[[4]],
     clust_memb + coord_flip() + theme(legend.position = 'none', plot.margin = unit(c(0, 0, 0, 3), 'pt')),
+    silvals + coord_flip() + theme(legend.position = 'none', plot.margin = unit(c(0, 0, 0, 3), 'pt')),
     right_dendro,
     align = 'h'
 )
@@ -801,16 +777,23 @@ plot_grid(
                 aligned_top_dendro_heatmap[[1]],
                 blank_plot(),
                 blank_plot(),
+                get_legend(silvals + theme(legend.position = c(0.4, 0.2))),
                 aligned_top_dendro_heatmap[[2]],
+                blank_plot(),
+                blank_plot(),
+                blank_plot(),
+                aligned_top_dendro_heatmap[[3]],
+                blank_plot(),
                 blank_plot(),
                 blank_plot(),
                 aligned_right_dendro_heatmap[[1]],
                 aligned_right_dendro_heatmap[[2]],
                 aligned_right_dendro_heatmap[[3]],
-                nrow = 3,
-                ncol = 3,
-                rel_heights = c(1, 0.2, 5),
-                rel_widths = c(5.1, 0.2, 0.9)
+                aligned_right_dendro_heatmap[[4]],
+                nrow = 4,
+                ncol = 4,
+                rel_heights = c(1, 0.2, 0.2, 5),
+                rel_widths = c(5.1, 0.2, 0.2, 0.9)
             ),
             nrow = 2,
             ncol = 1,
@@ -857,306 +840,6 @@ plot_grid(
     draw_label('A', x = 0, y = 0.975, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2) +
     draw_label('B', x = 0, y = 0.5, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2) +
     draw_label('C', x = 0.5, y = 0.975, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2)
-
-dev.off()
-
-
-
-
-
-# Deconv plots without single cell data:
-
-cairo_pdf('../data_and_figures/final_figures_resubmission/S10B.pdf', width = 11.5, height = 10)
-
-print(
-	plot_grid(
-		blank_plot(),
-		plot_grid(
-			plotlist = lapply(
-				c('blca_luminal_papillary', 'blca_basal_squamous', 'esca_ac'),
-				function(ct) {
-
-					deconv_figures <- sapply(
-						deconv_plots[[ct]]$plots,
-						function(x) x + theme(legend.position = 'none', plot.title = element_blank()),
-						simplify = FALSE,
-						USE.NAMES = TRUE
-					)
-					deconv_figures$heatmap <- deconv_figures$heatmap +
-						theme(plot.margin = unit(c(0, 20, 5.5, 20), 'pt'), axis.title.x = element_text(), axis.title.y = element_text()) +
-                        labs(x = 'Genes', y = 'Genes')
-
-					plot_grid(
-						plotlist = c(
-							list(
-								blank_plot() +
-								theme(plot.margin = unit(c(11, 5.5, 5.5, 0), 'pt')) +
-								labs(title = nice_names_for_figure[ct_to_keep == ct])
-							),
-							deconv_figures[c('purity_bar', 'ccle_bar', 'heatmap')]
-						),
-						nrow = 4,
-						ncol = 1,
-						align = 'v',
-						rel_heights = c(2, 1, 1, 15)
-					)
-
-				}
-			),
-			nrow = 1,
-			ncol = 3
-		),
-		blank_plot(),
-		plot_grid(
-			plotlist = lapply(
-				c('stad_cin', 'stad_msi', 'ucec'),
-				function(ct) {
-
-                    deconv_figures <- sapply(
-						deconv_plots[[ct]]$plots,
-						function(x) x + theme(legend.position = 'none', plot.title = element_blank()),
-						simplify = FALSE,
-						USE.NAMES = TRUE
-					)
-                    deconv_figures$heatmap <- deconv_figures$heatmap +
-						theme(plot.margin = unit(c(0, 20, 5.5, 20), 'pt'), axis.title.x = element_text(), axis.title.y = element_text()) +
-                        labs(x = 'Genes', y = 'Genes')
-
-					plot_grid(
-						plotlist = c(
-							list(
-								blank_plot() +
-								theme(plot.margin = unit(c(11, 5.5, 5.5, 0), 'pt')) +
-								labs(title = nice_names_for_figure[ct_to_keep == ct])
-							),
-							deconv_figures[c('purity_bar', 'ccle_bar', 'heatmap')]
-						),
-						nrow = 4,
-						ncol = 1,
-						align = 'v',
-						rel_heights = c(2, 1, 1, 15)
-					)
-
-				}
-			),
-			nrow = 1,
-			ncol = 3
-		),
-		blank_plot(),
-		plot_grid(
-			get_legend(
-				deconv_plots$brca_luminal_a$plots$purity_bar +
-					guides(fill = guide_colourbar(title.position = 'right')) +
-					theme(
-						legend.justification = c(0, 0.5),
-						legend.direction = 'horizontal',
-						legend.key.width = NULL,
-						legend.key.height = unit(10, 'pt'),
-						legend.box.margin = margin(l = 10)
-					) +
-					labs(fill = 'Correlation with purity\n')
-			),
-			get_legend(
-				deconv_plots$brca_luminal_a$plots$ccle_bar +
-					guides(fill = guide_colourbar(title.position = 'right')) +
-					theme(
-						legend.justification = c(0, 0.5),
-						legend.direction = 'horizontal',
-						legend.key.width = NULL,
-						legend.key.height = unit(10, 'pt'),
-						legend.box.margin = margin(l = 10)
-					) +
-					labs(fill = 'Tumours vs. cell lines\n')
-			),
-			get_legend(
-				deconv_plots$brca_luminal_a$plots$heatmap +
-					guides(fill = guide_colourbar(title.position = 'right')) +
-					theme(
-						legend.justification = c(0, 0.5),
-						legend.direction = 'horizontal',
-						legend.key.width = unit(25, 'pt'),
-						legend.key.height = unit(10, 'pt'),
-						legend.box.margin = margin(l = 10)
-					) +
-					labs(fill = 'Correlation\n')
-			),
-			nrow = 1,
-			ncol = 3
-		),
-		nrow = 6,
-		ncol = 1,
-		rel_heights = c(0.15, 1.2, 0.125, 1.2, 0.125, 0.2)
-		# rel_heights = c(0.05, 1, 0.05, 1)
-	) + draw_label('B', x = 0, y = 0.99, hjust = -0.1, vjust = 1.1, size = 20, fontface = 2)
-)
-
-dev.off()
-
-
-
-
-
-# Subset of plots for main text figure:
-
-# First remake the plots for these cancer types, so we can change the axis labels:
-
-ct_subset <- c('brca_luminal_a', 'hnsc_mesenchymal_basal', 'luad_proximal_proliferative')
-
-heatmap_annotations_subset <- lapply(
-    list(
-        brca_luminal_a = c('CALU', 'COL1A1', 'FAP', 'ITGAV', 'LAMC2', 'NOTCH2', 'PCOLCE', 'PVR', 'THY1'),
-        hnsc_mesenchymal_basal = c('ACTA2', 'CD44', 'COL6A1', 'ITGB1', 'LAMC2', 'POSTN', 'SERPINE1', 'TAGLN', 'TGFBI'),
-        luad_proximal_proliferative = c('AREG', 'CD44', 'COL1A2', 'COL8A1', 'ITGB5', 'LAMC2', 'MMP2', 'PDPN', 'TGFBI')
-    ),
-    c,
-    c('SNAI1', 'SNAI2', 'TWIST1', 'VIM', 'ZEB1', 'ZEB2')
-)
-
-deconv_plots_subset <- sapply(
-    ct_subset,
-    function(ct) {
-        do.call(
-            deconvolve_emt_caf_plots,
-            args = list(
-                data = deconv_data[[ct]],
-                plot_title = ct,
-                heatmap_legend_title = 'Correlation',
-                heatmap_annotations = heatmap_annotations_subset[[ct]],
-                heatmap_annotations_nudge = 0.3,
-                purity_colours = rev(colorRampPalette(brewer.pal(11, "PuOr"))(50)),
-                purity_legend_title = 'Correlation with purity\n',
-                purity_legend_direction = 'horizontal',
-                purity_axis_title = NULL,
-                ccle_colours = rev(colorRampPalette(brewer.pal(11, 'PiYG')[c(1:3, 6, 9:11)])(50)),
-                ccle_legend_title = 'Tumours vs. cell lines\n',
-                ccle_legend_direction = 'horizontal',
-                ccle_axis_title = NULL,
-                extra_colours = colorRampPalette(c('turquoise4', 'turquoise', 'azure', 'gold2', 'gold4'))(50),
-                extra_legend_title = 'scRNA-seq: CAF vs. cancer\n',
-                extra_legend_direction = 'horizontal',
-                extra_axis_title = NULL,
-                bar_legend_justification = 'left',
-                bar_legend_width = NULL
-            )
-        )
-    },
-    simplify = FALSE,
-    USE.NAMES = TRUE
-)
-
-# Summary figures:
-
-# Scatterplot of within- versus between-cluster correlations:
-
-within_between_clust_corr <- lapply(
-    names(deconv_data),
-    function(ct) {
-        within_clust_corr <- with(deconv_data[[ct]], c(cor_mat[ordering, ordering][1:30, 1:30], cor_mat[rev(ordering), rev(ordering)][1:30, 1:30]))
-        within_clust_corr <- mean(within_clust_corr[within_clust_corr != 1])
-        between_clust_corr <- with(deconv_data[[ct]], mean(cor_mat[ordering, rev(ordering)][1:30, 1:30]))
-        list(cancer_type = ct, wthn = within_clust_corr, btw = between_clust_corr)
-    }
-) %>% rbindlist
-
-within_between_clust_corr[, n_annot := sum(c('purity_bar', 'ccle_bar', 'extra_bar') %in% names(deconv_plots[[cancer_type]]$plots)), by = cancer_type]
-
-# Make the actual plots:
-
-deconv_summary_scatterplot <- ggplot(
-    within_between_clust_corr,
-    aes(x = btw, y = wthn, shape = as.character(mapvalues(n_annot, c(1, 2, 3), c('No', 'No', 'Yes'))))
-) +
-    geom_point(size = 2, alpha = 0.75, colour = 'lightblue4') +
-    # geom_text_repel(aes(label = cancer_type)) +
-    geom_text_repel(
-        aes(label = cancer_type),
-        data = within_between_clust_corr[cancer_type %in% c('BLCA - Basal-Squamous', 'ESCA - Squamous')],
-        nudge_x = 0.04, nudge_y = 0.01, direction = 'y', size = 3.5
-    ) +
-    geom_text_repel(
-        aes(label = cancer_type),
-        data = within_between_clust_corr[cancer_type %in% c('HNSC - Malignant-Basal', 'HNSC - Classical', 'UCEC')],
-        direction = 'x',
-        nudge_x = 0.02, nudge_y = 0.005, direction = 'x', size = 3.5
-    ) +
-    geom_text_repel(
-        aes(label = cancer_type),
-        data = within_between_clust_corr[cancer_type == 'COAD'],
-        nudge_x = 0.02, nudge_y = 0.02, size = 3.5
-    ) +
-    geom_text_repel(
-        aes(label = cancer_type),
-        data = within_between_clust_corr[cancer_type == 'LIHC'],
-        nudge_x = -0.02, nudge_y = 0.01, size = 3.5
-    ) +
-    geom_text_repel(
-        aes(label = cancer_type),
-        data = within_between_clust_corr[cancer_type == 'STAD - MSI'],
-        nudge_x = -0.04, nudge_y = -0.02, size = 3.5
-    ) +
-    geom_text_repel(
-        aes(label = cancer_type),
-        data = within_between_clust_corr[cancer_type == 'BRCA - Luminal A'],
-        nudge_x = -0.05, nudge_y = 0.01, size = 3.5
-    ) +
-    geom_text_repel(
-        aes(label = cancer_type),
-        data = within_between_clust_corr[cancer_type == 'ESCA - Adenocarcinoma'],
-        nudge_x = -0.06, nudge_y = -0.01, size = 3.5
-    ) +
-    geom_text_repel(
-        aes(label = cancer_type),
-        data = within_between_clust_corr[cancer_type == 'PAAD'],
-        nudge_x = -0.02, nudge_y = -0.005, size = 3.5
-    ) +
-    theme_test() +
-    labs(x = 'Between-cluster correlation', y = 'Within-cluster correlation', shape = 'scRNA-seq\ndata\navailable')
-
-pdf('../data_and_figures/deconv_figures_main.pdf', width = 14, height = 9)
-
-plot_grid(
-    deconv_plot(
-        deconv_plots_subset,
-        n_row = 2,
-        n_col = 3,
-        plots_rel_heights = c(title = 2, purity_bar = 1, ccle_bar = 1, extra_bar = 1, heatmap = 15, axis_labels = 6),
-        rows_rel_heights = c(1.04, 1),
-        left_plot_width = 1.06,
-        legends = FALSE
-    ),
-    plot_grid(
-        plotlist = c(
-            list(
-                deconv_summary_scatterplot +
-                    theme(
-                        legend.position = 'bottom',
-                        legend.text = element_text(margin = margin(r = 15, unit = 'pt')),
-                        legend.title = element_text(margin = margin(r = 10, unit = 'pt')),
-                        legend.spacing.x = unit(1, 'pt')
-                    ) +
-                    labs(shape = 'scRNA-seq data available:'),
-                blank_plot()
-            ),
-            lapply(
-                c('purity_bar', 'ccle_bar', 'extra_bar', 'heatmap'),
-                function(b) {
-                    get_legend(
-                        deconv_plots_subset$`BRCA - Luminal A`$plots[[b]] +
-                            theme(legend.justification = 'left') +
-                            guides(fill = guide_colourbar(title.position = 'right'))
-                    )
-                }
-            ),
-            list(blank_plot())
-        ),
-        nrow = 7,
-        ncol = 1,
-        rel_heights = c(26, 2, 3, 3, 3, 8, 6)
-    ),
-    nrow = 1,
-    ncol = 2,
-    rel_widths = c(2, 1)
-)
 
 dev.off()
 
@@ -1398,45 +1081,6 @@ clin_cor_heatmaps <- sapply(
     USE.NAMES = TRUE
 )
 
-cairo_pdf('../data_and_figures/clinical_heatmaps.pdf', width = 8.5, height = 5)
-plot_grid(
-    plot_grid(
-        clin_cor_heatmaps$deconv_emt + theme(axis.text.x = element_blank(), legend.position = 'none'),
-        clin_cor_heatmaps$deconv_caf + theme(axis.text.x = element_blank(), legend.position = 'none', plot.margin = unit(c(5.5, 5.5, 1, 5.5), 'pt')),
-        ggdraw(
-            get_x_axis(
-                clin_cor_heatmaps$deconv_caf + theme(
-                    axis.text.x = element_text(
-                        colour = mapvalues(
-                            ct_clust[
-                                with(ct_hclust, labels[order][labels[order] %in% clin_cor$deconv_caf$test_name]),
-                                .(new_clust = switch((memb_strength > 0.05) + 1, 0L, cluster_manual)),
-                                by = cancer_type
-                            ]$new_clust,
-                            c(0, 1, 2, 3),
-                            c('darkgrey', brewer.pal(3, 'Dark2'))
-                        )
-                    )
-                )
-            )
-        ),
-        nrow = 3,
-        ncol = 1,
-        align = 'v',
-        rel_heights = c(2, 2, 1.5)
-    ),
-    plot_grid(
-        get_legend(clin_cor_heatmaps$deconv_emt + guides(fill = guide_colourbar(title.position = 'right'))),
-        nrow = 2,
-        ncol = 1,
-        rel_heights = c(4, 1)
-    ),
-    nrow = 1,
-    ncol = 2,
-    rel_widths = c(6, 2.5)
-)
-dev.off()
-
 
 
 
@@ -1606,7 +1250,7 @@ plot_grid(
                     colour = mapvalues(
                         ct_clust[
                             with(ct_hclust, labels[order][labels[order] %in% clin_cor$deconv_caf$test_name]),
-                            .(new_clust = switch((memb_strength > 0.05) + 1, 0L, cluster_manual)),
+                            .(new_clust = switch((memb_strength > 0.2) + 1, 0L, cluster_manual)),
                             by = cancer_type
                         ]$new_clust,
                         c(0, 1, 2, 3),
@@ -1738,7 +1382,7 @@ lnmets_data[
     by = .(cancer_type, lnmets)
 ][, pval_oxphos := wilcox.test(oxphos_expression[lnmets == 'Zero'], oxphos_expression[lnmets == 'Multiple'])$p.value, by = cancer_type]
 
-# Try to separately cluster the classical tumours:
+# Cluster the classical tumours:
 
 cell_type_markers <- fread('../../cell_type_markers.csv')[source %in% c('Tirosh', 'Tirosh immune'), .(cell_type, gene)] %>% unique
 
@@ -1830,9 +1474,6 @@ site_bar <- ggplot(classical_bar_data, aes(x = sample_id, y = 0, fill = mapvalue
     ) +
     labs(fill = 'Tumour site: ')
 
-# carto_BrwnYl <- c('#ede5cf', '#e0c2a2', '#d39c83', '#c1766f', '#a65461', '#813753', '#541f3f')
-# carto_PurpOr <- c('#f9ddda', '#f2b9c4', '#e597b9', '#ce78b3', '#ad5fad', '#834ba0', '#573b88')
-
 pemt_oxphos_bars <- sapply(
     c('pemt', 'oxphos'),
     function(barvar) {
@@ -1840,7 +1481,6 @@ pemt_oxphos_bars <- sapply(
             geom_raster() +
             scale_x_discrete(expand = c(0, 0)) +
             scale_y_continuous(expand = c(0, 0)) +
-            # scale_fill_gradientn(colours = colorRampPalette(carto_PurpOr)(50), limits = c(-1.5, 1.5), oob = squish) +
             scale_fill_gradientn(colours = colorRampPalette(brewer.pal(9, 'YlOrRd'))(50), limits = c(-1, 1), breaks = c(-1, 0, 1), oob = squish) +
             theme(
                 axis.ticks = element_blank(),

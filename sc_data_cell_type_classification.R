@@ -1,5 +1,5 @@
 library(data.table) # 1.12.8
-library(ggplot2) # This is version 3.3.1 on my laptop's WSL setup but 3.3.0 on WEXAC.
+library(ggplot2) # 3.3.0
 library(magrittr) # 1.5
 library(plyr) # 1.8.6
 library(msigdbr) # 7.1.1
@@ -8,14 +8,7 @@ library(clusterProfiler) # 3.14.3
 source('general_functions.R')
 
 # Get MSigDB C2, C5 and H gene sets (C2 = Curated gene sets; C5 = GO gene sets):
-msigdb <- rbindlist(
-    lapply(
-        c('C2', 'C5', 'H'),
-        function(categ) {
-            as.data.table(msigdbr(category = categ))
-        }
-    )
-)
+msigdb <- rbindlist(lapply(c('C2', 'C5', 'H'), function(categ) as.data.table(msigdbr(category = categ))))
 
 # Function to test one cluster against all others, find DE genes and run GSEA:
 test_cluster <- function(
@@ -27,55 +20,46 @@ test_cluster <- function(
 	cell_id_var_name = 'cell_id',
 	seed = NULL
 ) {
-	
-	# Centre the matrix gene-wise (not sure this is necessary):
+
+	# Centre the matrix gene-wise:
 	expression_mat_centred <- t(apply(expression_mat, 2, function(x) {x - mean(x)}))
-	
+
 	averages <- sapply(
 		clust_data[get(clust_var_name) != 'noise', unique(get(clust_var_name))],
 		function(clst) rowMeans(expression_mat_centred[, clust_data[get(clust_var_name) == clst, get(cell_id_var_name)]]),
 		simplify = FALSE,
 		USE.NAMES = TRUE
 	)
-	
+
 	gene_test <- lapply(
 		lapply(clust_data[get(clust_var_name) != clust, unique(get(clust_var_name))], function(ct) c(clust, ct)),
 		function(clustpair) {
-			
+
 			cat(paste0(clustpair[1], ' vs. ', clustpair[2], '...'))
-			
+
 			mat_clustpair <- sapply(
 				clustpair,
 				function(clst) expression_mat_centred[, clust_data[get(clust_var_name) == clst, get(cell_id_var_name)]],
 				simplify = FALSE,
 				USE.NAMES = TRUE
 			)
-			
+
 			out <- list(
 				clust_pair = clustpair,
 				test_results = data.table(gene_id = rownames(expression_mat_centred))[
 					,
-					.(
-						pval = try_default(
-							t.test(
-								mat_clustpair[[1]][gene_id, ],
-								mat_clustpair[[2]][gene_id, ]
-							)$p.value,
-							default = 1,
-							quiet = TRUE
-						)
-					),
+					.(pval = try_default(t.test(mat_clustpair[[1]][gene_id, ], mat_clustpair[[2]][gene_id, ])$p.value, default = 1, quiet = TRUE)),
 					by = gene_id
 				]
 			)
-			
+
 			cat('Done!\n')
-			
+
 			out
-			
+
 		}
 	)
-	
+
 	gene_test_results <- lapply(
 		gene_test,
 		function(x) {
@@ -84,60 +68,37 @@ test_cluster <- function(
 			list(other_clst = x$clust_pair[2], data = data)
 		}
 	)
-	
-	gene_test_results <- setNames(
-		lapply(gene_test_results, `[[`, 'data'),
-		sapply(gene_test_results, `[[`, 'other_clst')
-	)
-	
+
+	gene_test_results <- setNames(lapply(gene_test_results, `[[`, 'data'), sapply(gene_test_results, `[[`, 'other_clst'))
+
 	table_list <- lapply(gene_test_results, function(dt) dt[p.adjust(pval, method ='BH') < 0.05])
 	for(dt in table_list) {setkey(dt, gene_id)}
-	
+
 	degenes <- data.table(gene = Reduce(intersect, lapply(table_list, `[[`, 'gene_id')))
-	# degenes <- data.table(gene = intersect(table_list[[1]]$gene_id, table_list[[2]]$gene_id))
-	degenes[
-		,
-		rel_exp := apply(
-			as.data.table(lapply(table_list, function(dt) dt[gene, rel_exp])),
-			# cbind(table_list[[1]][gene, rel_exp], table_list[[2]][gene, rel_exp]),
-			1,
-			mean
-		)
-	]
-	
-	# Run GSEA (note GSEA involves random permutations, I think in correcting for multiple hypothesis tests, so we need to set a seed):
-	
+	degenes[, rel_exp := apply(as.data.table(lapply(table_list, function(dt) dt[gene, rel_exp])), 1, mean)]
+
+	# Run GSEA:
+
 	if(!is.null(seed)) set.seed(seed)
-	
+
 	degenes_gsea <- sapply(
 		unique(msigdb_table$gs_cat),
 		function(categ) {
 			cbind(
 				gs_cat = categ,
 				as.data.table(
-					GSEA(
-						degenes[
-							order(-rel_exp),
-							setNames(rel_exp, gene)
-						],
-						TERM2GENE = msigdb_table[gs_cat == categ, .(gs_name, human_gene_symbol)]
-					)
+					GSEA(degenes[order(-rel_exp), setNames(rel_exp, gene)], TERM2GENE = msigdb_table[gs_cat == categ, .(gs_name, human_gene_symbol)])
 				)
 			)
 		},
 		simplify = FALSE,
 		USE.NAMES = TRUE
 	)
-	
-	gsea_table <- rbindlist(
-		lapply(
-			degenes_gsea,
-			function(dt) dt[, Reduce(intersect, lapply(degenes_gsea, names)), with = FALSE]
-		)
-	)
-	
+
+	gsea_table <- rbindlist(lapply(degenes_gsea, function(dt) dt[, Reduce(intersect, lapply(degenes_gsea, names)), with = FALSE]))
+
 	list(test_results = gene_test_results, degenes = degenes, gsea_table = gsea_table)
-	
+
 }
 
 
@@ -198,7 +159,9 @@ de_caf <- lapply(
 	function(i) {
 		test_cluster(
 			set_rownames(
-				as.matrix(sc_data[cell_type_data[!(cluster %in% c('noise', paste0('caf_', (1:2)[1:2 != i]))), cell_id], -c('id', 'patient', 'cell_type')]),
+				as.matrix(
+                    sc_data[cell_type_data[!(cluster %in% c('noise', paste0('caf_', (1:2)[1:2 != i]))), cell_id], -c('id', 'patient', 'cell_type')]
+                ),
 				cell_type_data[!(cluster %in% c('noise', paste0('caf_', (1:2)[1:2 != i]))), cell_id]
 			),
 			cell_type_data[!(cluster %in% c('noise', paste0('caf_', (1:2)[1:2 != i])))],
@@ -228,7 +191,10 @@ de_between_caf <- lapply(
 	}
 )
 
-de_between_caf_top_50 <- set_colnames(sapply(1:2, function(i) de_between_caf[[i]]$degenes[order(-rel_exp), head(gene, 50)]), c('Cluster 2', 'Cluster 5'))
+de_between_caf_top_50 <- set_colnames(
+    sapply(1:2, function(i) de_between_caf[[i]]$degenes[order(-rel_exp), head(gene, 50)]),
+    c('Cluster 2', 'Cluster 5')
+)
 
 # Save stuff:
 fwrite(plot_data, '../data_and_figures/sc_reclassify/files_for_rmd/breast_qian_plot_data.csv')
@@ -434,7 +400,12 @@ de_endothelial <- lapply(
 	function(i) {
 		test_cluster(
 			set_rownames(
-				as.matrix(sc_data[cell_type_data[!(cluster %in% c('noise', paste0('endothelial', (1:3)[1:3 != i]))), cell_id], -c('id', 'patient', 'cell_type')]),
+				as.matrix(
+                    sc_data[
+                        cell_type_data[!(cluster %in% c('noise', paste0('endothelial', (1:3)[1:3 != i]))), cell_id],
+                        -c('id', 'patient', 'cell_type')
+                    ]
+                ),
 				cell_type_data[!(cluster %in% c('noise', paste0('endothelial', (1:3)[1:3 != i]))), cell_id]
 			),
 			cell_type_data[!(cluster %in% c('noise', paste0('endothelial', (1:3)[1:3 != i])))],
@@ -533,7 +504,12 @@ de_caf <- lapply(
 	function(i) {
 		test_cluster(
 			set_rownames(
-				as.matrix(sc_data[cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:3)[1:3 != i])), cell_id], -c('id', 'patient', 'cell_type')]),
+				as.matrix(
+                    sc_data[
+                        cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:3)[1:3 != i])), cell_id],
+                        -c('id', 'patient', 'cell_type')
+                    ]
+                ),
 				cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:3)[1:3 != i])), cell_id]
 			),
 			cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:3)[1:3 != i]))],
@@ -631,7 +607,12 @@ de_caf <- lapply(
 	function(i) {
 		test_cluster(
 			set_rownames(
-				as.matrix(sc_data[cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:6)[1:6 != i])), cell_id], -c('id', 'patient', 'cell_type')]),
+				as.matrix(
+                    sc_data[
+                        cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:6)[1:6 != i])), cell_id],
+                        -c('id', 'patient', 'cell_type')
+                    ]
+                ),
 				cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:6)[1:6 != i])), cell_id]
 			),
 			cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:6)[1:6 != i]))],
@@ -675,7 +656,12 @@ de_endothelial <- lapply(
 	function(i) {
 		test_cluster(
 			set_rownames(
-				as.matrix(sc_data[cell_type_data[cluster != 'noise' & !(cluster %in% paste0('endothelial_', (1:2)[1:2 != i])), cell_id], -c('id', 'patient', 'cell_type')]),
+				as.matrix(
+                    sc_data[
+                        cell_type_data[cluster != 'noise' & !(cluster %in% paste0('endothelial_', (1:2)[1:2 != i])), cell_id],
+                        -c('id', 'patient', 'cell_type')
+                    ]
+                ),
 				cell_type_data[cluster != 'noise' & !(cluster %in% paste0('endothelial_', (1:2)[1:2 != i])), cell_id]
 			),
 			cell_type_data[cluster != 'noise' & !(cluster %in% paste0('endothelial_', (1:2)[1:2 != i]))],
@@ -768,7 +754,12 @@ de_caf <- lapply(
 	function(i) {
 		test_cluster(
 			set_rownames(
-				as.matrix(sc_data[cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:5)[1:5 != i])), cell_id], -c('id', 'patient', 'cell_type')]),
+				as.matrix(
+                    sc_data[
+                        cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:5)[1:5 != i])), cell_id],
+                        -c('id', 'patient', 'cell_type')
+                    ]
+                ),
 				cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:5)[1:5 != i])), cell_id]
 			),
 			cell_type_data[cluster != 'noise' & !(cluster %in% paste0('caf_', (1:5)[1:5 != i]))],
